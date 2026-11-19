@@ -2795,6 +2795,16 @@ static void add_ini_gauge_result(const char *name){
  copy_text(r->label,sizeof(r->label),name);
  r->field=-1;r->type=7;result_count++;
 }
+static void add_ini_indicator_result(const char *ref){
+ if(!ref||result_count>=RES_CAP)return;
+ int idx=-1;char extra='x';
+ if(sscanf(ref,"btsIndicator%d%c",&idx,&extra)!=1||
+    idx<0||idx>=ini_indicator_count)return;
+ const BtsIniIndicator *ind=&ini_indicators[idx];
+ Resolved *r=&results[result_count++];memset(r,0,sizeof(*r));
+ copy_text(r->label,sizeof(r->label),*ind->on?ind->on:ind->off);
+ r->field=idx;r->type=8; /* Live read-only indicator, never a command. */
+}
 static void add_action_result(const char*label,const char*command){
  if(result_count>=RES_CAP)return;
  Resolved*r=&results[result_count++];
@@ -3180,10 +3190,12 @@ static void resolve_item(const char*id,int depth){if(depth>8||!id||!*id||result_
  if(z>=0)add_result(t->label,z,is_3d?5:1);if(x>=0)add_result("X axis",x,0);if(y>=0)add_result("Y axis",y,0);return;}
  int f=field_index(id);if(f>=0){add_result(NULL,f,0);return;}
  for(int i=0;i<ref_count;i++){if(strcasecmp(refs[i].owner,id))continue;
+ int before=result_count;
  if(refs[i].panel==1)resolve_item(refs[i].ref,depth+1);
  else if(refs[i].panel==2)add_action_result(refs[i].label,refs[i].ref);
  else if(refs[i].panel==4)add_info_result(refs[i].label);
  else if(refs[i].panel==5)add_ini_gauge_result(refs[i].ref);
+ else if(refs[i].panel==6)add_ini_indicator_result(refs[i].ref);
  else if(refs[i].panel==3){
    for(int g=0;g<ini_graph_count;g++)if(!strcasecmp(refs[i].ref,ini_graphs[g].id)){      if(result_count<RES_CAP){
          Resolved *r=&results[result_count++];memset(r,0,sizeof(*r));r->field=g;r->type=4;
@@ -3192,7 +3204,14 @@ static void resolve_item(const char*id,int depth){if(depth>8||!id||!*id||result_
       }break;
    }
  }
- else {f=field_index(refs[i].ref);if(f>=0)add_result(refs[i].label,f,0);}}
+ else {f=field_index(refs[i].ref);if(f>=0)add_result(refs[i].label,f,0);}
+ /* The explicit INI placement is inherited by the entire child panel,
+  * but never overrides a deeper explicit North/West/East/etc position. */
+ if(refs[i].region){
+    for(int j=before;j<result_count;j++)
+       if(!results[j].region)results[j].region=refs[i].region;
+ }
+}
  /* The deepest named panel owns its controls. Unnamed layout wrappers
   * (e.g. outputsDialogLeft/Right) leave child names intact. */
  const char *caption=dialog_caption(id);
@@ -4078,6 +4097,7 @@ static void enter_selected(void){
      else if(results[selected].type==4){open_ini_graph(results[selected].field,PAGE_DETAIL,selected);}
       else if(results[selected].type==6){note("INI description: read only");}
       else if(results[selected].type==7){note("INI gauge: read only");}
+      else if(results[selected].type==8){note("ECU status indicator: read only");}
      else {detail_sel=selected;field_return_page=PAGE_DETAIL;
        bool from_3d_ini=results[selected].type==5;
        open_cal(results[selected].field,results[selected].label);
