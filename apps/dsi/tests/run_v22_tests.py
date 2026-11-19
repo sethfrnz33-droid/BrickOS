@@ -8,7 +8,8 @@ s=(root/'source/main.c').read_text()
 assert 'gauge_layout==3' in s and 'gauge_layout==4' in s
 assert 'if(down&KEY_L){gauge_layout=' in s
 assert 'bt_sd_layout_save(gauge_layout)' in s
-assert 'if(chosen_map>=0&&table.valid){\n        bottom_editor();' in s
+assert 'if(chosen_map>=0&&table.valid){\n        if(table.confirm_burn)bottom_burn_confirm();' in s
+assert 'else bottom_editor();' in s
 assert 'bit_choice_count=bt_bit_choices(' in s
 assert 'static void bottom_home' in s and 'nav_icon_mini(bottom,home_icons[i]' in s
 assert 'int y=27+i*32' in s

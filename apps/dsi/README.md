@@ -20,3 +20,5 @@ For control mappings, changes, limitations, and full test notes see [README_V24.
 
 
 **v25:** See [README_V25.md](README_V25.md) for map axes, trace, two-screen layout, contextual help, and START-key updates.
+
+For the v26 native INI reference gauge, placement, and START/A confirmation update, see [README_V26.md](README_V26.md).

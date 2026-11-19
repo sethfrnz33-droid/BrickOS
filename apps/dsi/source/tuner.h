@@ -11,6 +11,7 @@
 #define BTS_MAX_REFS 6000
 #define BTS_MAX_INI_GRAPHS 160
 #define BTS_MAX_GRAPH_LINES 640
+#define BTS_MAX_GAUGES 550
 #define BTS_LIVE_CAP 3072
 #define BTS_MAP_CELLS 2048
 
@@ -34,8 +35,14 @@ typedef struct {
 } BtMenu;
 typedef struct {
     char owner[64], name[64], label[72], detail[120], condition[80];
-    int kind; /* 0 field, 1 panel, 2 command button, 3 read-only field, 4 runtime, 5 text/help, 6 INI liveGraph */
+    char placement[8]; /* TunerStudio North/South/East/West/Center; layout, not a field */
+    int kind; /* 0 field, 1 panel, 2 command button, 3 read-only field, 4 runtime, 5 text/help, 6 liveGraph, 7 gauge */
 } BtDialogRef;
+typedef struct {
+    char name[64], channel[64], label[72], unit[40];
+    double min_value, max_value;
+    bool range_known;
+} BtGauge;
 typedef struct {char owner[64], name[64], title[72]; int first_line, line_count;} BtIniGraph;
 typedef struct {char channel[64]; int graph;} BtGraphLine;
 typedef struct {
@@ -45,8 +52,9 @@ typedef struct {
     BtDialogRef *refs;
     BtIniGraph *graphs;
     BtGraphLine *graph_lines;
-    int channel_capacity, constant_capacity, map_capacity, menu_capacity, ref_capacity, graph_capacity, graph_line_capacity;
-    int channel_count, constant_count, map_count, menu_count, ref_count, graph_count, graph_line_count;
+    BtGauge *gauges;
+    int channel_capacity, constant_capacity, map_capacity, menu_capacity, ref_capacity, graph_capacity, graph_line_capacity, gauge_capacity;
+    int channel_count, constant_count, map_count, menu_count, ref_count, graph_count, graph_line_count, gauge_count;
     int page_ids[64], page_sizes[64], page_count, current_page;
     bool page_writeable[64], page_burnable[64], truncated, out_of_memory;
     char signature[160], section[32], current_dialog[64];
@@ -98,6 +106,7 @@ void bt_ini_reset(BtDefinition *d);
 void bt_ini_feed(BtDefinition *d, const uint8_t *bytes, size_t length);
 bool bt_ini_finish(BtDefinition *d);
 const BtField *bt_field(const BtDefinition *d, const char *name, bool runtime);
+const BtGauge *bt_gauge(const BtDefinition *d,const char *name);
 int bt_type_size(BtType type);
 bool bt_field_value(const BtDefinition *d, const BtField *f, const uint8_t *data, int length, int index, double *result);
 bool bt_encode_value(const BtDefinition *d,const BtField *f, uint8_t *data,int len,int index,double value);

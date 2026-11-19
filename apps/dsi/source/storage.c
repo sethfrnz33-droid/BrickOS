@@ -238,8 +238,8 @@ bool bt_sd_http_report(const char *path,const char *status_line,int code,const c
 typedef struct {
     char magic[8];
     uint32_t format, raw_size, raw_crc, payload_crc;
-    uint32_t field_size, map_size, menu_size, ref_size, graph_size, graph_line_size;
-    uint32_t channels, constants, maps, menus, refs, pages, graphs, graph_lines;
+    uint32_t field_size, map_size, menu_size, ref_size, graph_size, graph_line_size, gauge_size;
+    uint32_t channels, constants, maps, menus, refs, pages, graphs, graph_lines, gauges;
     uint32_t big_endian;
     int32_t page_ids[64], page_sizes[64];
     uint8_t page_writeable[64], page_burnable[64];
@@ -280,20 +280,23 @@ static bool snapshot_arrays(FILE*f,BtDefinition*d,uint32_t *hash,bool write){
       snap_rw(f,d->menus,(size_t)d->menu_count,sizeof(BtMenu),hash,write) &&
       snap_rw(f,d->refs,(size_t)d->ref_count,sizeof(BtDialogRef),hash,write) &&
       snap_rw(f,d->graphs,(size_t)d->graph_count,sizeof(BtIniGraph),hash,write) &&
-      snap_rw(f,d->graph_lines,(size_t)d->graph_line_count,sizeof(BtGraphLine),hash,write);
+      snap_rw(f,d->graph_lines,(size_t)d->graph_line_count,sizeof(BtGraphLine),hash,write) &&
+      snap_rw(f,d->gauges,(size_t)d->gauge_count,sizeof(BtGauge),hash,write);
 }
 bool bt_sd_snapshot_save(const BtDefinition*d){
     if(!ready||!d||!d->valid)return false;
     BtsSnapshotHeader head={0};
-    memcpy(head.magic,"BTSMD25",8);head.format=3;
+    memcpy(head.magic,"BTSMD26",8);head.format=4;
     if(!bts_raw_identity(&head.raw_size,&head.raw_crc))return false;
     head.field_size=sizeof(BtField);head.map_size=sizeof(BtMap);
     head.menu_size=sizeof(BtMenu);head.ref_size=sizeof(BtDialogRef);
     head.graph_size=sizeof(BtIniGraph);head.graph_line_size=sizeof(BtGraphLine);
+    head.gauge_size=sizeof(BtGauge);
     head.channels=(uint32_t)d->channel_count;head.constants=(uint32_t)d->constant_count;
     head.maps=(uint32_t)d->map_count;head.menus=(uint32_t)d->menu_count;
     head.refs=(uint32_t)d->ref_count;head.pages=(uint32_t)d->page_count;
     head.graphs=(uint32_t)d->graph_count;head.graph_lines=(uint32_t)d->graph_line_count;
+    head.gauges=(uint32_t)d->gauge_count;
     head.big_endian=(uint32_t)d->big_endian;
     memcpy(head.page_ids,d->page_ids,sizeof(head.page_ids));
     memcpy(head.page_sizes,d->page_sizes,sizeof(head.page_sizes));
@@ -325,15 +328,17 @@ bool bt_sd_snapshot_load(BtDefinition*d){
     FILE *f=fopen(path,"rb");if(!f)return false;
     BtsSnapshotHeader h={0};
     bool ok=fread(&h,1,sizeof(h),f)==sizeof(h);
-    if(ok)ok=memcmp(h.magic,"BTSMD25",8)==0&&h.format==3&&
+    if(ok)ok=memcmp(h.magic,"BTSMD26",8)==0&&h.format==4&&
         h.raw_size==raw_size&&h.raw_crc==raw_crc&&
         h.field_size==sizeof(BtField)&&h.map_size==sizeof(BtMap)&&
         h.menu_size==sizeof(BtMenu)&&h.ref_size==sizeof(BtDialogRef)&&
         h.graph_size==sizeof(BtIniGraph)&&h.graph_line_size==sizeof(BtGraphLine)&&
+        h.gauge_size==sizeof(BtGauge)&&
         h.channels<=BTS_MAX_CHANNELS&&h.constants<=BTS_MAX_CONSTANTS&&
         h.maps<=BTS_MAX_MAPS&&h.menus<=BTS_MAX_MENUS&&
         h.refs<=BTS_MAX_REFS&&h.graphs<=BTS_MAX_INI_GRAPHS&&
-        h.graph_lines<=BTS_MAX_GRAPH_LINES&&h.pages<=64&&h.signature[159]==0&&
+        h.graph_lines<=BTS_MAX_GRAPH_LINES&&h.gauges<=BTS_MAX_GAUGES&&
+        h.pages<=64&&h.signature[159]==0&&
         h.signature[0]!=0;
     static BtDefinition t; /* Never put the 8KB line buffer on the ARM9 stack. */
     bt_ini_reset(&t);
@@ -341,9 +346,11 @@ bool bt_sd_snapshot_load(BtDefinition*d){
         t.channel_count=(int)h.channels;t.constant_count=(int)h.constants;
         t.map_count=(int)h.maps;t.menu_count=(int)h.menus;t.ref_count=(int)h.refs;
         t.graph_count=(int)h.graphs;t.graph_line_count=(int)h.graph_lines;
+        t.gauge_count=(int)h.gauges;
         t.channel_capacity=t.channel_count;t.constant_capacity=t.constant_count;
         t.map_capacity=t.map_count;t.menu_capacity=t.menu_count;t.ref_capacity=t.ref_count;
         t.graph_capacity=t.graph_count;t.graph_line_capacity=t.graph_line_count;
+        t.gauge_capacity=t.gauge_count;
         if(t.channel_count)t.channels=malloc((size_t)t.channel_count*sizeof(BtField));
         if(t.constant_count)t.constants=malloc((size_t)t.constant_count*sizeof(BtField));
         if(t.map_count)t.maps=malloc((size_t)t.map_count*sizeof(BtMap));
@@ -351,9 +358,11 @@ bool bt_sd_snapshot_load(BtDefinition*d){
         if(t.ref_count)t.refs=malloc((size_t)t.ref_count*sizeof(BtDialogRef));
         if(t.graph_count)t.graphs=malloc((size_t)t.graph_count*sizeof(BtIniGraph));
         if(t.graph_line_count)t.graph_lines=malloc((size_t)t.graph_line_count*sizeof(BtGraphLine));
+        if(t.gauge_count)t.gauges=malloc((size_t)t.gauge_count*sizeof(BtGauge));
         ok=(!t.channel_count||t.channels)&&(!t.constant_count||t.constants)&&
             (!t.map_count||t.maps)&&(!t.menu_count||t.menus)&&(!t.ref_count||t.refs)&&
-            (!t.graph_count||t.graphs)&&(!t.graph_line_count||t.graph_lines);
+            (!t.graph_count||t.graphs)&&(!t.graph_line_count||t.graph_lines)&&
+            (!t.gauge_count||t.gauges);
         uint32_t hash=2166136261u;
         if(ok)ok=snapshot_arrays(f,&t,&hash,false)&&hash==h.payload_crc;
         if(ok){

@@ -152,6 +152,15 @@ static void add_ref(BtDefinition*d,const char*owner,const char*name,const char*l
     cp(r->label,sizeof(r->label),label);cp(r->detail,sizeof(r->detail),details);
     cp(r->condition,sizeof(r->condition),condition);r->kind=kind;
 }
+static bool placement(const char *s){
+    return s&&(!strcasecmp(s,"West")||!strcasecmp(s,"East")||
+        !strcasecmp(s,"North")||!strcasecmp(s,"South")||
+        !strcasecmp(s,"Center"));
+}
+static void set_placement(BtDefinition *d,const char *where){
+    if(d->ref_count>0&&placement(where))
+        cp(d->refs[d->ref_count-1].placement,sizeof(d->refs[0].placement),where);
+}
 static bool ini_expression(const char *s){return s&&(*s=='{'||*s=='$');}
 static void line_parse(BtDefinition *d,char *line) {
     char *p=trim(line);
@@ -179,6 +188,24 @@ static void line_parse(BtDefinition *d,char *line) {
         }
         memcpy(d->signature,begin,length);d->signature[length]=0;
         d->had_signature=length>0;return;
+    }
+    if(!strcasecmp(d->section,"GaugeConfigurations")){
+        if(!strcasecmp(key,"gaugeCategory"))return;
+        char cols[12][128];int n=csv(val,cols,12);
+        if(n<3||!cols[0][0])return;
+        if(d->gauge_count>=BTS_MAX_GAUGES||
+           !grow(d,(void**)&d->gauges,&d->gauge_capacity,d->gauge_count+1,
+                 sizeof(BtGauge),BTS_MAX_GAUGES,24)){
+            d->truncated=true;return;
+        }
+        BtGauge*g=&d->gauges[d->gauge_count++];memset(g,0,sizeof(*g));
+        cp(g->name,sizeof(g->name),key);
+        cp(g->channel,sizeof(g->channel),cols[0]);
+        cp(g->label,sizeof(g->label),cols[1]);
+        cp(g->unit,sizeof(g->unit),cols[2]);
+        if(n>=5&&num(cols[3],&g->min_value)&&num(cols[4],&g->max_value)&&
+           g->max_value>g->min_value)g->range_known=true;
+        return;
     }
     if(!strcasecmp(d->section,"UserDefined")||!strcasecmp(d->section,"UiDialogs")){
         char a[8][128];int n=csv(val,a,8);
@@ -214,12 +241,24 @@ static void line_parse(BtDefinition *d,char *line) {
         }else if(!strcasecmp(key,"displayOnlyField")&&n>=2){
             add_ref(d,d->current_dialog,a[1],a[0],3,n>4?a[4]:"",n>2?a[2]:"");
         }else if(!strcasecmp(key,"panel")&&n>0){
-            add_ref(d,d->current_dialog,a[0],n>1&&*a[1]?a[1]:a[0],1,"",n>2?a[2]:"");
+            /* Keep INI border placement for grouping across DSi screens;
+             * it is NOT a human-facing control or a conditional expression. */
+            const char *condition=n>2?a[2]:(n>1&&!placement(a[1])?a[1]:"");
+            add_ref(d,d->current_dialog,a[0],a[0],1,"",condition);
+            set_placement(d,n>1?a[1]:"");
         }else if(!strcasecmp(key,"commandButton")&&n>=2){
             add_ref(d,d->current_dialog,a[1],a[0],2,n>3?a[3]:"",n>2?a[2]:"");
-        }else if((!strcasecmp(key,"runtimeValue")||!strcasecmp(key,"readout")||!strcasecmp(key,"gauge"))&&n>=1){
-            const char *channel=n>1&&*a[1]?a[1]:a[0];
+        }else if(!strcasecmp(key,"gauge")&&n>=1){
+            /* Gauge names point to [GaugeConfigurations] templates, not
+             * [OutputChannels] directly. Never display the word 'Gauge'
+             * as a fake editable setting in the list. */
+            add_ref(d,d->current_dialog,a[0],a[0],7,"",
+                    n>2?a[2]:(n>1&&!placement(a[1])?a[1]:""));
+            set_placement(d,n>1?a[1]:"");
+        }else if((!strcasecmp(key,"runtimeValue")||!strcasecmp(key,"readout"))&&n>=1){
+            const char *channel=n>1&&*a[1]&&!placement(a[1])?a[1]:a[0];
             add_ref(d,d->current_dialog,channel,a[0],4,"",n>2?a[2]:"");
+            set_placement(d,n>1?a[1]:"");
         }else if(!strcasecmp(key,"topicHelp")||!strcasecmp(key,"help")||!strcasecmp(key,"helpText")){
             /* Help blocks describe the editor/dialog; never make them fields. */
         }
@@ -305,7 +344,7 @@ static void line_parse(BtDefinition *d,char *line) {
     }
 }
 void bt_ini_reset(BtDefinition*d) {
-    free(d->channels);free(d->constants);free(d->maps);free(d->menus);free(d->refs);free(d->graphs);free(d->graph_lines);
+    free(d->channels);free(d->constants);free(d->maps);free(d->menus);free(d->refs);free(d->graphs);free(d->graph_lines);free(d->gauges);
     memset(d,0,sizeof(*d));d->current_page=1;d->last_map=-1;d->last_graph=-1;
     for(int i=0;i<64;i++){d->page_ids[i]=-1;d->page_sizes[i]=-1;}
 }
@@ -321,11 +360,52 @@ void bt_ini_feed(BtDefinition*d,const uint8_t*b,size_t n) {
         else d->line_overflow=true;
     }
 }
+/* Use actual map and menu captions for subpanels where the ECU INI
+ * supplies them.  A placement directive must never appear as a list entry.
+ * Fall back to a readable identifier, not a made-up setting or caption. */
+static void panel_display_label(char *out,size_t size,const char *name){
+    size_t n=0;
+    for(size_t i=0;name[i]&&n+1<size;i++){
+        unsigned char c=(unsigned char)name[i];
+        unsigned char prev=i?(unsigned char)name[i-1]:0;
+        unsigned char next=(unsigned char)name[i+1];
+        if(c=='_'||c=='-'){if(n&&out[n-1]!=' '&&n+1<size)out[n++]=' ';continue;}
+        if(i&&n&&out[n-1]!=' '&&
+           ((isupper(c)&&(islower(prev)||isdigit(prev)||
+             (isupper(prev)&&islower(next))))||
+            (isdigit(c)&&isalpha(prev))||
+            (isalpha(c)&&isdigit(prev))))out[n++]=' ';
+        if(n+1<size){out[n]=(char)(n==0?toupper(c):c);n++;}
+    }
+    out[n]=0;
+}
+static void finalize_panel_labels(BtDefinition*d){
+    for(int i=0;i<d->ref_count;i++){
+        BtDialogRef *r=&d->refs[i];if(r->kind!=1)continue;
+        const char *caption=NULL;
+        for(int k=0;k<d->map_count;k++)if(!strcasecmp(d->maps[k].name,r->name)){
+            caption=d->maps[k].label;break;
+        }
+        if(!caption)for(int k=0;k<d->menu_count;k++)
+            if(d->menus[k].target[0]&&!strcasecmp(d->menus[k].target,r->name)){
+                caption=d->menus[k].label;break;
+            }
+        if(caption&&*caption)cp(r->label,sizeof(r->label),caption);
+        else panel_display_label(r->label,sizeof(r->label),r->name);
+    }
+}
 bool bt_ini_finish(BtDefinition*d) {
     if(!d->line_overflow&&d->line_len){d->line[d->line_len]=0;line_parse(d,d->line);}
     d->line_len=0;
     d->valid=!d->truncated&&d->had_constants&&d->had_outputs&&d->had_signature&&d->channel_count>0;
+    if(d->valid)finalize_panel_labels(d);
     return d->valid;
+}
+const BtGauge*bt_gauge(const BtDefinition*d,const char *name){
+    if(!d||!name)return NULL;
+    for(int i=0;i<d->gauge_count;i++)
+        if(!strcasecmp(d->gauges[i].name,name))return &d->gauges[i];
+    return NULL;
 }
 const BtField*bt_field(const BtDefinition*d,const char*name,bool runtime){
     const BtField*list=runtime?d->channels:d->constants;

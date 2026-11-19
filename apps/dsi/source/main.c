@@ -1,4 +1,4 @@
-/* Brick Tuner Suite DSi v2.5
+/* Brick Tuner Suite DSi v2.6
  * Native two-screen UI, sourced from the original 3DS v62 INI/BrickOS contract.
  * A DSi cannot render v62's Citro3D visuals; this edition retains a recognizable
  * dashboard / TunerStudio category tree / live channels / map and graph workflow.
@@ -108,6 +108,12 @@ static size_t ini_progress=0,ini_disk_bytes=0,ini_parsed_bytes=0,ini_expected_by
 static char client_ip[24]="-",gateway_ip[24]="-";
 static int page=0,list_pick=0,list_scroll=0,tune_cat=0,tune_focus=0,tune_group=-1;
 static int home_pick=0;
+static int dialog_gauge_page=0;
+static int dialog_visible_ids[512],dialog_visible_total=0;
+/* Cached per opened dialog, never traverse the full 2,799-ref INI on VBlank. */
+static int dialog_gauge_ref_ids[64],dialog_gauge_total=0;
+static char dialog_gauge_expr[64][256];
+static bool dialog_gauge_expr_valid[64];
 static BtFavorite favorites[BTS_MAX_FAVORITES];
 static int favorite_count=0;
 static char favorite_signature[160]="";
@@ -251,6 +257,14 @@ static char keypad_input[24]="";
 #define BTS_DSI_CHOICE_CAP 256
 static int bit_choice_count=0;
 static char bit_choice_labels[BTS_DSI_CHOICE_CAP][36];
+/* A filtered *display index* into the exact INI enum IDs. The raw ECU
+ * numeric ID is never remapped, even when a list contains 200 holes. */
+static int bit_visible_ids[BTS_DSI_CHOICE_CAP],bit_visible_count=0;
+static void filter_bit_choices(void){
+    bit_visible_count=0;
+    for(int i=0;i<bit_choice_count;i++)
+        if(bit_choice_labels[i][0])bit_visible_ids[bit_visible_count++]=i;
+}
 static bool bit_picker_open=false;
 static int bit_picker_pick=0,bit_picker_scroll=0;
 static const char *keypad_keys[16]={
@@ -775,17 +789,60 @@ static int tune_item_at(int row){
     for(int i=start+1;i<category_end(start);i++)if(def.menus[i].group!=2&&row--==0)return i;
     return -1;
 }
-static int dialog_count(void){
-    int count=0;
-    for(int i=0;i<def.ref_count;i++)if(!strcasecmp(def.refs[i].owner,dialog_name))count++;
-    return count;
+/* TS border-layout containers named ...West/...East/...Center are
+ * presentation-only wrappers. Flatten those into the single navigable list,
+ * retaining their real child controls, order, and identifiers. */
+static bool panel_layout_wrapper(const BtDialogRef *r){
+    if(r->kind!=1||r->condition[0])return false;
+    if(r->placement[0])return true;
+    const char *s=r->name;size_t n=strlen(s);
+    static const char *suffixes[]={"West","East","Center","North","South"};
+    for(int k=0;k<5;k++){
+        size_t len=strlen(suffixes[k]);
+        if(n>len&&!strcasecmp(s+n-len,suffixes[k]))return true;
+    }
+    return false;
 }
+/* Gauge-only subpanels belong to the upper reference display. Do not
+ * create a pointless bottom-screen setting called 'Fan PWM Gauges'. */
+static bool gauge_only_panel(const char *owner,int depth){
+    if(depth>=7)return false;
+    bool found=false;
+    for(int i=0;i<def.ref_count;i++){
+        const BtDialogRef *r=&def.refs[i];
+        if(strcasecmp(r->owner,owner))continue;
+        if(r->kind==7){found=true;continue;}
+        if(r->kind==1&&strcasecmp(r->name,owner)&&
+           gauge_only_panel(r->name,depth+1)){found=true;continue;}
+        return false;
+    }
+    return found;
+}
+/* Build the visible list ONCE when opening a dialog; INI layouts can
+ * contain thousands of refs and should not be traversed on every redraw. */
+static void dialog_entry_find(const char *owner,int depth){
+    if(depth>=7||dialog_visible_total>=512)return;
+    for(int i=0;i<def.ref_count;i++){
+        const BtDialogRef *r=&def.refs[i];
+        if(strcasecmp(r->owner,owner)||r->kind==7)continue;
+        if(r->kind==1&&gauge_only_panel(r->name,0))continue;
+        if(panel_layout_wrapper(r)&&strcasecmp(r->owner,r->name))
+            dialog_entry_find(r->name,depth+1);
+        else if(dialog_visible_total<512)
+            dialog_visible_ids[dialog_visible_total++]=i;
+        if(dialog_visible_total>=512)return;
+    }
+}
+static void rebuild_dialog_entries(void){
+    dialog_visible_total=0;
+    if(dialog_name[0])dialog_entry_find(dialog_name,0);
+}
+static int dialog_count(void){return dialog_visible_total;}
 static void open_map(int id);
 static int dialog_at(int row){
-    if(row<0)return -1;
-    for(int i=0;i<def.ref_count;i++)if(!strcasecmp(def.refs[i].owner,dialog_name)&&row--==0)return i;
-    return -1;
+    return row>=0&&row<dialog_visible_total?dialog_visible_ids[row]:-1;
 }
+static void rebuild_dialog_gauges(void);
 static void open_dialog(const char*id,const char*label){
     if(dialog_name[0]){
         if(dialog_depth>=6){snprintf(note,sizeof(note),"MAX NESTED PANEL DEPTH");return;}
@@ -795,23 +852,27 @@ static void open_dialog(const char*id,const char*label){
     }
     snprintf(dialog_name,sizeof(dialog_name),"%s",id);
     snprintf(dialog_label,sizeof(dialog_label),"%s",label);
-    dialog_pick=dialog_scroll=0;dialog_info=false;
+    dialog_pick=dialog_scroll=0;dialog_info=false;dialog_gauge_page=0;
     dialog_help_index=-1;dialog_help_page=0;
+    rebuild_dialog_entries();
+    rebuild_dialog_gauges();
 }
 static bool open_ini_field(const char *target,const char *label,bool readonly){
     const BtField *f=bt_field(&def,target,false);
     if(!f||bt_type_size(f->type)<1||f->width*f->height<1||
        f->width*f->height>BTS_MAP_CELLS)return false;
-    bit_choice_count=0;
-    if(f->kind==2&&sd_ready)
+    bit_choice_count=bit_visible_count=0;
+    if(f->kind==2&&sd_ready){
         bit_choice_count=bt_bit_choices(bt_sd_cache_path(),f->name,bit_choice_labels,BTS_DSI_CHOICE_CAP);
+        filter_bit_choices();
+    }
     memset(&scalar_map,0,sizeof(scalar_map));
     snprintf(scalar_map.label,sizeof(scalar_map.label),"%s",label&&*label?label:f->name);
     snprintf(scalar_map.z,sizeof(scalar_map.z),"%s",f->name);
-    editor_readonly=readonly||f->read_only||(f->kind==2&&!bit_choice_count);
+    editor_readonly=readonly||f->read_only||(f->kind==2&&!bit_visible_count);
     bit_picker_open=false;
     open_map(BTS_MAX_MAPS);
-    if(f->kind==2&&!bit_choice_count)
+    if(f->kind==2&&!bit_visible_count)
         snprintf(note,sizeof(note),"INI OPTIONS UNRESOLVED / READ ONLY");
     return true;
 }
@@ -868,10 +929,84 @@ static void dialog_action(void){
     if(!open_ini_field(r->name,r->label,r->kind==3))
         snprintf(note,sizeof(note),"INI CONTROL HAS NO SUPPORTED ECU TYPE");
 }
+/* Each reference gauge is a template -> live OutputChannel. INI placement
+ * separates reference/diagnostics (usually East/North) from settings
+ * (usually West/Center). Keep one list below and gauges above. */
+static void collect_dialog_gauges(const char *owner,int depth){
+    if(depth>=7||dialog_gauge_total>=64)return;
+    for(int i=0;i<def.ref_count;i++){
+        const BtDialogRef *r=&def.refs[i];
+        if(strcasecmp(r->owner,owner))continue;
+        if(r->kind==7){
+            if(dialog_gauge_total<64)
+                dialog_gauge_ref_ids[dialog_gauge_total++]=i;
+        }else if(r->kind==1&&strcasecmp(r->name,owner))
+            collect_dialog_gauges(r->name,depth+1);
+        if(dialog_gauge_total>=64)return;
+    }
+}
+static void rebuild_dialog_gauges(void){
+    dialog_gauge_total=0;
+    memset(dialog_gauge_expr_valid,0,sizeof(dialog_gauge_expr_valid));
+    if(!dialog_name[0])return;
+    collect_dialog_gauges(dialog_name,0);
+    for(int i=0;i<dialog_gauge_total;i++){
+        const BtGauge*g=bt_gauge(&def,def.refs[dialog_gauge_ref_ids[i]].name);
+        if(g&&sd_ready&&!bt_field(&def,g->channel,true))
+            dialog_gauge_expr_valid[i]=bt_ini_rhs(bt_sd_cache_path(),
+                "OutputChannels",g->channel,dialog_gauge_expr[i],
+                sizeof(dialog_gauge_expr[i]));
+    }
+}
+static int dialog_gauge_count(void){return dialog_gauge_total;}
+static int dialog_gauge_at(int index){
+    return index>=0&&index<dialog_gauge_total?dialog_gauge_ref_ids[index]:-1;
+}
+static bool gauge_live_value(const BtGauge *g,double *out){
+    if(!g||!fresh())return false;
+    if(get_value(g->channel,out))return true;
+    for(int i=0;i<dialog_gauge_total;i++){
+        if(!dialog_gauge_expr_valid[i])continue;
+        const BtGauge *other=bt_gauge(&def,def.refs[dialog_gauge_ref_ids[i]].name);
+        if(other==g)return bt_numeric_eval(dialog_gauge_expr[i],
+                                            computed_value_lookup,NULL,out);
+    }
+    return false;
+}
+static void draw_ref_gauge(const BtGauge *g,int x,int y,int width){
+    if(!g)return;
+    round_fill(top,x,y,width,36,4,PANEL);
+    char label[92];snprintf(label,sizeof(label),"%s",g->label[0]?g->label:g->name);
+    tiny_fit(top,x+6,y+4,label,WHITE,width-119);
+    char value[52];double v=0;
+    bool ok=gauge_live_value(g,&v);
+    if(ok){char num[28];number(v,num,sizeof(num));
+        snprintf(value,sizeof(value),"%.23s %.20s",num,g->unit);
+    }else snprintf(value,sizeof(value),"-- %s",g->unit);
+    tiny_fit(top,x+width-100,y+4,value,ok?GREEN:MUTED,96);
+    fill(top,x+6,y+24,width-12,6,LITE);
+    if(ok&&g->range_known){
+        double f=(v-g->min_value)/(g->max_value-g->min_value);
+        if(f<0)f=0;
+        if(f>1)f=1;
+        int bw=(int)((width-12)*f+0.5);
+        if(bw>0)fill(top,x+6,y+24,bw,6,HIGHLIGHT);
+    }
+}
 static void top_dialog(void){
     draw_header(dialog_info?"INI HELP / DETAILS":"ECU SETTINGS / INI PANEL");
     int at=dialog_at(dialog_pick);
-    if(at<0){text(top,10,46,"EMPTY INI DIALOG",MUTED,26);return;}
+    if(at<0){
+        int gauges=dialog_gauge_count();
+        if(gauges==0){text(top,10,46,"EMPTY INI DIALOG",MUTED,26);return;}
+        tiny_fit(top,10,30,dialog_label,HIGHLIGHT,238);
+        for(int j=0;j<3;j++){
+            int ix=dialog_gauge_page*3+j,ri=ix<gauges?dialog_gauge_at(ix):-1;
+            if(ri>=0)draw_ref_gauge(bt_gauge(&def,def.refs[ri].name),8,50+j*43,240);
+        }
+        tiny_text(top,10,182,"L/R CHANGE REFERENCE GAUGES",MUTED,232);
+        return;
+    }
     const BtDialogRef*r=&def.refs[at];
     text(top,10,31,dialog_label,HIGHLIGHT,29);
     text(top,10,50,r->label,WHITE,27);
@@ -923,17 +1058,30 @@ static void top_dialog(void){
     if(r->kind==4){double v=0;
         if(get_value(r->name,&v)){number(v,b,sizeof(b));text(top,10,89,b,GREEN,20);}
     }
-    if(dialog_context[0]){
-        tiny_text(top,9,109,"DESCRIPTION FROM ECU INI",MUTED,235);
-        text_wrapped(top,10,124,dialog_context,WHITE,26,3);
-    }else if(r->detail[0]){
-        tiny_text(top,9,109,"DETAIL FROM ECU INI",MUTED,235);
-        text_wrapped(top,10,124,r->detail,WHITE,26,3);
-    }else if(r->kind==5)text_wrapped(top,10,111,r->label,WHITE,26,3);
-    else if(r->condition[0])text_wrapped(top,10,111,r->condition,MUTED,26,3);
-    else tiny_text(top,9,113,"NO DESCRIPTION IN ECU INI",MUTED,235);
-    if(r->kind==2)tiny_text(top,10,177,"INI COMMAND / NOT EXECUTED",HIGHLIGHT,236);
-    else tiny_text(top,10,177,"Y FULL DESCRIPTION / A OPEN",HIGHLIGHT,240);
+    int gauges=dialog_gauge_count();
+    if(gauges>0){
+        if(dialog_context[0])tiny_fit(top,10,88,dialog_context,MUTED,236);
+        else if(r->detail[0])tiny_fit(top,10,88,r->detail,MUTED,236);
+        for(int j=0;j<2;j++){
+            int ix=dialog_gauge_page*2+j,ri=ix<gauges?dialog_gauge_at(ix):-1;
+            if(ri>=0)draw_ref_gauge(bt_gauge(&def,def.refs[ri].name),8,105+j*36,240);
+        }
+        char b2[60];snprintf(b2,sizeof(b2),"REFERENCE GAUGES %d-%d / %d   L/R MORE",
+            dialog_gauge_page*2+1,dialog_gauge_page*2+2<gauges?dialog_gauge_page*2+2:gauges,gauges);
+        tiny_fit(top,9,181,b2,HIGHLIGHT,242);
+    }else{
+        if(dialog_context[0]){
+            tiny_text(top,9,109,"DESCRIPTION FROM ECU INI",MUTED,235);
+            text_wrapped(top,10,124,dialog_context,WHITE,26,3);
+        }else if(r->detail[0]){
+            tiny_text(top,9,109,"DETAIL FROM ECU INI",MUTED,235);
+            text_wrapped(top,10,124,r->detail,WHITE,26,3);
+        }else if(r->kind==5)text_wrapped(top,10,111,r->label,WHITE,26,3);
+        else if(r->condition[0])text_wrapped(top,10,111,r->condition,MUTED,26,3);
+        else tiny_text(top,9,113,"NO DESCRIPTION IN ECU INI",MUTED,235);
+        if(r->kind==2)tiny_text(top,10,177,"INI COMMAND / NOT EXECUTED",HIGHLIGHT,236);
+        else tiny_text(top,10,177,"Y FULL DESCRIPTION / A OPEN",HIGHLIGHT,240);
+    }
 }
 static void top_tune(void){
     if(cal_load.active || (chosen_map>=0&&table.valid)){map_top();return;}
@@ -1059,7 +1207,7 @@ static void bottom_editor(void){
             round_fill(bottom,9,72,237,30,5,LITE);
             text(bottom,16,81,bit_choice_labels[current],WHITE,24);
             tiny_text(bottom,9,107,"A OPTIONS / X NEXT / Y PREV",CYAN,236);
-        }else text(bottom,9,76,"UNDEFINED INI CHOICE / READ ONLY",RED,26);
+        }else text(bottom,9,76,"UNKNOWN ECU VALUE / A FOR OPTIONS",RED,26);
     }else if(scalar){
         number(focused_value(),b,sizeof(b));
         text(bottom,9,52,"ECU CALIBRATION VALUE",MUTED,26);
@@ -1102,22 +1250,32 @@ static void bottom_editor(void){
     else tiny_text(bottom,8,153,any_map_dirty()?"LOCAL EDIT / NOT WRITTEN":
             editor_readonly?"INI DISPLAY ONLY":"ECU ORIGINAL / UNCHANGED",MUTED,240);
     tiny_text(bottom,8,181,editor_readonly?"READ ONLY  /  B BACK":
-         table.confirm_burn?"R CONFIRM BURN / VERIFIED BACKUP":"START STAR  /  R TWICE BURN",HIGHLIGHT,246);
+         "START BURN  /  R FAVORITE  /  B BACK",HIGHLIGHT,246);
+}
+static void bottom_burn_confirm(void){
+    /* Modal confirmation: START merely opens this panel; no ECU write
+     * can occur until a separate A-down event on the next input cycle. */
+    round_fill(bottom,8,40,240,114,7,PANEL);
+    fill(bottom,13,47,230,2,HIGHLIGHT);
+    tiny_fit(bottom,22,57,"CONFIRM ECU BURN",HIGHLIGHT,215);
+    tiny_fit(bottom,19,81,"WRITE STAGED CALIBRATION TO ECU?",WHITE,218);
+    tiny_fit(bottom,19,99,"BENCH ONLY / VERIFIED BACKUP",MUTED,218);
+    round_fill(bottom,17,122,221,23,4,LITE);
+    tiny_fit(bottom,28,128,"PRESS A TO BURN  /  B CANCEL",HIGHLIGHT,201);
 }
 static void bottom_bit_picker(void){
     fill(bottom,0,0,W,H,BG);text(bottom,9,8,"INI DROPDOWN / PREDEFINED",HIGHLIGHT,26);
     const BtField *f=focused_cal_field();
     text(bottom,10,31,f?f->name:"ECU OPTIONS",HIGHLIGHT,27);
     for(int row=0;row<8;row++){
-        int index=bit_picker_scroll+row;
-        if(index>=bit_choice_count)break;
-        int y=49+row*16;
-        bool chosen=index==bit_picker_pick;
+        int visible=bit_picker_scroll+row;
+        if(visible>=bit_visible_count)break;
+        int index=bit_visible_ids[visible],y=49+row*16;
+        bool chosen=visible==bit_picker_pick;
         if(chosen)round_fill(bottom,6,y-2,244,16,3,LITE);
         char number[12];snprintf(number,sizeof(number),"%d",index);
         text(bottom,10,y,number,MUTED,4);
-        text(bottom,49,y,bit_choice_labels[index][0]?bit_choice_labels[index]:"(INI RESERVED)",
-             bit_choice_labels[index][0]?(chosen?HIGHLIGHT:WHITE):MUTED,21);
+        text(bottom,49,y,bit_choice_labels[index],chosen?HIGHLIGHT:WHITE,21);
     }
     tiny_text(bottom,8,181,"A SELECT    B CANCEL",MUTED,242);
 }
@@ -1141,13 +1299,15 @@ static void bottom_tune(void){
         return;
     }
     if(chosen_map>=0&&table.valid){
-        bottom_editor();
+        if(table.confirm_burn)bottom_burn_confirm();
+        else bottom_editor();
         return;
     }
     if(dialog_name[0]){
         tiny_fit(bottom,9,23,dialog_label,HIGHLIGHT,240);
         int total=dialog_count();
-        if(!total)text(bottom,10,74,"NO SUPPORTED FIELDS",MUTED,34);
+        if(!total)text(bottom,10,74,dialog_gauge_count()>0?
+            "LIVE REFERENCE GAUGES ABOVE":"NO SUPPORTED FIELDS",MUTED,34);
         for(int row=0;row<8&&dialog_scroll+row<total;row++){
             int ix=dialog_scroll+row,at=dialog_at(ix),y=36+row*18;
             if(at<0)continue;
@@ -1524,6 +1684,22 @@ static int live_length(void){
         for(int i=0;i<8;i++)if(graph_list_valid[i])
             length=expression_live_length(graph_list_formulas[i],length);
     }
+    /* TunerStudio dialog reference gauges require live bytes even when
+     * the user has not selected those channels in the generic View tab. */
+    if((page==P_TUNE||page==P_FAV)&&dialog_name[0]){
+        int count=dialog_gauge_count();
+        for(int i=0;i<count;i++){
+            int ref=dialog_gauge_at(i);
+            if(ref<0)continue;
+            const BtGauge *g=bt_gauge(&def,def.refs[ref].name);
+            if(!g)continue;
+            const BtField *f=bt_field(&def,g->channel,true);
+            if(f){int end=f->offset+bt_type_size(f->type);
+                if(end>length&&end<=BTS_LIVE_CAP)length=end;
+            }else if(i<64&&dialog_gauge_expr_valid[i])
+                length=expression_live_length(dialog_gauge_expr[i],length);
+        }
+    }
     /* Preserve a small 30Hz response while navigating; request the larger
      * six-channel capture only when the lower idle dashboard is visible. */
     if(idle_dashboard || (page==P_HOME&&gauge_layout>2))length=bt_idle_required_length(&def,&idle_gauges,length);
@@ -1651,7 +1827,7 @@ static void open_map(int id){
     if(virtual_z)memcpy(table.cells,ini_virtual_z,(size_t)virtual_count*sizeof(double));
     editor_description[0]=0;editor_help_visible=false;
     if(sd_ready){
-        if(!bt_ini_context_help(bt_sd_cache_path(),z->name,editor_description,sizeof(editor_description))
+        if(!(z&&bt_ini_context_help(bt_sd_cache_path(),z->name,editor_description,sizeof(editor_description)))
            &&m->help_topic[0])
             bt_ini_topic_help(bt_sd_cache_path(),m->help_topic,editor_description,sizeof(editor_description));
     }
@@ -1965,10 +2141,12 @@ static void bit_picker_show(void){
     const BtField *z=focused_cal_field();
     if(!z||z->kind!=2||map_focus!=0)return;
     int current=(int)focused_value();
-    if(current<0||current>=bit_choice_count)current=0;
-    bit_picker_pick=current;
-    bit_picker_scroll=current>3?current-3:0;
-    bit_picker_open=true;
+    /* The UI indexes only defined options; each item still writes its
+     * original numeric INI value, never an artificially compacted ID. */
+    bit_picker_pick=0;
+    for(int i=0;i<bit_visible_count;i++)if(bit_visible_ids[i]==current){bit_picker_pick=i;break;}
+    bit_picker_scroll=bit_picker_pick>3?bit_picker_pick-3:0;
+    bit_picker_open=bit_visible_count>0;
 }
 static void keypad_begin(void){
     if(!table.valid||chosen_map<0||editor_readonly)return;
@@ -2023,7 +2201,7 @@ static void commit_map(void){
         snprintf(note,sizeof(note),"SELECT YOUR EDITED Z/X/Y FIELD FIRST");return;
     }
     if(!table.confirm_burn){table.confirm_burn=true;
-        snprintf(note,sizeof(note),"R AGAIN: BENCH ONLY / BACKUP / BURN");return;}
+        snprintf(note,sizeof(note),"PRESS A TO BURN / B TO CANCEL");return;}
     table.confirm_burn=false;
     bt_async_cancel();bt_async_forget_connection();
     snprintf(status_msg,sizeof(status_msg),"VERIFYING ECU / WRITING BENCH ONLY");
@@ -2037,7 +2215,7 @@ static void commit_map(void){
 }
 static void goto_page(int next){
     if(next<0||next>=P_COUNT)return;
-    page=next;chosen_map=-1;table.valid=false;map_focus=0;bit_picker_open=false;bit_choice_count=0;list_pick=list_scroll=0;editor_readonly=false;
+    page=next;chosen_map=-1;table.valid=false;table.confirm_burn=false;map_focus=0;bit_picker_open=false;bit_choice_count=bit_visible_count=0;list_pick=list_scroll=0;editor_readonly=false;
     keypad_open=false;
     activity_frame=frame;idle_dashboard=false;
     dialog_name[0]=0;note[0]=0;dialog_depth=0;
@@ -2093,20 +2271,18 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
     if(bit_picker_open){
         if(down&KEY_B){bit_picker_open=false;return;}
         if(down&KEY_UP && bit_picker_pick>0)bit_picker_pick--;
-        if(down&KEY_DOWN && bit_picker_pick+1<bit_choice_count)bit_picker_pick++;
+        if(down&KEY_DOWN && bit_picker_pick+1<bit_visible_count)bit_picker_pick++;
         if(bit_picker_pick<bit_picker_scroll)bit_picker_scroll=bit_picker_pick;
         if(bit_picker_pick>=bit_picker_scroll+8)bit_picker_scroll=bit_picker_pick-7;
         if((down&KEY_TOUCH)&&tp->py>=49&&tp->py<177){
             int next=bit_picker_scroll+(tp->py-49)/16;
-            if(next>=0&&next<bit_choice_count){
+            if(next>=0&&next<bit_visible_count){
                 bit_picker_pick=next;
-                if(bit_choice_labels[next][0] && set_map_cell((double)next))bit_picker_open=false;
+                if(set_map_cell((double)bit_visible_ids[next]))bit_picker_open=false;
             }
         }
-        if(down&KEY_A){
-            if(bit_picker_pick>=0&&bit_picker_pick<bit_choice_count&&bit_choice_labels[bit_picker_pick][0]){
-                if(set_map_cell((double)bit_picker_pick))bit_picker_open=false;
-            }else snprintf(note,sizeof(note),"INI RESERVED / CANNOT SELECT");
+        if(down&KEY_A&&bit_picker_pick>=0&&bit_picker_pick<bit_visible_count){
+            if(set_map_cell((double)bit_visible_ids[bit_picker_pick]))bit_picker_open=false;
         }
         return;
     }
@@ -2128,6 +2304,11 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
         return;
     }
     if(chosen_map>=0&&table.valid){
+        if(table.confirm_burn){
+            if(down&KEY_A)commit_map();
+            else if(down&KEY_B){table.confirm_burn=false;note[0]=0;}
+            return;
+        }
         if(editor_help_visible){if(down&KEY_B)editor_help_visible=false;return;}
         if((down&KEY_TOUCH)&&tp->py>=148&&tp->py<174&&editor_description[0]){
             editor_help_visible=true;return;
@@ -2136,7 +2317,8 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
         if((down|held)&KEY_RIGHT&&cx+1<table.width)cx++;
         if((down|held)&KEY_UP&&cy>0)cy--;
         if((down|held)&KEY_DOWN&&cy+1<table.height)cy++;
-        if(down&KEY_START)favorite_current_editor();
+        if(down&KEY_START){commit_map();return;}
+        if(down&KEY_R)favorite_current_editor();
         if((down&KEY_TOUCH)&&tp->py>=24&&tp->py<46&&tp->px>=215)favorite_current_editor();
         if(down&KEY_X)change_map_cell(1);
         if(down&KEY_Y)change_map_cell(-1);
@@ -2163,7 +2345,7 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
                 }
             }
         }
-        if(down&KEY_R)commit_map();
+        /* R stars a setting; START opens the burn confirmation modal. */
         if(down&KEY_B){
             if(any_map_dirty()&&!abandon_confirm){abandon_confirm=true;table.confirm_burn=false;
                 snprintf(note,sizeof(note),"B AGAIN TO DISCARD UNSAVED EDITS");return;}
@@ -2191,13 +2373,21 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
                     dialog_depth--;
                     memcpy(dialog_name,dialog_owner_stack[dialog_depth],sizeof(dialog_name));
                     memcpy(dialog_label,dialog_label_stack[dialog_depth],sizeof(dialog_label));
-                    dialog_pick=dialog_scroll=0;dialog_info=false;dialog_info=false;
+                    dialog_pick=dialog_scroll=0;dialog_info=false;dialog_gauge_page=0;
+                    rebuild_dialog_entries();
+                    rebuild_dialog_gauges();
                 }else dialog_name[0]=0;
                 return;
             }
             if(down&KEY_Y){dialog_info=!dialog_info;dialog_help_index=-1;dialog_help_page=0;}
             if(dialog_info && (down&KEY_L) && dialog_help_page>0)dialog_help_page--;
             if(dialog_info && (down&KEY_R) && dialog_help_page<30)dialog_help_page++;
+            if(!dialog_info){
+                int gauges=dialog_gauge_count(),per=dialog_count()>0?2:3;
+                int pages=(gauges+per-1)/per;
+                if((down&KEY_L)&&dialog_gauge_page>0)dialog_gauge_page--;
+                if((down&KEY_R)&&dialog_gauge_page+1<pages)dialog_gauge_page++;
+            }
             if((down&KEY_UP)&&dialog_pick>0){dialog_pick--;dialog_info=false;dialog_help_index=-1;}
             if((down&KEY_DOWN)&&dialog_pick+1<n){dialog_pick++;dialog_info=false;dialog_help_index=-1;}
             if(dialog_pick<dialog_scroll)dialog_scroll=dialog_pick;
