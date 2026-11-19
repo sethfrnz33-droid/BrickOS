@@ -74,7 +74,7 @@ typedef struct {char name[64];const char *value;} MacroDef;
 typedef struct {int value;char label[56];} Choice;
 typedef struct {char id[64],alt[64],label[76],x[60],y[60],z[60],xchan[60],ychan[60];bool curve,xro,yro;} TableDef;
 typedef struct {char owner[64],ref[64],label[60];int panel;} DialogRef;
-typedef struct {char label[72],command[64],info[128];int field;int type;} Resolved;
+typedef struct {char label[72],command[64],info[128],group[68];int field;int type;} Resolved;
 
 enum {T_U08,T_S08,T_U16,T_S16,T_U32,T_S32,T_F32,T_F64,T_BAD};
 enum {K_SCALAR,K_ARRAY,K_BITS};
@@ -105,6 +105,17 @@ static Field cal[FIELD_CAP], channels[CHAN_CAP];static int cal_count=0,chan_coun
 static TableDef tables[TABLE_CAP];static int table_count=0;
 static DialogRef refs[REF_CAP];static int ref_count=0;
 static Resolved results[RES_CAP];static int result_count=0;
+/* Use actual [UserDefined] dialog captions, not ambiguous field labels, to
+ * reconstruct TunerStudio's panel grouping on the dual screens. */
+#define DIALOG_CAPTION_CAP 768
+typedef struct {char id[64],title[68];} DialogCaption;
+static DialogCaption dialog_captions[DIALOG_CAPTION_CAP];
+static int dialog_caption_count=0;
+static const char *dialog_caption(const char *id){
+ for(int i=0;i<dialog_caption_count;i++)
+   if(!strcasecmp(dialog_captions[i].id,id))return dialog_captions[i].title;
+ return NULL;
+}
 static int page_ids[64], page_sizes[64],page_ids_count=0,live_length=256,base_live_length=256;
 static bool page_burnable[64]={false},page_writeable[64]={false};
 static char ini_signature[160]="",ecu_signature[160]="",menu_info[80]="No INI loaded";
@@ -945,7 +956,7 @@ static int parse_ini_all(const char*body,int length){char*buf=(char*)malloc((siz
  if(compare_buffer)free(compare_buffer);
  ini_source=buf;
  macro_count=power_cycle_count=ini_readonly_count=0;rpm_limit_requested=rpm_limit_known=false;rpm_limit_retry_at=0;
- menu_count=cal_count=chan_count=table_count=ref_count=gauge_def_count=ini_graph_count=0;page_ids_count=0;ini_setting_help_count=0;
+ menu_count=cal_count=chan_count=table_count=ref_count=gauge_def_count=ini_graph_count=0;page_ids_count=0;ini_setting_help_count=0;dialog_caption_count=0;
  memset(&ini_flags,0,sizeof(ini_flags));ini_flags_requested=false;ini_flags_retry_at=0;ini_flags_signature[0]=0;
  memset(nav_bookmark,0,sizeof(nav_bookmark));memset(page_ids,-1,sizeof(page_ids));memset(page_sizes,-1,sizeof(page_sizes));memset(page_burnable,0,sizeof(page_burnable));memset(page_writeable,0,sizeof(page_writeable));ini_signature[0]=0;
  char*save=NULL;char*row=strtok_r(buf,"\r\n",&save);char section[32]="";int currentpage=1,lasttable=-1,lastcurve=-1;char dialog[64]="";int currentgraph=-1;bool onmain=false;
@@ -997,7 +1008,14 @@ static int parse_ini_all(const char*body,int length){char*buf=(char*)malloc((siz
     }
  }
  if(!strcasecmp(section,"UserDefined")){
- if(!strcasecmp(key,"dialog")){copy_text(dialog,sizeof(dialog),a[0]);currentgraph=-1;}
+ if(!strcasecmp(key,"dialog")){
+      copy_text(dialog,sizeof(dialog),a[0]);currentgraph=-1;
+      if(n>1&&*a[1]&&dialog_caption_count<DIALOG_CAPTION_CAP){
+         DialogCaption *c=&dialog_captions[dialog_caption_count++];
+         copy_text(c->id,sizeof(c->id),dialog);
+         copy_text(c->title,sizeof(c->title),a[1]);
+      }
+  }
  else if(!strcasecmp(key,"liveGraph") && *dialog && n>=1 && ini_graph_count<INI_GRAPH_CAP){
    currentgraph=ini_graph_count++;
    IniGraphDef *g=&ini_graphs[currentgraph];memset(g,0,sizeof(*g));
@@ -2682,7 +2700,7 @@ static void search_prompt(void){
  note(search_count?"Select a real ECU item":"No INI matches; press Y to search again");
 }
 static bool has_field_result(int id){for(int i=0;i<result_count;i++)if(results[i].field==id)return true;return false;}
-static void add_result(const char*label,int fid,int typ){if(fid<0||fid>=cal_count||result_count>=RES_CAP||has_field_result(fid))return;Resolved*r=&results[result_count++];snprintf(r->label,sizeof(r->label),"%s",(label&&*label)?label:cal[fid].name);r->field=fid;r->type=typ;}
+static void add_result(const char*label,int fid,int typ){if(fid<0||fid>=cal_count||result_count>=RES_CAP||has_field_result(fid))return;Resolved*r=&results[result_count++];memset(r,0,sizeof(*r));snprintf(r->label,sizeof(r->label),"%s",(label&&*label)?label:cal[fid].name);r->field=fid;r->type=typ;}
 /* Read-only text and gauge controls from the ECU's actual INI. */
 static void add_info_result(const char *raw){
  if(!raw||!*raw||result_count>=RES_CAP)return;
@@ -3056,6 +3074,7 @@ static void fault_open_page(void){
 }
 static int find_table(const char*id){for(int i=0;i<table_count;i++)if(!strcasecmp(tables[i].id,id)||!strcasecmp(tables[i].alt,id))return i;return -1;}
 static void resolve_item(const char*id,int depth){if(depth>8||!id||!*id||result_count>=RES_CAP)return;
+ int first=result_count;
  int tid=find_table(id);if(tid>=0){TableDef*t=&tables[tid];int z=field_index(t->z),x=field_index(t->x),y=field_index(t->y);
  /* TunerStudio's table id is its 2D entry and its alternate id is the
   * 3D entry. Both reference the SAME INI Z field and ECU bytes. */
@@ -3076,6 +3095,57 @@ static void resolve_item(const char*id,int depth){if(depth>8||!id||!*id||result_
    }
  }
  else {f=field_index(refs[i].ref);if(f>=0)add_result(refs[i].label,f,0);}}
+ /* The deepest named panel owns its controls. Unnamed layout wrappers
+  * (e.g. outputsDialogLeft/Right) leave child names intact. */
+ const char *caption=dialog_caption(id);
+ if((!caption||!*caption)&&depth==0)caption=open_title;
+ if(caption&&*caption){
+   for(int i=first;i<result_count;i++)if(!results[i].group[0])
+       copy_text(results[i].group,sizeof(results[i].group),caption);
+ }
+}
+/* Contiguous group boundaries preserve the exact order of the ECU INI. */
+static const char *config_group_label(int idx){
+ if(idx<0||idx>=result_count)return open_title;
+ return results[idx].group[0]?results[idx].group:open_title;
+}
+static int config_group_count(void){
+ int n=result_count?1:0;
+ for(int i=1;i<result_count;i++)
+    if(strcasecmp(config_group_label(i),config_group_label(i-1)))n++;
+ return n;
+}
+static int config_group_start(int group){
+ if(group<0)return -1;
+ if(!result_count)return -1;
+ if(group==0)return 0;
+ int n=0;
+ for(int i=1;i<result_count;i++){
+    if(strcasecmp(config_group_label(i),config_group_label(i-1))){
+       if(++n==group)return i;
+    }
+ }
+ return -1;
+}
+static int config_group_end(int start){
+ if(start<0||start>=result_count)return 0;
+ int i=start+1;
+ while(i<result_count&&!strcasecmp(config_group_label(i),config_group_label(start)))i++;
+ return i;
+}
+static int config_group_of(int index){
+ if(index<0||index>=result_count)return 0;
+ int n=0;
+ for(int i=1;i<=index;i++)
+    if(strcasecmp(config_group_label(i),config_group_label(i-1)))n++;
+ return n;
+}
+static void config_group_shift(int direction){
+ int count=config_group_count();if(count<2)return;
+ int current=config_group_of(selected);
+ int next=(current+direction+count)%count;
+ int first=config_group_start(next);
+ if(first>=0){selected=first;scroll_y=0;}
 }
 static void open_cal(int id,const char*label);
 static void open_ini_graph(int id,int returnpage,int returnselected);
@@ -4262,32 +4332,59 @@ static void draw_tune_categories_top(void){
       tune_lower_focus?"A: OPEN OPTION     B: CATEGORY":"A: SETTINGS     B: HOME");
 }
 
+/* Two-screen configuration editor: named INI subpanels on top, values and
+ * visually distinct action buttons on the touchscreen below. */
 static void draw_tune_dialog_top(void){
  draw_depth_grid(400,240);
- char title[88];shorten(title,sizeof(title),open_title,42);
- text(12,5,.53f,white,title);
- if(result_count<1){text(12,91,.48f,orange,"No supported fields in this INI dialog");return;}
- int rows=8,first=selected>=rows?selected-rows+1:0;
- for(int r=0;r<rows&&first+r<result_count;r++){
-    int i=first+r;float y=28+23*r;
-    bool active=i==selected;
-    float boxx=9+(active?bts_front(3.4f):0.f);
-    float foreground=boxx-9;
-    round_panel(boxx,y,381,21,3,active?muted_leaf:panel);
-    const Resolved *item=&results[i];
-    int type=item->type;
-    draw_ts_icon((type==1||type==5)?11:12,12+foreground,y+1,.53f);
-    char desc[74];shorten(desc,sizeof(desc),item->label,type==7?23:31);
-    text(39+foreground,y+2,.54f,active?white:cream,desc);
-    if(type==7){
-       double reading=0.0;char value[30]="--";
-       if(channel_live_value(item->field,&reading))
-          snprintf(value,sizeof(value),fabs(reading)>=1000?"%.0f":"%.2f",reading);
-       text(323+foreground,y+2,.43f,live_stale?orange:bright,value);
-     }
-     if(active)text(374+foreground,y+2,.43f,green,">");
+ char label[82];shorten(label,sizeof(label),open_title,43);
+ text(12,7,.56f,white,label);
+ int group=config_group_of(selected),total=config_group_count();
+ text(12,29,.35f,secondary,"ECU PANELS  /  L-R SWITCH SECTION");
+ round_panel(7,48,153,179,5,panel);
+ int first=group>6?group-6:0;
+ for(int r=0;r<7&&first+r<total;r++){
+    int i=first+r,start=config_group_start(i);
+    if(start<0)break;
+    float y=54+r*23;
+    bool active=i==group;
+    if(active){round_panel(11,y,145,21,3,muted_leaf);rect(12,y+3,3,15,green);}
+    char name[76];shorten(name,sizeof(name),config_group_label(start),19);
+    text(20,y+3,.43f,active?white:secondary,name);
  }
- text(10,223,.32f,secondary,"A EDIT FIELD  |  B RETURN TO FUEL / SETUP / ETC");
+ round_panel(167,48,226,179,5,panel2);
+ int at=config_group_start(group),until=config_group_end(at);
+ if(at>=0){
+    char title[90];shorten(title,sizeof(title),config_group_label(at),28);
+    text(178,58,.55f,white,title);
+    char amount[40];snprintf(amount,sizeof(amount),"%d controls  /  section %d of %d",until-at,group+1,total);
+    text(178,83,.33f,secondary,amount);
+ }
+ if(selected>=0&&selected<result_count){
+    const Resolved *r=&results[selected];
+    rect(177,106,204,1,outline);
+    char name[90];shorten(name,sizeof(name),r->label,31);
+    text(179,114,.55f,white,name);
+    if(r->type==3){
+       round_panel(177,144,204,39,5,panel);
+       text(190,149,.46f,orange,"ECU TEST COMMAND");
+       text(190,168,.36f,secondary,"Unavailable / no actuation");
+    }else if(r->type==6){
+       text(178,144,.44f,secondary,"INI INFORMATION / READ ONLY");
+    }else if(r->type==7){
+       double value=0.0;char shown[45]="Awaiting data";
+       if(channel_live_value(r->field,&value))snprintf(shown,sizeof(shown),"%.2f",value);
+       text(178,144,.50f,bright,shown);
+       text(178,168,.33f,secondary,"LIVE ECU CHANNEL");
+    }else if(r->type==4){
+       text(178,144,.44f,bright,"A  OPEN LIVE GRAPH");
+    }else if(r->field>=0&&r->field<cal_count){
+       const Field *f=&cal[r->field];
+       char detail[88];shorten(detail,sizeof(detail),f->name,31);
+       text(179,144,.37f,secondary,detail);
+       text(179,165,.41f,bright,f->kind==K_BITS?"A  CHOOSE VALUE":f->kind==K_ARRAY?"A  OPEN TABLE / CURVE":"A  EDIT VALUE");
+    }
+    text(178,201,.33f,secondary,"Settings use real ECU INI definitions");
+ }
 }
 static void draw_tune_context_top(void){
  if(ui_page==PAGE_TUNE_TREE){draw_tune_categories_top();return;}
@@ -4953,10 +5050,59 @@ static void bts_soundboard_play(int idx){
  if(!sound_test_queued)note("Sound not queued: check DSP and sample state");
 }
 
+/* Bottom touchscreen is the active configuration form. Even repeated
+ * "Output" labels are unambiguous under the INI's named subdialog heading. */
+static void draw_config_dialog_bottom(void){
+ int group=config_group_of(selected);
+ int at=config_group_start(group),until=config_group_end(at);
+ if(at<0){text(11,100,.45f,orange,"No ECU controls in this panel");return;}
+ char title[85];shorten(title,sizeof(title),config_group_label(at),35);
+ text(11,32,.57f,white,title);
+ char step[35];snprintf(step,sizeof(step),"%d/%d",group+1,config_group_count());
+ text(280,34,.35f,secondary,step);
+ rect(9,54,302,1,outline);
+ const int visible=6,row_y=58,row_h=25;
+ int local=selected-at,count=until-at;
+ if(local<scroll_y)scroll_y=local;
+ if(local>=scroll_y+visible)scroll_y=local-visible+1;
+ if(scroll_y<0)scroll_y=0;
+ for(int r=0;r<visible;r++){
+    int i=at+scroll_y+r;if(i>=until)break;
+    const Resolved *item=&results[i];
+    bool focus=i==selected,button=item->type==3;
+    int y=row_y+r*row_h;
+    round_panel(8,y,304,23,4,focus?muted_leaf:panel);
+    if(focus)rect(9,y+3,3,17,green);
+    char name[80];shorten(name,sizeof(name),item->label,button?24:25);
+    text(17,y+4,.46f,focus?white:cream,name);
+    if(button){
+       /* Clearly an action, unlike an ECU value. Unsupported tests stay inert. */
+       round_panel(227,y+2,76,19,4,outline);
+       text(237,y+5,.34f,orange,"LOCKED");
+    }else if(item->type==6){
+       text(268,y+5,.32f,secondary,"INFO");
+    }else if(item->type==7){
+       double live=0.0;char display[27]="--";
+       if(channel_live_value(item->field,&live))snprintf(display,sizeof(display),"%.1f",live);
+       text(263,y+4,.43f,bright,display);
+    }else {
+       const char *kind=item->type==4?"GRAPH":item->type==1||item->type==5?"MAP":"EDIT";
+       round_panel(255,y+2,48,19,4,panel2);
+       text(261,y+5,.37f,bright,kind);
+    }
+ }
+ if(count>visible){
+    float thumb=fmaxf(11.f,150.f*visible/(float)count);
+    float off=(float)scroll_y/(float)(count-visible)*(150.f-thumb);
+    rect(314,58,3,150,outline);rect(314,58+off,3,thumb,bright);
+ }
+ text(8,217,.36f,bright,"A EDIT  L/R SECTIONS  Y SAVE  B BACK");
+}
 static void draw_list(void){
  if(workspace_page(ui_page)){draw_workspace_list();return;}
  if(ui_page==PAGE_TUNE_TREE){if(tune_screen_asleep)draw_tune_idle_gauges_bottom();else draw_tune_preview_bottom();return;}
- if(ui_page==PAGE_GROUP||ui_page==PAGE_DETAIL){draw_subfolder_help_bottom();return;}
+ if(ui_page==PAGE_GROUP){draw_subfolder_help_bottom();return;}
+ if(ui_page==PAGE_DETAIL){draw_config_dialog_bottom();return;}
  if(tune_context_page()){draw_tune_navigation();return;}
  if(ui_page==PAGE_CATS||ui_page==PAGE_VIEWS){draw_home_menu();return;}
  const char*title="ECU MENU";
@@ -6569,10 +6715,21 @@ static void touch_input(void){touchPosition tp;hidTouchRead(&tp);
     }
     return;
  }
- if(ui_page==PAGE_GROUP||ui_page==PAGE_DETAIL){
-    if(tp.py>=208)enter_selected(); /* Help text itself never triggers an ECU edit. */
-    return;
- }
+ if(ui_page==PAGE_DETAIL){
+     if(tp.py>=58&&tp.py<208){
+        int group=config_group_of(selected),at=config_group_start(group);
+        int until=config_group_end(at);
+        int hit=at+scroll_y+(tp.py-58)/25;
+        if(hit>=at&&hit<until){
+           if(selected==hit)enter_selected();else selected=hit;
+        }
+     }
+     return;
+  }
+  if(ui_page==PAGE_GROUP){
+     if(tp.py>=208)enter_selected();
+     return;
+  }
  if(tune_context_page()){
     if(tp.py>=117&&tp.py<151){if(tp.px<160)enter_selected();else back();}
     return;
@@ -7019,6 +7176,18 @@ static void handle_keys(u32 k){
     if(k&KEY_L)graph_bank=(graph_bank+2)%3;
     if(k&KEY_R)graph_bank=(graph_bank+1)%3;
     if(k&KEY_X)graph_seconds=graph_seconds==5?10:graph_seconds==10?20:5;
+    return;
+ }
+ if(ui_page==PAGE_DETAIL){
+    if(k&(KEY_L|KEY_DLEFT|KEY_CPAD_LEFT))config_group_shift(-1);
+    if(k&(KEY_R|KEY_DRIGHT|KEY_CPAD_RIGHT))config_group_shift(1);
+    int group=config_group_of(selected),at=config_group_start(group);
+    int end=config_group_end(at);
+    if(k&(KEY_DUP|KEY_CPAD_UP))if(selected>at)selected--;
+    if(k&(KEY_DDOWN|KEY_CPAD_DOWN))if(selected<end-1)selected++;
+    if(k&KEY_CSTICK_UP)selected=selected-5>=at?selected-5:at;
+    if(k&KEY_CSTICK_DOWN)selected=selected+5<end?selected+5:end-1;
+    if(k&KEY_A){sfx_play(1);enter_selected();}
     return;
  }
  if(ui_page==PAGE_TUNE_SECTION){
