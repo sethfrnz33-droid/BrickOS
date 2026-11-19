@@ -588,6 +588,34 @@ static esp_err_t stim_start_post(httpd_req_t *r) {
         "{\"ok\":true,\"already_active\":true,\"command_acknowledged\":true,\"running_state_verified\":false}":
         "{\"ok\":true,\"already_active\":false,\"command_acknowledged\":true,\"running_state_verified\":false}",200);
 }
+/* The TunerStudio "Abort test" command is a safety stop operation only.
+ * Never accept an arbitrary raw Z payload, test type, or output selector.
+ * This response confirms receipt by the ECU, NOT that outputs are physically
+ * isolated or inactive. The user must independently verify hardware state. */
+static esp_err_t test_abort_post(httpd_req_t *r){
+    cJSON *j=read_request_json(r);
+    if(!j)return error_reply(r,400,"Abort requires current ECU signature JSON");
+    const char *requested=cJSON_GetStringValue(cJSON_GetObjectItem(j,"signature"));
+    char active[160];
+    brick_ecu_signature_copy(active,sizeof(active));
+    bool matched=requested && active[0] &&
+                 strcmp(requested,active)==0 && vcp_gateway_usb_ready();
+    cJSON_Delete(j);
+    if(!matched)return error_reply(r,403,"ECU session or signature mismatch: abort not sent");
+    /* Fixed cancel selector from the verified rusEFI ControllerCommands entry.
+     * There is NO user-controllable selector or generic Z execution API. */
+    const uint8_t cancel_args[]={0x00,0x16,0x00,0x0f};
+    ts_reply_t *reply=calloc(1,sizeof(*reply));
+    if(!reply)return error_reply(r,503,"No memory for ECU abort reply");
+    brick_live_holdoff(1200);
+    esp_err_t err=ts_request('Z',cancel_args,sizeof(cancel_args),reply,4500);
+    unsigned status=(unsigned)reply->status;
+    bool ack=err==ESP_OK && (status==0||status==4);
+    free(reply);
+    if(!ack)return error_reply(r,503,"ECU test abort not acknowledged; actual output state unknown");
+    return json_string(r,
+      "{\"ok\":true,\"command\":\"cmd_test_cancel\",\"command_acknowledged\":true,\"running_state_verified\":false}",200);
+}
 /* Stop never needs a nonce or an RPM measurement. */
 static esp_err_t stim_stop_post(httpd_req_t *r){
     (void)r;
@@ -899,6 +927,7 @@ static void http_start(void){
       {.uri="/api/ts/inspect",.method=HTTP_GET,.handler=ts_inspect_get},
       {.uri="/api/live",.method=HTTP_GET,.handler=live_get},
       {.uri="/api/stim/stop",.method=HTTP_POST,.handler=stim_stop_post},
+      {.uri="/api/test/abort",.method=HTTP_POST,.handler=test_abort_post},
       {.uri="/api/stim/preflight",.method=HTTP_POST,.handler=stim_preflight_post},
       {.uri="/api/stim/start",.method=HTTP_POST,.handler=stim_start_post},
       {.uri="/api/arm",.method=HTTP_POST,.handler=arm_post},
