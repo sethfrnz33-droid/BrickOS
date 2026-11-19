@@ -489,7 +489,7 @@ static bool trace_found=false;
 /* The UI never waits for HTTP; worker holds the shared HTTP response until
  * the main thread consumes its result. LightLock protects task handoff. */
 enum {TASK_IDLE,TASK_STATUS,TASK_INI,TASK_LIVE,TASK_CAL,TASK_AXIS_X,TASK_AXIS_Y,TASK_WRITE,TASK_RPM_LIMIT,TASK_INI_FLAGS,
-      TASK_STIM_PREPARE,TASK_STIM_START,TASK_STIM_STOP,TASK_ERROR,TASK_COMMAND_INSPECT,TASK_TEST_ABORT};
+      TASK_STIM_PREPARE,TASK_STIM_START,TASK_STIM_STOP,TASK_ERROR,TASK_COMMAND_INSPECT,TASK_TEST_ABORT,TASK_SENSOR_CAPTURE};
 static LightLock task_lock;
 static volatile int task_state=0; /* 0 free, 1 pending, 2 busy, 3 completed */
 static int task_type=TASK_IDLE,task_result=-1,task_page=0,task_offset=0,task_len=0,task_field=-1;
@@ -498,6 +498,9 @@ static uint8_t task_calibration[EDIT_CAP];
 static bool command_inspect_pending=false,command_inspect_defined=false,command_inspect_visible=false;
 static bool test_abort_pending=false;
 static char test_abort_error[160]="";
+static bool sensor_capture_pending=false,sensor_capture_inflight=false;
+static bool sensor_capture_confirmation=false;
+static char sensor_capture_command[64]="",sensor_capture_error[160]="";
 static char command_inspect_name[64]="";
 /* Multi-step, offline-safe UI demo for TunerStudio command buttons.
  * The demo never sends an ECU output command. */
@@ -2763,16 +2766,38 @@ static void request_output_test_abort(void){
  test_abort_pending=true;
  note("Sending real ECU test abort; awaiting acknowledgement...");
 }
+/* Only mechanical throttle and pedal sensor grabs; ETB auto-calibration,
+ * injector, ignition, and physical I/O bench tests use no execution path here. */
+static bool is_sensor_capture_command(const char *name){
+ if(!name)return false;
+ return !strcmp(name,"cmd_calibrate_tps_closed")||
+        !strcmp(name,"cmd_calibrate_tps_open")||
+        !strcmp(name,"cmd_calibrate_pedal_up")||
+        !strcmp(name,"cmd_calibrate_pedal_down");
+}
 static void begin_output_demo(const Resolved *r){
  if(!r||r->type!=3)return;
  if(demo_confirm.phase||hazardous_test.kind){
     note("Finish or cancel the current confirmation first");return;
  }
+ if(is_sensor_capture_command(r->command)){
+    if(!net_ok||!ecu_session||!ecu_signature[0]||!menu_loaded||
+       strcmp(ini_signature,ecu_signature)){
+       note("Connect ECU with matching INI before capturing sensor values");
+       return;
+    }
+    if(sensor_capture_pending||sensor_capture_inflight){
+       note("Previous sensor capture still in progress");return;
+    }
+    sensor_capture_confirmation=true;
+ }else sensor_capture_confirmation=false;
  copy_text(demo_command,sizeof(demo_command),r->command);
  copy_text(demo_label,sizeof(demo_label),r->label);
  bts_demo_begin(&demo_confirm);
  demo_started_ms=osGetTime();
- note("DEMO: Press A to enable, then release and hold L+R; B cancels");
+ note(sensor_capture_confirmation?
+      "SENSOR CAPTURE: Press A, release L+R, then hold both to confirm":
+      "DEMO: Press A to enable, then release and hold L+R; B cancels");
 }
 static bool is_stim_action(const Resolved *r){
  return r&&r->type==3&&
@@ -4393,6 +4418,8 @@ static void draw_tune_dialog_top(void){
        text(179,168,.36f,secondary,
           !strcmp(r->command,"cmd_test_cancel")?
            "A SEND REAL ECU TEST ABORT":
+          is_sensor_capture_command(r->command)?
+           "A REAL SENSOR CAPTURE / L+R CONFIRM":
           is_stim_action(r)?"Uses guarded trigger action":
            "A DEMO / 2-STEP CONFIRM / NO OUTPUT");
     }else if(r->type==6){
@@ -5106,13 +5133,14 @@ static void draw_config_dialog_bottom(void){
        /* Actual button styling; explicit disabled state instead of an
         * unusable test button pretending it can actuate the ECU. */
        bool abort=!strcmp(item->command,"cmd_test_cancel");
+       bool capture=is_sensor_capture_command(item->command);
        bool supported=abort ||
           (is_stim_action(item)&&
            (!strcmp(item->command,"cmd_disable_self_stim")?
             stim_stop_supported:stim_start_supported));
        round_panel(215,y+2,88,19,4,supported?muted_leaf:outline);
        text(222,y+5,.34f,supported?bright:orange,
-            abort?"ABORT":supported?"COMMAND":"DEMO");
+            abort?"ABORT":capture?"CAPTURE":supported?"COMMAND":"DEMO");
     }else if(item->type==6){
        text(268,y+5,.32f,secondary,"INFO");
     }else if(item->type==7){
@@ -6604,24 +6632,27 @@ static void draw_demo_confirm(void){
  rect(0,0,320,240,soil);
  rect(7,7,306,226,orange);
  rect(11,11,298,218,bg);
- text(20,18,.53f,cream,"OUTPUT TEST - UI DEMO");
+ text(20,18,.53f,cream,sensor_capture_confirmation?"SENSOR CAPTURE - REAL ECU":"OUTPUT TEST - UI DEMO");
  rect(20,44,278,2,orange);
  char label[80];shorten(label,sizeof(label),demo_label,31);
  text(20,54,.48f,white,label);
- text(20,78,.35f,orange,"CONNECTED HARDWARE CAN BE DANGEROUS.");
- text(20,95,.35f,cream,"THIS DEMO NEVER SENDS AN OUTPUT COMMAND.");
- text(20,112,.35f,secondary,"Simulates the user's approval sequence.");
+ text(20,78,.35f,orange,sensor_capture_confirmation?
+      "STOP ENGINE BEFORE SENSOR CALIBRATION.":"CONNECTED HARDWARE CAN BE DANGEROUS.");
+ text(20,95,.35f,cream,sensor_capture_confirmation?
+      "CAPTURES CURRENT TPS / PEDAL POSITION.":"THIS DEMO NEVER SENDS AN OUTPUT COMMAND.");
+ text(20,112,.35f,secondary,sensor_capture_confirmation?
+      "ECU ACK IS NOT CALIBRATION READBACK.":"Simulates the user's approval sequence.");
  round_panel(18,140,284,58,5,panel2);
  if(demo_confirm.phase==BTS_DEMO_ENABLE){
-    text(27,147,.47f,bright,"STEP 1 / 2    A  ENABLE DEMO");
-    text(27,174,.37f,secondary,"No ECU output will be activated");
+    text(27,147,.47f,bright,sensor_capture_confirmation?"STEP 1 / 2    A  ENABLE CAPTURE":"STEP 1 / 2    A  ENABLE DEMO");
+    text(27,174,.37f,secondary,sensor_capture_confirmation?"Position sensor before confirming":"No ECU output will be activated");
  }else{
     text(27,147,.45f,bright,"STEP 2 / 2    HOLD L + R");
     text(27,174,.36f,secondary,demo_confirm.shoulders_released?
          "Both shoulder buttons: hold together":
          "Release both shoulder buttons first");
  }
- text(20,211,.37f,cream,"B  CANCEL  |  No hardware actuation");
+ text(20,211,.37f,cream,sensor_capture_confirmation?"B CANCEL  |  Captures sensor value only":"B CANCEL  |  No hardware actuation");
 }
 static void draw_hazard_confirm(void){
  if(hazardous_test.kind==BRICK_TEST_NONE)return;
@@ -6971,20 +7002,37 @@ static void handle_keys(u32 k){
  if(demo_confirm.phase){
     if(osGetTime()-demo_started_ms>20000){
        bts_demo_reset(&demo_confirm);
-       note("Demo confirmation expired; outputs unchanged");
+       sensor_capture_confirmation=false;
+       note("Confirmation expired; no command was sent");
        return;
     }
     int result=bts_demo_input(&demo_confirm,k,hidKeysHeld(),
                               KEY_A,KEY_L,KEY_R,KEY_B);
-    if(result<0)note("Demo cancelled; outputs unchanged");
-    else if(result==2)note("Demo enabled: release L/R, then hold both");
+    if(result<0){
+       sensor_capture_confirmation=false;
+       note("Confirmation cancelled; no command sent");
+    }else if(result==2)
+       note("Enabled: release L/R, then hold both to confirm");
     else if(result>0){
-       demo_completed_count++;
-       note("LOCAL DEMO COMPLETE; NO ECU HARDWARE COMMAND SENT");
-       if(net_ok&&ecu_session&&ecu_signature[0]&&menu_loaded&&
-          !strcmp(ecu_signature,ini_signature)&&!command_inspect_pending){
-          copy_text(command_inspect_name,sizeof(command_inspect_name),demo_command);
-          command_inspect_pending=true;
+       if(sensor_capture_confirmation){
+          sensor_capture_confirmation=false;
+          if(!net_ok||!ecu_session||!ecu_signature[0]||!menu_loaded||
+             strcmp(ini_signature,ecu_signature)||sensor_capture_pending||
+             sensor_capture_inflight){
+             note("Capture cancelled: ECU session changed or request busy");
+          }else{
+             copy_text(sensor_capture_command,sizeof(sensor_capture_command),demo_command);
+             sensor_capture_pending=true;
+             note("Sensor capture queued: awaiting real ECU acknowledgement");
+          }
+       }else{
+          demo_completed_count++;
+          note("LOCAL OUTPUT DEMO COMPLETE; NO HARDWARE COMMAND SENT");
+          if(net_ok&&ecu_session&&ecu_signature[0]&&menu_loaded&&
+             !strcmp(ecu_signature,ini_signature)&&!command_inspect_pending){
+             copy_text(command_inspect_name,sizeof(command_inspect_name),demo_command);
+             command_inspect_pending=true;
+          }
        }
     }
     return;
@@ -7404,6 +7452,31 @@ static void net_thread(void *arg){
           stim_failure[0]=0;
           result=stim_http_action(type);
           if(result<0)snprintf(stim_failure,sizeof(stim_failure),"%.150s",ui_note);
+       }else if(type==TASK_SENSOR_CAPTURE){
+          char escaped_signature[320],escaped_command[160],payload[600];
+          bool valid=is_sensor_capture_command(sensor_capture_command)&&
+                     ecu_session&&ecu_signature[0]&&
+                     !strcmp(ecu_signature,ini_signature)&&
+                     escape_json_string(ecu_signature,escaped_signature,sizeof(escaped_signature))&&
+                     escape_json_string(sensor_capture_command,escaped_command,sizeof(escaped_command));
+          if(!valid){
+             result=-1;
+             copy_text(sensor_capture_error,sizeof(sensor_capture_error),
+                       "Sensor capture cancelled: ECU signature or INI changed");
+          }else{
+             snprintf(payload,sizeof(payload),
+                "{\"signature\":\"%s\",\"command\":\"%s\"}",
+                escaped_signature,escaped_command);
+             result=post_api("/api/sensors/capture",payload,11000);
+             bool ack=false;
+             if(result>0&&json_bool(http_body(),"command_acknowledged",&ack)&&ack)
+                 result=1;
+             else {
+                 result=-1;
+                 copy_text(sensor_capture_error,sizeof(sensor_capture_error),
+                           "ECU sensor capture not acknowledged; verify settings");
+             }
+          }
        }else if(type==TASK_TEST_ABORT){
           char escaped[320],payload[400];
           if(!ecu_signature[0]||
@@ -7534,6 +7607,15 @@ static void complete_task(void){
       ini_flags_requested=false;ini_flags_retry_at=now+10000;
    }
    break;
+ case TASK_SENSOR_CAPTURE:
+   sensor_capture_inflight=false;
+   if(result>0){
+      note("ECU SENSOR CAPTURE ACK: reopen settings, verify values, then burn");
+      status_requested=true;
+      fault_poll_requested=true;
+   }else note(sensor_capture_error[0]?sensor_capture_error:
+              "Sensor capture failed; calibration state unknown");
+   break;
  case TASK_TEST_ABORT:
    note(result>0?
       "ECU test abort ACKNOWLEDGED; verify actual hardware state":
@@ -7602,6 +7684,15 @@ static void complete_task(void){
 }
 static void run_scheduler(u64 now){
  if(!net_ok||!wifi_candidate||!task_idle()||work_suspended)return;
+ /* Sensor capture is a single-shot, non-actuating calibration command. */
+ if(sensor_capture_pending){
+    if(task_submit(TASK_SENSOR_CAPTURE,0,0,0,-1)){
+       sensor_capture_pending=false;
+       sensor_capture_inflight=true;
+       sensor_capture_error[0]=0;
+    }
+    return;
+ }
  /* A queued safety abort takes priority over tuning, writes and telemetry. */
  if(test_abort_pending){
     if(task_submit(TASK_TEST_ABORT,0,0,0,-1)){
