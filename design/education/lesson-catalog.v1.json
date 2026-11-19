@@ -1,0 +1,891 @@
+{
+  "schema": "brickos.guide.education.catalog.v1",
+  "version": "1.0.0",
+  "status": "DESIGN_ONLY_OFFLINE_SIMULATION_NOT_ESP_READER",
+  "language": "en",
+  "source": "Original BrickOS education writing. HP Academy public ten-step order used for chapter structure; no copied paid lessons.",
+  "chapter_order": [
+    "configuration",
+    "trigger",
+    "baseline",
+    "references",
+    "starting",
+    "idle",
+    "steady_fuel",
+    "steady_spark",
+    "power",
+    "confirmation"
+  ],
+  "lesson_rules": {
+    "check_answers": "education_only_not_hardware_validation",
+    "missing_role": "unavailable_not_zero",
+    "gdi": "block_guided_gdi_fuel_tuning",
+    "client_portability": "ESPresolved packet; device-specific UI no decoder/INI offsets",
+    "audio_optional": true
+  },
+  "lessons": [
+    {
+      "id": "ecu_vs_engine",
+      "chapter": "configuration",
+      "prerequisites": [],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "ECU numbers are settings, not physical proof.",
+      "variants": {
+        "quick": "ECU numbers are settings, not physical proof.",
+        "guided": "An ECU is a computer that calculates commands using inputs and stored settings. A reported command does not prove the connected hardware performed it.",
+        "lesson": "An ECU is a computer that calculates commands using inputs and stored settings. A reported command does not prove the connected hardware performed it. Picture a thermostat: requesting heat is different from checking that the room actually warmed. The example is explanatory; it does not verify this engine.",
+        "technical": "The firmware configuration, sensor readings, and independently checked hardware belong to three different evidence categories."
+      },
+      "if_confused": {
+        "alternate": "Picture a thermostat: requesting heat is different from checking that the room actually warmed.",
+        "prerequisites": [],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "Which statement is justified by an ECU command?",
+        "options": [
+          "The ECU requested an action.",
+          "The connected actuator definitely worked.",
+          "The vehicle is safe."
+        ],
+        "correct_index": 0,
+        "explanation": "Only a request is established; physical results need separate evidence."
+      },
+      "semantic_roles": [
+        "ecuIdentity"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "ini_definition",
+      "chapter": "configuration",
+      "prerequisites": [
+        "ecu_vs_engine"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "The INI describes how to interpret this ECU.",
+      "variants": {
+        "quick": "The INI describes how to interpret this ECU.",
+        "guided": "The correct generated INI tells BrickOS where settings and output channels live and how to scale them. A matching signature matters because a wrong definition can turn a real number into nonsense.",
+        "lesson": "The correct generated INI tells BrickOS where settings and output channels live and how to scale them. A matching signature matters because a wrong definition can turn a real number into nonsense. Think of the INI as the labels and instructions on an electrical diagram; another model's labels might point somewhere else. The example is explanatory; it does not verify this engine.",
+        "technical": "Verify signature and layout, check table axes, data types and conditions, then preserve the definition hash with every recorded finding. An unknown field stays unknown."
+      },
+      "if_confused": {
+        "alternate": "Think of the INI as the labels and instructions on an electrical diagram; another model's labels might point somewhere else.",
+        "prerequisites": [
+          "ecu_vs_engine"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "What does a matched INI establish?",
+        "options": [
+          "How to decode supported settings and channels.",
+          "That every sensor is installed correctly.",
+          "That every table is optimized."
+        ],
+        "correct_index": 0,
+        "explanation": "Field meaning and physical correctness are different things."
+      },
+      "semantic_roles": [
+        "rpm"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "sensor_trust",
+      "chapter": "configuration",
+      "prerequisites": [
+        "ecu_vs_engine",
+        "ini_definition"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "A displayed value is not automatically a valid measurement.",
+      "variants": {
+        "quick": "A displayed value is not automatically a valid measurement.",
+        "guided": "Sensor readings need correct calibration, plausible units, timestamps, health and independent checks where relevant. Missing values are unknown, never zero.",
+        "lesson": "Sensor readings need correct calibration, plausible units, timestamps, health and independent checks where relevant. Missing values are unknown, never zero. If your clock stopped at noon, its display might still say 12:00; fresh readings matter. The example is explanatory; it does not verify this engine.",
+        "technical": "Track source/units, last update, applicable ECU modes, faults and comparison evidence. A value can be structurally decoded yet still physically wrong."
+      },
+      "if_confused": {
+        "alternate": "If your clock stopped at noon, its display might still say 12:00; fresh readings matter.",
+        "prerequisites": [
+          "ecu_vs_engine",
+          "ini_definition"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "Which observation most strengthens confidence in a sensor?",
+        "options": [
+          "Fresh readings plus relevant independent verification.",
+          "A colourful gauge.",
+          "A setting with a familiar label."
+        ],
+        "correct_index": 0,
+        "explanation": "Reliability comes from evidence, not presentation."
+      },
+      "semantic_roles": [
+        "clt",
+        "map"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "trigger_sync",
+      "chapter": "trigger",
+      "prerequisites": [
+        "sensor_trust"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "Synchronization tells the ECU how it is positioned in the engine cycle.",
+      "variants": {
+        "quick": "Synchronization tells the ECU how it is positioned in the engine cycle.",
+        "guided": "Crank/cam inputs help the ECU identify speed and phase. A synchronization error is different from a fuel-map problem, and ordinary 100 Hz gauges cannot reproduce individual tooth timestamps.",
+        "lesson": "Crank/cam inputs help the ECU identify speed and phase. A synchronization error is different from a fuel-map problem, and ordinary 100 Hz gauges cannot reproduce individual tooth timestamps. A musician needs to know the beat before playing notes; the ECU needs its position reference before coordinating commands. The example is explanatory; it does not verify this engine.",
+        "technical": "Interpret synchronization status, error counters, and supported special trigger records separately; do not infer the physical reference from the command alone."
+      },
+      "if_confused": {
+        "alternate": "A musician needs to know the beat before playing notes; the ECU needs its position reference before coordinating commands.",
+        "prerequisites": [
+          "sensor_trust"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "What can a sync error indicate?",
+        "options": [
+          "That crank/cam position interpretation needs investigation.",
+          "That VE is definitely incorrect.",
+          "That ignition timing is fully verified."
+        ],
+        "correct_index": 0,
+        "explanation": "Sync is a prerequisite, not an automatic diagnosis of one part."
+      },
+      "semantic_roles": [
+        "rpm",
+        "sync"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "physical_reference",
+      "chapter": "references",
+      "prerequisites": [
+        "trigger_sync"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "The physical ignition reference requires an independent check.",
+      "variants": {
+        "quick": "The physical ignition reference requires an independent check.",
+        "guided": "A displayed ignition angle is what the ECU reports, not proof of the physical event. The guide must track the external verification separately.",
+        "lesson": "A displayed ignition angle is what the ECU reports, not proof of the physical event. The guide must track the external verification separately. A map pin can say where a road is, but it cannot prove that a sign was installed at that location. The example is explanatory; it does not verify this engine.",
+        "technical": "Separate base requested angle, live corrections, synchronization validity and externally measured timing evidence. An INI field alone cannot certify mechanical alignment."
+      },
+      "if_confused": {
+        "alternate": "A map pin can say where a road is, but it cannot prove that a sign was installed at that location.",
+        "prerequisites": [
+          "trigger_sync"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "Can a displayed spark value verify physical ignition timing by itself?",
+        "options": [
+          "No, an independent reference is required.",
+          "Yes, always.",
+          "Only if the display is updated rapidly."
+        ],
+        "correct_index": 0,
+        "explanation": "An ECU report is not a physical measurement."
+      },
+      "semantic_roles": [
+        "spark"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "active_table",
+      "chapter": "baseline",
+      "prerequisites": [
+        "ini_definition"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "First establish which table the ECU actually uses.",
+      "variants": {
+        "quick": "First establish which table the ECU actually uses.",
+        "guided": "A calibration may contain several maps and corrections, but only some are active in a given configuration. Seth should link to the active one, not whichever has VE in its name.",
+        "lesson": "A calibration may contain several maps and corrections, but only some are active in a given configuration. Seth should link to the active one, not whichever has VE in its name. Owning several recipes doesn't mean the oven is using every recipe at once. The example is explanatory; it does not verify this engine.",
+        "technical": "Resolve active fuel algorithm, axes, bank, conditional table enablement and interpolation using the matched INI and current configuration."
+      },
+      "if_confused": {
+        "alternate": "Owning several recipes doesn't mean the oven is using every recipe at once.",
+        "prerequisites": [
+          "ini_definition"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "If two VE tables exist, what must we know first?",
+        "options": [
+          "Which lookup strategy is active.",
+          "Which one has larger values.",
+          "Which appears first in the menu."
+        ],
+        "correct_index": 0,
+        "explanation": "A map's existence is not evidence of use."
+      },
+      "semantic_roles": [
+        "rpm",
+        "map"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "injector_model",
+      "chapter": "baseline",
+      "prerequisites": [
+        "active_table"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "VE learning depends on a trustworthy injector model.",
+      "variants": {
+        "quick": "VE learning depends on a trustworthy injector model.",
+        "guided": "The ECU's fuel model depends on injector characterization and supply pressure assumptions, not only on the VE table. A VE adjustment may disguise an incorrect hardware model.",
+        "lesson": "The ECU's fuel model depends on injector characterization and supply pressure assumptions, not only on the VE table. A VE adjustment may disguise an incorrect hardware model. Changing a recipe to compensate for a faulty measuring cup doesn't fix the cup. The example is explanatory; it does not verify this engine.",
+        "technical": "Keep injector response/flow data, battery-related corrections, measured rail pressure where present and fuel-model version separate; ask for real hardware provenance."
+      },
+      "if_confused": {
+        "alternate": "Changing a recipe to compensate for a faulty measuring cup doesn't fix the cup.",
+        "prerequisites": [
+          "active_table"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "If injector data changes, what happens to old VE conclusions?",
+        "options": [
+          "They may need reviewing.",
+          "They become more reliable automatically.",
+          "Nothing can change."
+        ],
+        "correct_index": 0,
+        "explanation": "Fuel estimates depend on the injector model."
+      },
+      "semantic_roles": [
+        "battery",
+        "fuelPressure"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "pump_vs_regulator",
+      "chapter": "references",
+      "prerequisites": [
+        "sensor_trust"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "Pump control and pressure regulation are different questions.",
+      "variants": {
+        "quick": "Pump control and pressure regulation are different questions.",
+        "guided": "PWM tells us how a pump is commanded, not whether a regulator exists. Seth separately asks about pump control, regulation and what pressure is actually measured.",
+        "lesson": "PWM tells us how a pump is commanded, not whether a regulator exists. Seth separately asks about pump control, regulation and what pressure is actually measured. The speed of a water pump is not the same fact as the pressure shown by a gauge. The example is explanatory; it does not verify this engine.",
+        "technical": "Support PWM plus mechanical regulation, separate external/OEM controller assumptions and gauge/absolute/differential references. Never infer verified pressure from duty cycle."
+      },
+      "if_confused": {
+        "alternate": "The speed of a water pump is not the same fact as the pressure shown by a gauge.",
+        "prerequisites": [
+          "sensor_trust"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "PWM pump control means the system definitely lacks a regulator. True or false?",
+        "options": [
+          "False.",
+          "True.",
+          "Only on a phone."
+        ],
+        "correct_index": 0,
+        "explanation": "The two mechanisms can coexist, and pressure needs its own evidence."
+      },
+      "semantic_roles": [
+        "fuelPressure"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "pressure_reference",
+      "chapter": "references",
+      "prerequisites": [
+        "pump_vs_regulator"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "Pressure readings only make sense with their reference.",
+      "variants": {
+        "quick": "Pressure readings only make sense with their reference.",
+        "guided": "Absolute pressure, gauge pressure and injector differential pressure are not interchangeable. Seth must identify the measurement source before interpreting it.",
+        "lesson": "Absolute pressure, gauge pressure and injector differential pressure are not interchangeable. Seth must identify the measurement source before interpreting it. A height measurement means little unless you know whether it starts at sea level or the floor. The example is explanatory; it does not verify this engine.",
+        "technical": "Preserve the reference domain, sensor calibration and whether a reported rail measurement is actually physically verified. Unknown sensor type blocks pressure conclusions."
+      },
+      "if_confused": {
+        "alternate": "A height measurement means little unless you know whether it starts at sea level or the floor.",
+        "prerequisites": [
+          "pump_vs_regulator"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "What must be known before comparing two pressure numbers?",
+        "options": [
+          "Their units and reference.",
+          "Only their decimal places.",
+          "The UI colour."
+        ],
+        "correct_index": 0,
+        "explanation": "Reference and units determine comparability."
+      },
+      "semantic_roles": [
+        "fuelPressure",
+        "map"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "gdi_not_supported",
+      "chapter": "configuration",
+      "prerequisites": [
+        "ecu_vs_engine"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "BrickOS Guided Fuel Tuning does not support GDI.",
+      "variants": {
+        "quick": "BrickOS Guided Fuel Tuning does not support GDI.",
+        "guided": "Port injection and direct injection are different hardware/control architectures. For this product GDI and mixed GDI/PFI fuel guidance are explicitly unavailable.",
+        "lesson": "Port injection and direct injection are different hardware/control architectures. For this product GDI and mixed GDI/PFI fuel guidance are explicitly unavailable. An ECU menu can describe a feature without the connected hardware or our guide supporting it. The example is explanatory; it does not verify this engine.",
+        "technical": "Use a hard product capability gate independent of upstream rusEFI definition availability. Avoid GDI fuel analyses, injector advice and proposed writes."
+      },
+      "if_confused": {
+        "alternate": "An ECU menu can describe a feature without the connected hardware or our guide supporting it.",
+        "prerequisites": [
+          "ecu_vs_engine"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "If a generated INI contains a GDI field, does that make BrickOS GDI autotuning available?",
+        "options": [
+          "No.",
+          "Yes.",
+          "Only when a mascot is displayed."
+        ],
+        "correct_index": 0,
+        "explanation": "Support requires independently verified product capability, not a field name."
+      },
+      "semantic_roles": [
+        "ecuIdentity"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "startup_states",
+      "chapter": "starting",
+      "prerequisites": [
+        "trigger_sync",
+        "sensor_trust"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "Cranking, catching, after-start and running are different states.",
+      "variants": {
+        "quick": "Cranking, catching, after-start and running are different states.",
+        "guided": "Seth must classify what the ECU actually reported rather than treating every abnormal start as a VE error. Ordinary sensor readiness can change during the event.",
+        "lesson": "Seth must classify what the ECU actually reported rather than treating every abnormal start as a VE error. Ordinary sensor readiness can change during the event. A door opening and a person walking through it are different moments; sequence matters. The example is explanatory; it does not verify this engine.",
+        "technical": "Use state flags, source timestamps, synchronization status, supply, commanded corrections and evidence limits. This is analysis of an observed event, not an instruction to initiate one."
+      },
+      "if_confused": {
+        "alternate": "A door opening and a person walking through it are different moments; sequence matters.",
+        "prerequisites": [
+          "trigger_sync",
+          "sensor_trust"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "Which is appropriate when a start is irregular?",
+        "options": [
+          "Investigate several possibilities using qualified evidence.",
+          "Automatically edit VE first.",
+          "Assume the crank sensor failed."
+        ],
+        "correct_index": 0,
+        "explanation": "A single symptom does not prove one cause."
+      },
+      "semantic_roles": [
+        "rpm",
+        "sync",
+        "battery"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "wideband_readiness",
+      "chapter": "starting",
+      "prerequisites": [
+        "sensor_trust"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "Lambda cannot be interpreted before its sensor is valid.",
+      "variants": {
+        "quick": "Lambda cannot be interpreted before its sensor is valid.",
+        "guided": "A wideband sensor has a readiness state. A missing or delayed reading during a starting event is not proof of mixture error.",
+        "lesson": "A wideband sensor has a readiness state. A missing or delayed reading during a starting event is not proof of mixture error. A thermometer still warming up cannot be used to judge the room precisely. The example is explanatory; it does not verify this engine.",
+        "technical": "Require matched-INI validity/fault fields, measurement age and any transport-delay uncertainty before using lambda in fuel inference."
+      },
+      "if_confused": {
+        "alternate": "A thermometer still warming up cannot be used to judge the room precisely.",
+        "prerequisites": [
+          "sensor_trust"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "No valid lambda during a start proves the engine is lean. True or false?",
+        "options": [
+          "False.",
+          "True.",
+          "It proves the pump is PWM."
+        ],
+        "correct_index": 0,
+        "explanation": "Missing data is not a mixture measurement."
+      },
+      "semantic_roles": [
+        "lambda",
+        "lambdaGood"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "idle_target",
+      "chapter": "idle",
+      "prerequisites": [
+        "sensor_trust"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "A stable idle needs more than a matching RPM number.",
+      "variants": {
+        "quick": "A stable idle needs more than a matching RPM number.",
+        "guided": "The ECU has an active target and feedback strategy that can change with temperature and loads. Seth should compare requested and actual RPM without treating one snapshot as validation.",
+        "lesson": "The ECU has an active target and feedback strategy that can change with temperature and loads. Seth should compare requested and actual RPM without treating one snapshot as validation. A cruise-control display can show a desired speed without proving the vehicle is holding it. The example is explanatory; it does not verify this engine.",
+        "technical": "Check idle active state, target origin, actuator command, spark correction, temporal order and independent loads before attributing a cause."
+      },
+      "if_confused": {
+        "alternate": "A cruise-control display can show a desired speed without proving the vehicle is holding it.",
+        "prerequisites": [
+          "sensor_trust"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "If idle RPM wanders, what should Seth do?",
+        "options": [
+          "Compare competing causes and data quality.",
+          "Assume PID is wrong.",
+          "Ignore measured engine load."
+        ],
+        "correct_index": 0,
+        "explanation": "Many systems can create similar symptoms."
+      },
+      "semantic_roles": [
+        "rpm",
+        "idleTarget",
+        "idleCommand"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "warmup_strategy",
+      "chapter": "idle",
+      "prerequisites": [
+        "startup_states"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "Warmup behavior may differ from warmed steady behavior.",
+      "variants": {
+        "quick": "Warmup behavior may differ from warmed steady behavior.",
+        "guided": "Starting corrections, after-start changes and temperature-related compensation can overlap. A warmed fuel observation cannot validate every cold condition.",
+        "lesson": "Starting corrections, after-start changes and temperature-related compensation can overlap. A warmed fuel observation cannot validate every cold condition. A coat that works at one temperature isn't evidence it suits every season. The example is explanatory; it does not verify this engine.",
+        "technical": "Create temperature and state-bounded evidence with source revisions; never call an unobserved temperature region calibrated."
+      },
+      "if_confused": {
+        "alternate": "A coat that works at one temperature isn't evidence it suits every season.",
+        "prerequisites": [
+          "startup_states"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "Can a warm-idle observation validate a cold-start map?",
+        "options": [
+          "Not by itself.",
+          "Yes automatically.",
+          "Only when airflow is displayed."
+        ],
+        "correct_index": 0,
+        "explanation": "These are different operating contexts."
+      },
+      "semantic_roles": [
+        "clt",
+        "iat"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "lambda_vs_target",
+      "chapter": "steady_fuel",
+      "prerequisites": [
+        "wideband_readiness"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "Lambda is useful only against the relevant active target.",
+      "variants": {
+        "quick": "Lambda is useful only against the relevant active target.",
+        "guided": "A measured lambda reading describes the observed mixture under its sensor conditions. The ECU may command different targets in different modes; stoichiometric is not a universal idle or cruise rule.",
+        "lesson": "A measured lambda reading describes the observed mixture under its sensor conditions. The ECU may command different targets in different modes; stoichiometric is not a universal idle or cruise rule. A measurement is a question answered only when we know what it was supposed to measure against. The example is explanatory; it does not verify this engine.",
+        "technical": "Compare active target and measured lambda only when valid, time-aligned, with correction state known, and using the same convention."
+      },
+      "if_confused": {
+        "alternate": "A measurement is a question answered only when we know what it was supposed to measure against.",
+        "prerequisites": [
+          "wideband_readiness"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "Does lambda 1.0 always mean every operating condition is optimally tuned?",
+        "options": [
+          "No.",
+          "Yes.",
+          "Only if the chart is green."
+        ],
+        "correct_index": 0,
+        "explanation": "Targets, correction status and physical validation matter."
+      },
+      "semantic_roles": [
+        "lambda",
+        "target"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "fuel_trim_masking",
+      "chapter": "steady_fuel",
+      "prerequisites": [
+        "lambda_vs_target"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "On-target lambda can hide an underlying model error.",
+      "variants": {
+        "quick": "On-target lambda can hide an underlying model error.",
+        "guided": "Closed-loop corrections can make lambda match its target while the base fuel model remains inaccurate. STFT, LTFT and Gego may have different scaling and bank associations.",
+        "lesson": "Closed-loop corrections can make lambda match its target while the base fuel model remains inaccurate. STFT, LTFT and Gego may have different scaling and bank associations. A person leaning on a shelf can keep it level even when one leg is uneven. The example is explanatory; it does not verify this engine.",
+        "technical": "Keep trim sources and neutral conventions separate; protect VE evidence from unsupported correction masking or misaligned sensor delay."
+      },
+      "if_confused": {
+        "alternate": "A person leaning on a shelf can keep it level even when one leg is uneven.",
+        "prerequisites": [
+          "lambda_vs_target"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "Measured lambda equals target with active trims. Is base VE definitely correct?",
+        "options": [
+          "No.",
+          "Yes.",
+          "Only for four-cylinder engines."
+        ],
+        "correct_index": 0,
+        "explanation": "Feedback can compensate for a base-model error."
+      },
+      "semantic_roles": [
+        "lambda",
+        "target",
+        "gego",
+        "stft1",
+        "ltft1"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "ve_interpolation",
+      "chapter": "steady_fuel",
+      "prerequisites": [
+        "active_table",
+        "fuel_trim_masking"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "VE evidence belongs to the active table and its interpolated region.",
+      "variants": {
+        "quick": "VE evidence belongs to the active table and its interpolated region.",
+        "guided": "An ECU can combine neighboring table cells. Credible learning needs qualified measurements and knowledge of which cells contributed, rather than throwing everything at the nearest cell.",
+        "lesson": "An ECU can combine neighboring table cells. Credible learning needs qualified measurements and knowledge of which cells contributed, rather than throwing everything at the nearest cell. A colour between four pixels is often a mixture of their colours; lookup interpolation also distributes influence. The example is explanatory; it does not verify this engine.",
+        "technical": "Track active axes, bank, eligibility, time alignment, repeat visits, cell locks, uncertainty and config revision; propose only a reviewable difference."
+      },
+      "if_confused": {
+        "alternate": "A colour between four pixels is often a mixture of their colours; lookup interpolation also distributes influence.",
+        "prerequisites": [
+          "active_table",
+          "fuel_trim_masking"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "Should one sample automatically rewrite the nearest VE cell?",
+        "options": [
+          "No.",
+          "Yes.",
+          "Only above idle."
+        ],
+        "correct_index": 0,
+        "explanation": "Evidence quality and interpolation must be respected."
+      },
+      "semantic_roles": [
+        "rpm",
+        "map",
+        "lambda"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "transient_classification",
+      "chapter": "steady_fuel",
+      "prerequisites": [
+        "lambda_vs_target"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "A throttle transition isn't a steady-state VE observation.",
+      "variants": {
+        "quick": "A throttle transition isn't a steady-state VE observation.",
+        "guided": "Acceleration enrichment, deceleration fuel cut and lambda transport delay can create temporary deviations. Seth should decide which subsystem owns an event before interpreting it.",
+        "lesson": "Acceleration enrichment, deceleration fuel cut and lambda transport delay can create temporary deviations. Seth should decide which subsystem owns an event before interpreting it. A bus braking isn't a good moment to measure its steady cruising speed. The example is explanatory; it does not verify this engine.",
+        "technical": "Use ECU flags and timestamp uncertainty to distinguish transients, DFCO and sensor delay from persistent base fuel errors."
+      },
+      "if_confused": {
+        "alternate": "A bus braking isn't a good moment to measure its steady cruising speed.",
+        "prerequisites": [
+          "lambda_vs_target"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "A lambda spike during fuel cut automatically proves bad VE. True or false?",
+        "options": [
+          "False.",
+          "True.",
+          "Only if MAP changes."
+        ],
+        "correct_index": 0,
+        "explanation": "Operating state matters to attribution."
+      },
+      "semantic_roles": [
+        "engineState",
+        "lambda"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "spark_actual",
+      "chapter": "steady_spark",
+      "prerequisites": [
+        "physical_reference"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "Actual spark can differ from a base ignition table.",
+      "variants": {
+        "quick": "Actual spark can differ from a base ignition table.",
+        "guided": "Ignition corrections, active strategy and protection interventions affect the reported command. Missing intermediate channels mean some corrections cannot be reconstructed.",
+        "lesson": "Ignition corrections, active strategy and protection interventions affect the reported command. Missing intermediate channels mean some corrections cannot be reconstructed. The recipe is not the finished dish; conditions can change the result. The example is explanatory; it does not verify this engine.",
+        "technical": "Show base table provenance, actual reported angle, known correction channels, knock warning and missing evidence without fabricating missing corrections."
+      },
+      "if_confused": {
+        "alternate": "The recipe is not the finished dish; conditions can change the result.",
+        "prerequisites": [
+          "physical_reference"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "If actual spark differs from a base table, what follows?",
+        "options": [
+          "Review active corrections and strategy.",
+          "The ECU is necessarily defective.",
+          "Add advance automatically."
+        ],
+        "correct_index": 0,
+        "explanation": "Multiple normal and abnormal causes are possible."
+      },
+      "semantic_roles": [
+        "spark",
+        "knock"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "knock_not_mbt",
+      "chapter": "steady_spark",
+      "prerequisites": [
+        "spark_actual"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "No reported knock does not prove optimal ignition timing.",
+      "variants": {
+        "quick": "No reported knock does not prove optimal ignition timing.",
+        "guided": "Knock status can inform a warning but does not measure best torque. MAP, airflow and uncalibrated motion do not independently establish MBT.",
+        "lesson": "Knock status can inform a warning but does not measure best torque. MAP, airflow and uncalibrated motion do not independently establish MBT. A smoke detector not sounding doesn't tell you the building is ideally warm. The example is explanatory; it does not verify this engine.",
+        "technical": "Keep instrumented torque evidence, temperature, fuel and correction conditions separate, and do not derive automatic spark advance from absent knock."
+      },
+      "if_confused": {
+        "alternate": "A smoke detector not sounding doesn't tell you the building is ideally warm.",
+        "prerequisites": [
+          "spark_actual"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "No reported knock means more timing must improve torque. True or false?",
+        "options": [
+          "False.",
+          "True.",
+          "Only with a phone accelerometer."
+        ],
+        "correct_index": 0,
+        "explanation": "A warning signal is not a torque measurement."
+      },
+      "semantic_roles": [
+        "knock",
+        "spark"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "qualified_power",
+      "chapter": "power",
+      "prerequisites": [
+        "knock_not_mbt"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "Higher-load and best-torque conclusions require appropriate independent evidence.",
+      "variants": {
+        "quick": "Higher-load and best-torque conclusions require appropriate independent evidence.",
+        "guided": "Seth can organize data collected by a qualified operator in a controlled facility, but cannot use a single accelerometer trace as a calibrated dynamometer.",
+        "lesson": "Seth can organize data collected by a qualified operator in a controlled facility, but cannot use a single accelerometer trace as a calibrated dynamometer. Two guesses that agree are still guesses unless anchored to a measured reference. The example is explanatory; it does not verify this engine.",
+        "technical": "Require instrument provenance, time synchronization, comparable engine state, active correction tracking and independent professional validation. Guide mode never initiates a power test."
+      },
+      "if_confused": {
+        "alternate": "Two guesses that agree are still guesses unless anchored to a measured reference.",
+        "prerequisites": [
+          "knock_not_mbt"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "What can an uncalibrated motion trace establish on its own?",
+        "options": [
+          "Limited movement evidence, not validated engine torque.",
+          "Guaranteed MBT.",
+          "That all protections are configured."
+        ],
+        "correct_index": 0,
+        "explanation": "The quality and meaning of the sensor must be established."
+      },
+      "semantic_roles": [
+        "vehicleSpeed"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    },
+    {
+      "id": "final_audit",
+      "chapter": "confirmation",
+      "prerequisites": [
+        "ecu_vs_engine",
+        "fuel_trim_masking",
+        "knock_not_mbt"
+      ],
+      "applies_when": "chapter_applicable_and_capability_verified_or_general_concept",
+      "learning_objective": "Finished lessons and verified engine behavior are separate achievements.",
+      "variants": {
+        "quick": "Finished lessons and verified engine behavior are separate achievements.",
+        "guided": "Seth should tell you what you've learned, which configurations were reviewed, which conditions have valid data and which physical checks remain outstanding.",
+        "lesson": "Seth should tell you what you've learned, which configurations were reviewed, which conditions have valid data and which physical checks remain outstanding. Finishing a flight-theory textbook isn't the same as an aircraft being inspected. The example is explanatory; it does not verify this engine.",
+        "technical": "Report concept checks, build profile, ECU/INI coverage, log quality, calibration revisions, untested regions and independent verification statuses separately."
+      },
+      "if_confused": {
+        "alternate": "Finishing a flight-theory textbook isn't the same as an aircraft being inspected.",
+        "prerequisites": [
+          "ecu_vs_engine",
+          "fuel_trim_masking",
+          "knock_not_mbt"
+        ],
+        "always_allow": "I don't know / explain another way"
+      },
+      "check": {
+        "kind": "concept_only",
+        "prompt": "Which report is most accurate?",
+        "options": [
+          "Education, observations and external validation each have their own status.",
+          "One universal 100% safe badge.",
+          "Only the number of visited VE cells."
+        ],
+        "correct_index": 0,
+        "explanation": "Progress categories describe different kinds of evidence."
+      },
+      "semantic_roles": [
+        "faultBits"
+      ],
+      "unavailable_fallback": "This ECU does not currently expose verified matching data for that example.",
+      "no_calibration_actions": true
+    }
+  ]
+}
