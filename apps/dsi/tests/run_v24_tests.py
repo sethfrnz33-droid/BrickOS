@@ -13,7 +13,7 @@ assert 'home_labels[4]' in main and 'FAVORITE SETTINGS' in main
 assert 'ECU MAPS' not in main and 'LIVE GRAPHS"' not in main
 print('PASS v2.4 UI: INI-backed dropdown, SD Favorites, four-item home, duplicate workspace removed')
 
-assert 'BTSMD24' in (root/'source/storage.c').read_text()
+assert 'BTSMD25' in (root/'source/storage.c').read_text()
 assert 'graph_from_ini' in main and 'active_ini_graph_line' in main
 assert 'ECU INI MARKS AXIS READ ONLY' in main
 assert 'read_only' in (root/'source/tuner.h').read_text()

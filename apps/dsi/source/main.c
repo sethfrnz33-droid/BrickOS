@@ -1,4 +1,4 @@
-/* Brick Tuner Suite DSi v2.4
+/* Brick Tuner Suite DSi v2.5
  * Native two-screen UI, sourced from the original 3DS v62 INI/BrickOS contract.
  * A DSi cannot render v62's Citro3D visuals; this edition retains a recognizable
  * dashboard / TunerStudio category tree / live channels / map and graph workflow.
@@ -14,6 +14,7 @@
 #include <strings.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <ctype.h>
 #include <math.h>
 #include "tuner.h"
 #include "dashboard.h"
@@ -115,6 +116,7 @@ static bool view_from_tree=false;
 static int active_ini_graph=-1, active_ini_graph_line=0;
 static char graph_from_dialog[64]="", graph_from_label[76]="";
 static bool graph_from_ini=false;
+static const BtMap* selected_map(void);
 static void load_favorites(void);
 static void toggle_favorite(const char *target,const char *label);
 static bool is_favorite(const char *target);
@@ -134,12 +136,96 @@ typedef struct {
     uint8_t axis_raw[512];
 } BtCalLoad;
 static BtCalLoad cal_load;
+static BtField active_fields[3];
+static BtIniFormat active_formats[3];
+static bool active_field_present[3];
+static char trace_formula[2][256];
+static bool trace_formula_valid[2];
+static char channel_names[SLOTS][64]={"AFRValue","VBatt"};
+static char graph_formula[SLOTS][256];
+static bool graph_formula_valid[SLOTS];
+/* Graph panels may have more than two INI channels. Keep the visible eight
+ * resolved, including computed OutputChannels, without a 640-line RAM cache. */
+static char graph_list_names[8][64],graph_list_formulas[8][256];
+static bool graph_list_valid[8];
+static int graph_list_start=0;
+static void refresh_graph_formulas(void){
+    memset(graph_formula_valid,0,sizeof(graph_formula_valid));
+    memset(graph_list_valid,0,sizeof(graph_list_valid));
+    for(int i=0;i<SLOTS;i++){
+        if(sd_ready && !bt_field(&def,channel_names[i],true))
+            graph_formula_valid[i]=bt_ini_rhs(bt_sd_cache_path(),"OutputChannels",
+                        channel_names[i],graph_formula[i],sizeof(graph_formula[i]));
+    }
+    if(!graph_from_ini||active_ini_graph<0||active_ini_graph>=def.graph_count)return;
+    const BtIniGraph *g=&def.graphs[active_ini_graph];
+    graph_list_start=(active_ini_graph_line/8)*8;
+    for(int i=0;i<8;i++){
+        graph_list_names[i][0]=0;
+        int index=graph_list_start+i;
+        if(index>=g->line_count||g->first_line+index>=def.graph_line_count)break;
+        const char *name=def.graph_lines[g->first_line+index].channel;
+        snprintf(graph_list_names[i],sizeof(graph_list_names[i]),"%.63s",name);
+        if(sd_ready && !bt_field(&def,name,true))
+            graph_list_valid[i]=bt_ini_rhs(bt_sd_cache_path(),"OutputChannels",
+                name,graph_list_formulas[i],sizeof(graph_list_formulas[i]));
+    }
+}
+static int expression_live_length(const char *expr,int existing){
+    if(!expr||!*expr)return existing;
+    for(const char *q=expr;*q;){
+        if(!(isalpha((unsigned char)*q)||*q=='_')){q++;continue;}
+        char name[64];int n=0;
+        while(isalnum((unsigned char)*q)||*q=='_'){
+            if(n<63)name[n++]=*q;
+            q++;
+        }
+        name[n]=0;
+        const BtField *f=bt_field(&def,name,true);
+        if(f&&f->scaled){
+            int end=f->offset+bt_type_size(f->type);
+            if(end>existing&&end<=BTS_LIVE_CAP)existing=end;
+        }
+    }
+    return existing;
+}
+static const char *mode_names[6]={
+    "useMetricOnInterface","useLambdaOnInterface","fuelAlgorithm",
+    "veOverrideMode","afrOverrideMode","ignOverrideMode"
+};
+static double mode_values[6];
+static bool mode_valid[6];
+static bool lookup_config_variable(const char *name,void *ctx,double *value){
+    (void)ctx;
+    for(int i=0;i<6;i++)if(!strcasecmp(name,mode_names[i])){
+        if(!mode_valid[i])return false;
+        *value=mode_values[i];return true;
+    }
+    return false;
+}
+static void resolve_active_formats(void){
+    for(int i=0;i<3;i++){
+        if(!active_field_present[i])continue;
+        BtField *field=&active_fields[i];BtIniFormat *f=&active_formats[i];
+        if(field->kind==2)continue;
+        double scale=0,shift=0,low=0,high=0;
+        if(bt_numeric_eval(f->scale,lookup_config_variable,NULL,&scale)&&scale!=0 &&
+           bt_numeric_eval(f->translate,lookup_config_variable,NULL,&shift)){
+            field->scale=scale;field->translate=shift;field->scaled=true;
+        }
+        if(bt_numeric_eval(f->low,lookup_config_variable,NULL,&low) &&
+           bt_numeric_eval(f->high,lookup_config_variable,NULL,&high)&&low<=high){
+            field->low=low;field->high=high;field->limits_known=true;
+        }
+    }
+}
+
 static void calibration_service(void);
 static const BtField *focused_cal_field(void);
 static double focused_value(void);
 static bool any_map_dirty(void);
 
-static char channel_names[SLOTS][64]={"AFRValue","VBatt"};
+
 static double hist[SLOTS][HISTORY],low[SLOTS],high[SLOTS],sum[SLOTS];
 static bool hist_valid[SLOTS][HISTORY];
 static unsigned sample_count[SLOTS];
@@ -151,6 +237,9 @@ static int dialog_depth=0;
 static int dialog_pick=0,dialog_scroll=0;
 static bool dialog_info=false;
 static char dialog_context[1024];
+static char editor_description[1024];
+static bool editor_help_visible=false;
+static bool virtual_z_map=false; /* INI UI-only values, never an ECU memory write */
 static int dialog_help_index=-1,dialog_help_page=0;
 
 static const double steps[]={0.1,1.0,5.0,10.0};
@@ -242,6 +331,28 @@ static void glyph(uint16_t *d,int x,int y,unsigned char ch,uint16_t color,int sc
         }
     }
 }
+static void tiny_text(uint16_t*d,int x,int y,const char*s,uint16_t color,int max_px){
+    /* 6 x 9 native small font for dense map grid / long menu descriptions. */
+    if(!s||max_px<6)return;
+    int cap=max_px/6;
+    for(int i=0;s[i]&&i<cap&&x+i*6+6<=W;i++){
+        unsigned char ch=(unsigned char)s[i];if(ch<32||ch>126)ch='?';
+        for(int ry=0;ry<9;ry++){
+            uint8_t bits=bts_glyphs[ch-32][ry];
+            for(int rx=0;rx<6;rx++)if(bits&(1u<<rx))pix(d,x+i*6+rx,y+ry,color);
+        }
+    }
+}
+static void tiny_fit(uint16_t*d,int x,int y,const char*s,uint16_t color,int width){
+    if(!s||width<12)return;
+    int cap=width/6;
+    int n=(int)strlen(s);
+    if(n<=cap){tiny_text(d,x,y,s,color,width);return;}
+    char b[64];if(cap>(int)sizeof(b)-1)cap=(int)sizeof(b)-1;
+    int end=cap-2;if(end<1)return;
+    memcpy(b,s,(size_t)end);b[end]='.';b[end+1]='.';b[end+2]=0;
+    tiny_text(d,x,y,b,color,width);
+}
 static void text(uint16_t*d,int x,int y,const char*s,uint16_t c,int limit){
     if(!s)return;
     for(int i=0;s[i]&&i<limit&&x+i*9<W;i++)
@@ -303,10 +414,30 @@ static void draw_header(const char*heading){
 /* Render a recently received real gauge frame even when a separate status
  * request fails. Status failure is NOT proof the ECU disconnected. */
 static bool fresh(void){return live.valid&&frame-live_frame<600&&ini_ok&&ecu_up&&wifi_up;}
+static bool computed_value_lookup(const char *name,void *ctx,double *value){
+    (void)ctx;
+    if(lookup_config_variable(name,NULL,value))return true;
+    const BtField *field=bt_field(&def,name,true);
+    return field&&bt_field_value(&def,field,live.bytes,live.length,0,value);
+}
 static bool get_value(const char*name,double*value){
-    if(!fresh())return false;
+    if(!fresh()||!name||!value)return false;
     const BtField*f=bt_field(&def,name,true);
-    return f&&bt_field_value(&def,f,live.bytes,live.length,0,value);
+    if(f&&bt_field_value(&def,f,live.bytes,live.length,0,value))return true;
+    for(int slot=0;slot<SLOTS;slot++){
+        if(graph_formula_valid[slot]&&!strcasecmp(name,channel_names[slot]))
+            return bt_numeric_eval(graph_formula[slot],computed_value_lookup,NULL,value);
+    }
+    for(int i=0;i<8;i++)if(graph_list_valid[i]&&
+       !strcasecmp(name,graph_list_names[i]))
+        return bt_numeric_eval(graph_list_formulas[i],computed_value_lookup,NULL,value);
+    for(int i=0;i<2;i++){
+        const BtMap*m=selected_map();
+        const char *axis=m?(i==0?m->xchan:m->ychan):NULL;
+        if(axis&&!strcasecmp(name,axis)&&trace_formula_valid[i])
+            return bt_numeric_eval(trace_formula[i],computed_value_lookup,NULL,value);
+    }
+    return false;
 }
 static void clear_history(int slot){
     for(int i=0;i<HISTORY;i++)hist_valid[slot][i]=false;
@@ -454,6 +585,16 @@ static void toggle_favorite(const char *target,const char *label){
     if(sd_ready)bt_sd_favorites_save(def.signature,favorites,favorite_count);
     snprintf(note,sizeof(note),"FAVORITED: %.72s",label);
 }
+static int next_curve_series(int current){
+    if(current<0||current>=def.map_count||!def.maps[current].curve)return -1;
+    const char *name=def.maps[current].name;
+    int first=-1;
+    for(int i=0;i<def.map_count;i++)if(def.maps[i].curve&&!strcasecmp(name,def.maps[i].name)){
+        if(first<0)first=i;
+        if(i>current)return i;
+    }
+    return first!=current?first:-1;
+}
 static int map_for_target(const char*name){
     if(!name||!*name)return -1;
     for(int j=0;j<map_count;j++){
@@ -476,18 +617,41 @@ static int nearest_bin(double value,const double *bins,int n){
 }
 static void map_live_trace(const BtMap*m){
     trace_valid=false;trace_x=trace_y=-1;
-    if(!m||!table.valid||!table.has_x||!m->xchan[0])return;
+    /* Virtual axes have exact INI defaults but no ECU field; they are valid
+     * for graph positioning even though they cannot be written. */
+    if(!m||!table.valid||!table.has_x||!m->xchan[0]||
+       (active_field_present[1]&&!active_fields[1].scaled))return;
     double x=0,y=0;
     if(!get_value(m->xchan,&x))return;
     int tx=nearest_bin(x,table.xbins,table.width);
     if(tx<0)return;
     int ty=0;
     if(table.height>1){
-        if(!table.has_y||!m->ychan[0]||!get_value(m->ychan,&y))return;
+        if(!table.has_y||!m->ychan[0]||
+           (active_field_present[2]&&!active_fields[2].scaled)||
+           !get_value(m->ychan,&y))return;
         ty=nearest_bin(y,table.ybins,table.height);
         if(ty<0)return;
     }
     trace_x=tx;trace_y=ty;trace_valid=true;
+}
+static uint16_t heat_color(double v,double min,double max){
+    double t=max>min?(v-min)/(max-min):0.5;
+    if(!isfinite(t))t=0.5;
+    if(t<0)t=0;
+    if(t>1)t=1;
+    double r=0,g=0,b=0;
+    if(t<0.25){double a=t*4;r=4;g=9+a*12;b=22-a*6;}
+    else if(t<0.5){double a=(t-0.25)*4;r=4+a*7;g=21+a*7;b=16-a*10;}
+    else if(t<0.75){double a=(t-0.5)*4;r=11+a*17;g=28-a*5;b=6-a*4;}
+    else {double a=(t-0.75)*4;r=28;g=23-a*14;b=2+a*4;}
+    return COL((int)r,(int)g,(int)b);
+}
+static void map_number(char *dst,size_t cap,double value){
+    if(fabs(value)>=1000)snprintf(dst,cap,"%.0f",value);
+    else if(fabs(value)>=100)snprintf(dst,cap,"%.0f",value);
+    else if(fabs(value)>=10)snprintf(dst,cap,"%.1f",value);
+    else snprintf(dst,cap,"%.2f",value);
 }
 static void map_top(void){
     draw_header(table.dirty?"MAP / STAGED CHANGES":"ECU CALIBRATION MAP");
@@ -512,7 +676,7 @@ static void map_top(void){
     }
     const BtMap*m=selected_map();if(!m)return;
     map_live_trace(m);
-    text(top,11,31,m->label,HIGHLIGHT,27);
+    tiny_fit(top,11,33,m->label,HIGHLIGHT,m->curve?182:236);
     if(chosen_map==BTS_MAX_MAPS && table.width==1 && table.height==1){
         const BtField *f=focused_cal_field();
         text(top,11,53,f&&f->kind==2?"INI PREDEFINED SELECTION":"INI NUMERIC SCALAR",CYAN,28);
@@ -533,31 +697,64 @@ static void map_top(void){
         text(top,11,168,editor_readonly?"INI READ ONLY":"ECU VALUE / STAGED EDIT",MUTED,26);
         return;
     }
-    if(m->curve)text(top,145,31,"INI CURVE",CYAN,12);
-    if(map_focus){
-        text(top,11,43,map_focus==1?"X AXIS SELECTED":"Y AXIS SELECTED",CYAN,30);
+    if(virtual_z_map)tiny_text(top,9,176,"INI DEFAULT CURVE / READ ONLY",HIGHLIGHT,240);
+    if(m->curve){
+        char series[26];snprintf(series,sizeof(series),"CURVE %d",m->series_index+1);
+        tiny_text(top,202,31,series,CYAN,54);
     }
+    if(map_focus)tiny_text(top,176,31,map_focus==1?"X EDIT":"Y EDIT",CYAN,75);
+    char labels[90];
+    snprintf(labels,sizeof(labels),"X %.17s   Y %.17s",
+             m->x_label[0]?m->x_label:m->x,m->y_label[0]?m->y_label:m->y);
+    tiny_fit(top,9,48,labels,MUTED,241);
     int cols=table.width<5?table.width:5,rows=table.height<5?table.height:5;
     int left=cx-cols/2,above=cy-rows/2;
     if(left<0)left=0;
     if(above<0)above=0;
     if(left+cols>table.width)left=table.width-cols;
     if(above+rows>table.height)above=table.height-rows;
-    for(int yy=0;yy<rows;yy++)for(int xx=0;xx<cols;xx++){
-        int tx=left+xx,ty=above+yy,px=10+xx*47,py=52+yy*22;
-        bool selected=tx==cx&&ty==cy;
-        bool traced=trace_valid&&tx==trace_x&&ty==trace_y;
-        round_fill(top,px,py,44,19,3,traced?GREEN:selected?HIGHLIGHT:PANEL);
-        char b[18];number(table.cells[ty*table.width+tx],b,sizeof(b));
-        text(top,px+3,py+4,b,selected||traced?BG:WHITE,5);
+    double minv=INFINITY,maxv=-INFINITY;
+    for(int i=0;i<table.width*table.height;i++){
+        double v=table.cells[i];if(!isfinite(v))continue;
+        if(v<minv)minv=v;
+        if(v>maxv)maxv=v;
     }
-    char b[60];snprintf(b,sizeof(b),"%d X %d   CELL %d,%d",table.width,table.height,cx+1,cy+1);
-    text(top,10,169,b,MUTED,33);
-    if(trace_valid){
-        snprintf(b,sizeof(b),"LIVE TRACE %d,%d",trace_x+1,trace_y+1);
-        text(top,10,181,b,GREEN,30);
-    }else text(top,10,181,"LIVE TRACE: AXES UNAVAILABLE",MUTED,30);
-    if(table.dirty)text(top,10,156,"STAGED / NOT BURNT",HIGHLIGHT,27);
+    if(!isfinite(minv)||!isfinite(maxv)){minv=0;maxv=1;}
+    int cellw=42,cellh=18,dx=43,dy=20;
+    int x0=37+(5-cols)*dx/2,y0=61;
+    for(int yy=0;yy<rows;yy++){
+        int ty=above+yy,py=y0+yy*dy;
+        if(table.has_y && ty<table.y_count){
+            char v[22];map_number(v,sizeof(v),table.ybins[ty]);
+            tiny_fit(top,2,py+4,v,MUTED,33);
+        }else if(table.height>1)tiny_text(top,2,py+4,"?",MUTED,22);
+        for(int xx=0;xx<cols;xx++){
+            int tx=left+xx,px=x0+xx*dx;
+            bool selected=tx==cx && ty==cy;
+            bool traced=trace_valid&&tx==trace_x&&ty==trace_y;
+            if(selected||traced)round_fill(top,px-1,py-1,cellw+2,cellh+2,3,
+                                           selected?HIGHLIGHT:CYAN);
+            uint16_t tile=heat_color(table.cells[ty*table.width+tx],minv,maxv);
+            round_fill(top,px,py,cellw,cellh,3,tile);
+            char v[24];map_number(v,sizeof(v),table.cells[ty*table.width+tx]);
+            tiny_fit(top,px+3,py+5,v,WHITE,cellw-5);
+            if(traced){fill(top,px+cellw-5,py+2,3,3,WHITE);}
+        }
+    }
+    if(table.has_x){
+        for(int xx=0;xx<cols;xx++){
+            int tx=left+xx;char v[22];map_number(v,sizeof(v),table.xbins[tx]);
+            tiny_fit(top,x0+xx*dx+2,164,v,CYAN,cellw-2);
+        }
+    }else tiny_text(top,38,164,"NO INI X AXIS",MUTED,125);
+    char line[80];
+    if(trace_valid)snprintf(line,sizeof(line),"TRACE %d,%d  /  CELL %d,%d",
+                  trace_x+1,trace_y+1,cx+1,cy+1);
+    else if(table.has_x && (table.height==1||table.has_y))
+        snprintf(line,sizeof(line),"TRACE: WAITING FOR INI OUTPUT DATA");
+    else snprintf(line,sizeof(line),"AXIS INI DEFINITION UNAVAILABLE");
+    tiny_fit(top,8,181,line,trace_valid?GREEN:MUTED,246);
+    if(table.dirty)tiny_text(top,180,48,"STAGED",HIGHLIGHT,64);
 }
 static int category_count(void){int n=0;for(int i=0;i<def.menu_count;i++)if(def.menus[i].group==0)n++;return n;}
 static int category_at(int c){
@@ -634,6 +831,7 @@ static void open_ini_graph(const char *id){
     snprintf(graph_from_dialog,sizeof(graph_from_dialog),"%s",dialog_name);
     snprintf(graph_from_label,sizeof(graph_from_label),"%s",dialog_label);
     graph_from_ini=true;active_ini_graph=index;active_ini_graph_line=0;
+    refresh_graph_formulas();
     view_from_tree=true;
     goto_page(P_GRAPH);
 }
@@ -706,27 +904,36 @@ static void top_dialog(void){
         }else text(top,10,132,"NO ADDITIONAL INI HELP",MUTED,26);
         return;
     }
-    char b[70];
-    if(r->kind==1)snprintf(b,sizeof(b),"NESTED PANEL / %.46s",r->name);
-    else if(r->kind==2)snprintf(b,sizeof(b),"ECU COMMAND / %.46s",r->name);
-    else if(r->kind==3)snprintf(b,sizeof(b),"DISPLAY ONLY / %.46s",r->name);
-    else if(r->kind==4)snprintf(b,sizeof(b),"LIVE OUTPUT / %.46s",r->name);
-    else if(r->kind==6)snprintf(b,sizeof(b),"INI LIVE GRAPH / %.46s",r->name);
+    if(dialog_help_index!=at){
+        dialog_context[0]=0;dialog_help_index=at;dialog_help_page=0;
+        if(sd_ready)bt_ini_context_help(bt_sd_cache_path(),r->name,dialog_context,sizeof(dialog_context));
+    }
+    char b[80];
+    if(r->kind==1)snprintf(b,sizeof(b),"NESTED PANEL / %.53s",r->name);
+    else if(r->kind==2)snprintf(b,sizeof(b),"INI COMMAND / %.53s",r->name);
+    else if(r->kind==3)snprintf(b,sizeof(b),"READ ONLY / %.53s",r->name);
+    else if(r->kind==4)snprintf(b,sizeof(b),"LIVE OUTPUT / %.53s",r->name);
+    else if(r->kind==6)snprintf(b,sizeof(b),"INI LIVE GRAPH / %.53s",r->name);
     else if(r->kind==5)snprintf(b,sizeof(b),"INI INFORMATION");
     else {
         const BtField*f=bt_field(&def,r->name,false);
-        snprintf(b,sizeof(b),"%s / %.48s",f?(f->kind==2?"SELECTION":f->kind==1?"ARRAY":"VALUE"):"FIELD",r->name);
+        snprintf(b,sizeof(b),"%s / %.53s",f?(f->kind==2?"INI CHOICE":f->kind==1?"ARRAY":"SCALAR"):"FIELD",r->name);
     }
-    text(top,10,72,b,MUTED,28);
-    if(r->detail[0])text_wrapped(top,10,92,r->detail,CYAN,26,2);
-    else if(r->kind==5)text_wrapped(top,10,92,r->label,CYAN,26,2);
-    if(r->condition[0])text_wrapped(top,10,125,r->condition,MUTED,26,1);
-    if(r->kind==2)text(top,10,146,"COMMAND LISTED / NOT EXECUTED",HIGHLIGHT,26);
-    else if(r->kind==4){double v=0;
-        if(get_value(r->name,&v)){number(v,b,sizeof(b));text(top,10,145,b,GREEN,20);}
-        else text(top,10,145,"NO DECODED LIVE VALUE",MUTED,27);
-    }else text(top,10,146,"Y: INI DETAILS / A OPEN",HIGHLIGHT,28);
-    if(note[0])text(top,10,176,note,HIGHLIGHT,28);
+    tiny_fit(top,9,71,b,CYAN,238);
+    if(r->kind==4){double v=0;
+        if(get_value(r->name,&v)){number(v,b,sizeof(b));text(top,10,89,b,GREEN,20);}
+    }
+    if(dialog_context[0]){
+        tiny_text(top,9,109,"DESCRIPTION FROM ECU INI",MUTED,235);
+        text_wrapped(top,10,124,dialog_context,WHITE,26,3);
+    }else if(r->detail[0]){
+        tiny_text(top,9,109,"DETAIL FROM ECU INI",MUTED,235);
+        text_wrapped(top,10,124,r->detail,WHITE,26,3);
+    }else if(r->kind==5)text_wrapped(top,10,111,r->label,WHITE,26,3);
+    else if(r->condition[0])text_wrapped(top,10,111,r->condition,MUTED,26,3);
+    else tiny_text(top,9,113,"NO DESCRIPTION IN ECU INI",MUTED,235);
+    if(r->kind==2)tiny_text(top,10,177,"INI COMMAND / NOT EXECUTED",HIGHLIGHT,236);
+    else tiny_text(top,10,177,"Y FULL DESCRIPTION / A OPEN",HIGHLIGHT,240);
 }
 static void top_tune(void){
     if(cal_load.active || (chosen_map>=0&&table.valid)){map_top();return;}
@@ -734,20 +941,20 @@ static void top_tune(void){
     draw_header("TUNERSTUDIO TREE");
     int count=category_count();
     if(!count){text(top,12,46,"NO TUNING MENU IN ECU INI",MUTED,33);return;}
-    int first=tune_cat>9?tune_cat-9:0;
-    for(int i=first;i<count&&i<first+10;i++){
+    int first=tune_cat>7?tune_cat-7:0;
+    for(int i=first;i<count&&i<first+8;i++){
         int at=category_at(i),y=30+(i-first)*15;
         bool selected=i==tune_cat;
         if(selected)round_fill(top,6,y,244,14,3,PANEL);
         nav_icon_mini(top,category_icon(def.menus[at].label),11,y);
-        text(top,30,y+1,def.menus[at].label,selected?HIGHLIGHT:WHITE,27);
+        tiny_fit(top,30,y+2,def.menus[at].label,selected?HIGHLIGHT:WHITE,214);
     }
     if(tune_focus){
         int ix=tune_item_at(list_pick);
         if(ix>=0){
             const BtMenu*m=&def.menus[ix];
-            text(top,9,172,m->target[0]?m->target:"INI FOLDER",CYAN,28);
-            if(m->condition[0])text(top,9,183,m->condition,MUTED,27);
+            tiny_fit(top,9,165,m->target[0]?m->target:"INI FOLDER",CYAN,241);
+            if(m->condition[0])tiny_fit(top,9,179,m->condition,MUTED,241);
         }
     }
 }
@@ -842,8 +1049,8 @@ static void bottom_editor(void){
     char b[60];
     bool option=f&&f->kind==2;
     bool scalar=chosen_map==BTS_MAX_MAPS&&table.width==1&&table.height==1;
-    text(bottom,8,26,map->label,HIGHLIGHT,27);
-    text(bottom,226,26,is_favorite(chosen_map==BTS_MAX_MAPS?map->z:map->name)?"[*]":"[+]",HIGHLIGHT,3);
+    tiny_fit(bottom,8,24,map->label,HIGHLIGHT,207);
+    tiny_text(bottom,224,24,is_favorite(chosen_map==BTS_MAX_MAPS?map->z:map->name)?"[*]":"[+]",HIGHLIGHT,28);
     if(option){
         int current=(int)focused_value();
         snprintf(b,sizeof(b),"INI SELECTION / RAW %d",current);
@@ -851,7 +1058,7 @@ static void bottom_editor(void){
         if(bit_choice_count>0&&current>=0&&current<bit_choice_count&&bit_choice_labels[current][0]){
             round_fill(bottom,9,72,237,30,5,LITE);
             text(bottom,16,81,bit_choice_labels[current],WHITE,24);
-            text(bottom,9,110,"A OPTION LIST / X NEXT / Y PREV",CYAN,26);
+            tiny_text(bottom,9,107,"A OPTIONS / X NEXT / Y PREV",CYAN,236);
         }else text(bottom,9,76,"UNDEFINED INI CHOICE / READ ONLY",RED,26);
     }else if(scalar){
         number(focused_value(),b,sizeof(b));
@@ -871,31 +1078,37 @@ static void bottom_editor(void){
         if(table.has_y){number(table.ybins[cy],b,sizeof(b));text(bottom,135,102,"Y:",MUTED,2);text(bottom,156,102,b,WHITE,12);}
     }
     if(f&&f->power_cycle){
-        text(bottom,9,112,"ECU RESTART REQUIRED AFTER WRITE",HIGHLIGHT,30);
+        tiny_text(bottom,9,166,"ECU RESTART REQUIRED AFTER WRITE",HIGHLIGHT,244);
     }
     if(!option){
         static const char *actions[]={"-","+","STEP","TRACE"};
+        const BtMap *here=selected_map();
+        bool has_series=here&&here->curve&&next_curve_series(chosen_map)>=0;
         for(int i=0;i<4;i++){
             int x=6+i*62;
             round_fill(bottom,x,120,57,26,4,i==1?LITE:PANEL);
-            text(bottom,x+(57-(int)strlen(actions[i])*9)/2,127,actions[i],WHITE,5);
+            const char *label=(i==3&&has_series)?"SERIES":actions[i];
+            tiny_text(bottom,x+(57-(int)strlen(label)*6)/2,128,label,WHITE,56);
         }
     }else{
         round_fill(bottom,9,120,115,26,4,PANEL);
         round_fill(bottom,132,120,115,26,4,PANEL);
         text(bottom,20,128,"< PREVIOUS",WHITE,12);text(bottom,140,128,"NEXT >",WHITE,12);
     }
-    if(note[0])text(bottom,8,151,note,HIGHLIGHT,29);
-    else text(bottom,8,151,any_map_dirty()?"LOCAL EDIT / NOT WRITTEN":
-            editor_readonly?"INI DISPLAY ONLY":"ECU ORIGINAL / UNCHANGED",any_map_dirty()?HIGHLIGHT:MUTED,28);
-    text(bottom,8,171,editor_readonly?"READ ONLY / B BACK":
-         table.confirm_burn?"R AGAIN: BACKUP + VERIFY":"START STAR  R TWICE TO BURN",HIGHLIGHT,28);
+    if(editor_description[0]){
+        tiny_fit(bottom,8,153,editor_description,WHITE,235);
+        tiny_text(bottom,235,153,"?",CYAN,12);
+    }else if(note[0])tiny_fit(bottom,8,153,note,HIGHLIGHT,241);
+    else tiny_text(bottom,8,153,any_map_dirty()?"LOCAL EDIT / NOT WRITTEN":
+            editor_readonly?"INI DISPLAY ONLY":"ECU ORIGINAL / UNCHANGED",MUTED,240);
+    tiny_text(bottom,8,181,editor_readonly?"READ ONLY  /  B BACK":
+         table.confirm_burn?"R CONFIRM BURN / VERIFIED BACKUP":"START STAR  /  R TWICE BURN",HIGHLIGHT,246);
 }
 static void bottom_bit_picker(void){
     fill(bottom,0,0,W,H,BG);text(bottom,9,8,"INI DROPDOWN / PREDEFINED",HIGHLIGHT,26);
     const BtField *f=focused_cal_field();
     text(bottom,10,31,f?f->name:"ECU OPTIONS",HIGHLIGHT,27);
-    for(int row=0;row<7;row++){
+    for(int row=0;row<8;row++){
         int index=bit_picker_scroll+row;
         if(index>=bit_choice_count)break;
         int y=49+row*16;
@@ -906,7 +1119,7 @@ static void bottom_bit_picker(void){
         text(bottom,49,y,bit_choice_labels[index][0]?bit_choice_labels[index]:"(INI RESERVED)",
              bit_choice_labels[index][0]?(chosen?HIGHLIGHT:WHITE):MUTED,21);
     }
-    text(bottom,9,172,"A SELECT    B CANCEL",MUTED,27);
+    tiny_text(bottom,8,181,"A SELECT    B CANCEL",MUTED,242);
 }
 static void bottom_tune(void){
     if(cal_load.active){
@@ -919,61 +1132,68 @@ static void bottom_tune(void){
     /* The active editor takes priority over its parent nested dialog. */
     if(keypad_open){bottom_keypad();return;}
     if(bit_picker_open){bottom_bit_picker();return;}
+    if(chosen_map>=0&&table.valid&&editor_help_visible){
+        const BtMap *m=selected_map();
+        tiny_fit(bottom,9,11,m?m->label:"INI DESCRIPTION",HIGHLIGHT,237);
+        text_wrapped(bottom,10,37,editor_description[0]?editor_description:
+            "NO CONTEXT HELP IS PROVIDED BY THIS ECU INI.",WHITE,25,8);
+        tiny_text(bottom,8,181,"B BACK TO EDITOR",MUTED,225);
+        return;
+    }
     if(chosen_map>=0&&table.valid){
         bottom_editor();
         return;
     }
     if(dialog_name[0]){
-        text(bottom,10,30,dialog_label,HIGHLIGHT,34);
+        tiny_fit(bottom,9,23,dialog_label,HIGHLIGHT,240);
         int total=dialog_count();
         if(!total)text(bottom,10,74,"NO SUPPORTED FIELDS",MUTED,34);
-        for(int row=0;row<6&&dialog_scroll+row<total;row++){
-            int ix=dialog_scroll+row,at=dialog_at(ix),y=47+row*17;
+        for(int row=0;row<8&&dialog_scroll+row<total;row++){
+            int ix=dialog_scroll+row,at=dialog_at(ix),y=36+row*18;
             if(at<0)continue;
             bool sel=ix==dialog_pick;
             if(sel)round_fill(bottom,6,y,244,16,3,PANEL);
             const BtDialogRef *r=&def.refs[at];
-            text(bottom,12,y+4,r->label,sel?HIGHLIGHT:WHITE,31);
+            tiny_fit(bottom,12,y+3,r->label,sel?HIGHLIGHT:WHITE,216);
             if(is_favorite(r->name))text(bottom,228,y+3,"*",HIGHLIGHT,2);
             if(r->kind==2)text(bottom,241,y+4,"!",CYAN,1);
             if(r->kind==6)text(bottom,241,y+4,"G",CYAN,1);
             if(r->kind==1)text(bottom,241,y+4,">",CYAN,1);
         }
-        text(bottom,9,150,"A OPEN X STAR Y HELP B BACK",MUTED,27);
+        tiny_text(bottom,8,182,"A OPEN   X STAR   Y HELP   B BACK",MUTED,245);
         return;
     }
     int count=tune_item_count();
     const char*cat="ECU MENU";
     int index=category_at(tune_cat);if(index>=0)cat=def.menus[index].label;
-    text(bottom,9,29,tune_group>=0?def.menus[tune_group].label:cat,HIGHLIGHT,34);
+    tiny_fit(bottom,9,23,tune_group>=0?def.menus[tune_group].label:cat,HIGHLIGHT,239);
     if(!count){text(bottom,11,75,"NO ECU SETTINGS IN CATEGORY",MUTED,34);return;}
-    for(int row=0;row<6&&list_scroll+row<count;row++){
-        int idx=tune_item_at(list_scroll+row),y=47+row*17;
+    for(int row=0;row<8&&list_scroll+row<count;row++){
+        int idx=tune_item_at(list_scroll+row),y=36+row*18;
         if(idx<0)continue;
         bool selected=list_scroll+row==list_pick;
         if(selected)round_fill(bottom,6,y,244,16,3,PANEL);
         nav_icon_mini(bottom,category_icon(def.menus[idx].label),10,y+1);
-        text(bottom,29,y+3,def.menus[idx].label,selected?HIGHLIGHT:WHITE,26);
+        tiny_fit(bottom,28,y+3,def.menus[idx].label,selected?HIGHLIGHT:WHITE,191);
         if(def.menus[idx].target[0] && is_favorite(def.menus[idx].target))
             text(bottom,224,y+3,"*",HIGHLIGHT,2);
         if(def.menus[idx].group==1)text(bottom,240,y+4,">",CYAN,1);
         else if(map_for_target(def.menus[idx].target)>=0)text(bottom,240,y+4,"M",CYAN,1);
     }
-    text(bottom,9,150,tune_focus?"A OPEN  X FAVORITE  B BACK":"UP/DOWN: CATEGORY   A: MENU",MUTED,30);
-    if(note[0])text(bottom,9,170,note,HIGHLIGHT,28);
+    tiny_text(bottom,8,182,tune_focus?"A OPEN   X STAR   B BACK":"UP/DOWN CATEGORY   A OPEN",MUTED,246);
 }
 /* 3DS layout parity: workspace launcher is a vertical icon-left list.
  * The upper screen remains exclusively the live dashboard. */
 static void bottom_favorites(void){
-    text(bottom,8,28,"STARRED TUNING SETTINGS",HIGHLIGHT,27);
+    tiny_text(bottom,9,23,"STARRED TUNING SETTINGS",HIGHLIGHT,236);
     if(!favorite_count)text(bottom,9,79,"PRESS X ON A TUNING SETTING",MUTED,27);
-    for(int r=0;r<7&&list_scroll+r<favorite_count;r++){
-        int i=list_scroll+r,y=47+r*17;
+    for(int r=0;r<8&&list_scroll+r<favorite_count;r++){
+        int i=list_scroll+r,y=36+r*18;
         if(i==list_pick)round_fill(bottom,6,y,244,16,3,PANEL);
-        text(bottom,10,y+3,favorites[i].label,i==list_pick?HIGHLIGHT:WHITE,26);
+        tiny_fit(bottom,10,y+3,favorites[i].label,i==list_pick?HIGHLIGHT:WHITE,208);
         text(bottom,228,y+3,"*",HIGHLIGHT,2);
     }
-    text(bottom,9,174,"A OPEN   X REMOVE   B HOME",MUTED,28);
+    tiny_text(bottom,8,182,"A OPEN   X REMOVE   B HOME",MUTED,246);
 }
 static void bottom_home(void){
     text(bottom,8,5,"BRICK TUNER / WORKSPACES",HIGHLIGHT,26);
@@ -1036,14 +1256,35 @@ static void bottom_sounds(void){
     text(bottom,9,180,"A: PLAY    B: HOME",MUTED,27);
 }
 static void bottom_graph(void){
-    text(bottom,10,30,"GRAPH CHANNEL",HIGHLIGHT,34);
-    for(int i=0;i<SLOTS;i++){
-        int x=7+i*124,y=45;
-        bool selected=i==active_slot;
-        round_fill(bottom,x,y,116,35,4,selected?LITE:PANEL);
-        text(bottom,x+6,y+13,channel_names[i],selected?HIGHLIGHT:WHITE,15);
+    if(graph_from_ini && active_ini_graph>=0 && active_ini_graph<def.graph_count){
+        const BtIniGraph *g=&def.graphs[active_ini_graph];
+        tiny_fit(bottom,8,26,g->title,HIGHLIGHT,238);
+        for(int i=0;i<8&&graph_list_start+i<g->line_count;i++){
+            int offset=g->first_line+graph_list_start+i;
+            if(offset>=def.graph_line_count)break;
+            const char *ch=def.graph_lines[offset].channel;
+            int y=38+i*17;
+            bool selected=graph_list_start+i==active_ini_graph_line;
+            if(selected)round_fill(bottom,5,y,246,16,3,PANEL);
+            tiny_fit(bottom,10,y+3,ch,selected?HIGHLIGHT:WHITE,172);
+            double v=0;char b[32];
+            if(get_value(ch,&v)){number(v,b,sizeof(b));tiny_fit(bottom,189,y+3,b,GREEN,61);}
+            else tiny_text(bottom,189,y+3,"--",MUTED,40);
+        }
+        tiny_text(bottom,8,180,"X NEXT CH  /  Y STATS  /  B BACK",MUTED,246);
+    }else{
+        tiny_text(bottom,10,30,"GRAPH CHANNELS",HIGHLIGHT,225);
+        for(int i=0;i<SLOTS;i++){
+            int y=50+i*42;
+            round_fill(bottom,7,y,241,35,4,i==active_slot?LITE:PANEL);
+            tiny_fit(bottom,15,y+5,channel_names[i],i==active_slot?HIGHLIGHT:WHITE,225);
+            double v=0;char b[32];
+            if(get_value(channel_names[i],&v)){
+                number(v,b,sizeof(b));tiny_fit(bottom,15,y+21,b,GREEN,180);
+            }
+        }
+        tiny_text(bottom,9,181,"Y STATS  /  L-R CHANNELS  /  B BACK",MUTED,246);
     }
-    text(bottom,10,150,"Y: GRAPH / MIN MAX AVG",MUTED,34);
 }
 static void bottom_link(void){
     text(bottom,10,30,"EXPECTED NETWORK: " EXPECTED_AP,HIGHLIGHT,34);
@@ -1264,6 +1505,25 @@ static int live_length(void){
     all[SLOTS+1]=m&&m->xchan[0]?m->xchan:channel_names[0];
     all[SLOTS+2]=m&&m->ychan[0]?m->ychan:channel_names[0];
     int length=bt_required_live_length(&def,all,SLOTS+3);
+    const BtMap *active=(chosen_map>=0&&table.valid)?selected_map():NULL;
+    if(active){
+        for(int i=0;i<2;i++)if(trace_formula_valid[i])
+            length=expression_live_length(trace_formula[i],length);
+    }
+    if(page==P_GRAPH&&graph_from_ini&&active_ini_graph>=0&&active_ini_graph<def.graph_count){
+        const BtIniGraph *g=&def.graphs[active_ini_graph];
+        for(int j=0;j<g->line_count;j++){
+            const char *ch=def.graph_lines[g->first_line+j].channel;
+            const BtField *f=bt_field(&def,ch,true);
+            if(f&&f->scaled){int end=f->offset+bt_type_size(f->type);
+                if(end>length&&end<=BTS_LIVE_CAP)length=end;
+            }
+        }
+        for(int i=0;i<SLOTS;i++)if(graph_formula_valid[i])
+            length=expression_live_length(graph_formula[i],length);
+        for(int i=0;i<8;i++)if(graph_list_valid[i])
+            length=expression_live_length(graph_list_formulas[i],length);
+    }
     /* Preserve a small 30Hz response while navigating; request the larger
      * six-channel capture only when the lower idle dashboard is visible. */
     if(idle_dashboard || (page==P_HOME&&gauge_layout>2))length=bt_idle_required_length(&def,&idle_gauges,length);
@@ -1359,13 +1619,19 @@ static void open_map(int id){
     if(id<0||(id>=def.map_count&&id!=BTS_MAX_MAPS)||!ini_ok)return;
     const BtMap *m=id==BTS_MAX_MAPS?&scalar_map:&def.maps[id];
     const BtField *z=bt_field(&def,m->z,false);
+    /* Some TS curves are generated from defaultValue arrays (no ECU offset).
+     * Show them as read-only rather than failing to open, or faking writes. */
+    static double ini_virtual_z[BTS_MAP_CELLS];
+    int virtual_count=0;
+    bool virtual_z=!z&&sd_ready&&bt_ini_virtual_array(bt_sd_cache_path(),m->z,
+                                       ini_virtual_z,BTS_MAP_CELLS,&virtual_count);
     int size=z?bt_type_size(z->type):0;
-    if(!z||size<1||z->page<1||z->page>64||z->width<1||z->height<1||
-       z->width*z->height>BTS_MAP_CELLS){
-        snprintf(note,sizeof(note),"INI FIELD ADDRESS / TYPE UNSUPPORTED");return;
+    if(!virtual_z && (!z||size<1||z->page<1||z->page>64||z->width<1||z->height<1||
+       z->width*z->height>BTS_MAP_CELLS)){
+        snprintf(note,sizeof(note),"INI CURVE NOT ECU-BACKED / NO DECLARED VALUES");return;
     }
-    int bytes=size*z->width*z->height;
-    if(bytes<1||bytes>(int)sizeof(table.baseline)){
+    int bytes=virtual_z?0:size*z->width*z->height;
+    if(!virtual_z && (bytes<1||bytes>(int)sizeof(table.baseline))){
         snprintf(note,sizeof(note),"INI CALIBRATION EXCEEDS DS RAM BUDGET");return;
     }
     /* Select the workspace immediately. Do not perform blocking socket I/O
@@ -1373,18 +1639,55 @@ static void open_map(int id){
     bt_async_cancel();
     memset(&table,0,sizeof(table));
     memset(&cal_load,0,sizeof(cal_load));
-    table.width=z->width;table.height=z->height;table.raw_length=bytes;
-    editor_readonly=editor_readonly||z->read_only;
+    memset(active_fields,0,sizeof(active_fields));
+    memset(active_formats,0,sizeof(active_formats));
+    memset(active_field_present,0,sizeof(active_field_present));
+    memset(mode_valid,0,sizeof(mode_valid));
+    memset(trace_formula_valid,0,sizeof(trace_formula_valid));
+    virtual_z_map=virtual_z;
+    table.width=virtual_z?virtual_count:z->width;
+    table.height=virtual_z?1:z->height;
+    table.raw_length=bytes;
+    if(virtual_z)memcpy(table.cells,ini_virtual_z,(size_t)virtual_count*sizeof(double));
+    editor_description[0]=0;editor_help_visible=false;
+    if(sd_ready){
+        if(!bt_ini_context_help(bt_sd_cache_path(),z->name,editor_description,sizeof(editor_description))
+           &&m->help_topic[0])
+            bt_ini_topic_help(bt_sd_cache_path(),m->help_topic,editor_description,sizeof(editor_description));
+    }
+    for(int j=0;j<3;j++){
+        const char *field_name=j==0?m->z:j==1?m->x:m->y;
+        const BtField *source=bt_field(&def,field_name,false);
+        if(!source)continue;
+        active_fields[j]=*source;
+        active_field_present[j]=true;
+        if(sd_ready)bt_ini_field_format(bt_sd_cache_path(),field_name,&active_formats[j]);
+    }
+    for(int j=0;j<2;j++){
+        const char *ch=j==0?m->xchan:m->ychan;
+        if(sd_ready && ch&&*ch && !bt_field(&def,ch,true)){
+            trace_formula_valid[j]=bt_ini_rhs(bt_sd_cache_path(),"OutputChannels",ch,
+                 trace_formula[j],sizeof(trace_formula[j]));
+        }
+    }
+    editor_readonly=editor_readonly||virtual_z||(z&&z->read_only);
+    if(virtual_z){
+        memset(&active_fields[0],0,sizeof(active_fields[0]));
+        snprintf(active_fields[0].name,sizeof(active_fields[0].name),"%.63s",m->z);
+        active_fields[0].kind=1;active_fields[0].width=virtual_count;
+        active_fields[0].height=1;active_fields[0].type=BT_F64;
+        active_fields[0].scale=1;active_fields[0].scaled=true;
+        active_fields[0].read_only=true;active_field_present[0]=true;
+    }
     chosen_map=id;cx=cy=0;map_focus=0;abandon_confirm=false;keypad_open=false;bit_picker_open=false;
-    cal_load.active=true;cal_load.stage=0;cal_load.total=bytes;cal_load.map_id=id;
+    cal_load.active=true;cal_load.stage=-3;cal_load.total=0;cal_load.map_id=id;
     snprintf(status_msg,sizeof(status_msg),"READING ECU CALIBRATION");
     snprintf(note,sizeof(note),"READING %s FROM ECU",m->label);
 }
 static const BtField *cal_stage_field(void){
-    const BtMap *m=selected_map();
-    if(!m)return NULL;
-    return bt_field(&def,cal_load.stage==0?m->z:
-                    cal_load.stage==1?m->x:m->y,false);
+    if(!selected_map())return NULL;
+    if(cal_load.stage<0||cal_load.stage>2||!active_field_present[cal_load.stage])return NULL;
+    return &active_fields[cal_load.stage];
 }
 static void cal_load_fail(const char *why){
     cal_load.active=false;bt_async_cancel();
@@ -1406,8 +1709,9 @@ static void cal_stage_complete(void){
                 cal_load_fail("ECU BYTES OR INI REPRESENTATION INVALID");return;
             }
         }
-    }else if(f&&f->scaled){
+    }else if(f){
         BtField relative=*f;relative.offset=0;
+        if(!relative.scaled){relative.scaled=true;relative.scale=1;relative.translate=0;}
         int count=f->width*f->height;
         double *axis=cal_load.stage==1?table.xbins:table.ybins;
         bool valid=count>0&&count<=64;
@@ -1426,7 +1730,7 @@ static void cal_stage_complete(void){
     cal_load.offset=0;cal_load.total=0;
     if(cal_load.stage>=3){
         cal_load.active=false;table.valid=true;
-        const BtField *z=bt_field(&def,selected_map()->z,false);
+        const BtField *z=active_field_present[0]?&active_fields[0]:NULL;
         snprintf(status_msg,sizeof(status_msg),"ECU CALIBRATION READ COMPLETE");
         snprintf(note,sizeof(note),"%s",z&&z->scaled?
             "ECU VALUES LOADED / EDIT LOCALLY":"RAW VIEW ONLY / INI FORMULA NOT DECODED");
@@ -1444,9 +1748,49 @@ static void cal_skip_optional_axis(const char *cause){
         snprintf(status_msg,sizeof(status_msg),"ECU MAP READY / AXIS UNAVAILABLE");
     }
 }
+static bool read_mode_block(int at,const uint8_t *bytes,int length){
+    bool found=false;
+    for(int i=0;i<6;i++){
+        const BtField*source=bt_field(&def,mode_names[i],false);
+        if(!source||source->page!=1||source->offset<at||
+           source->offset+bt_type_size(source->type)>at+length)continue;
+        BtField relative=*source;relative.offset-=at;
+        double v=0;
+        if(bt_field_value(&def,&relative,bytes,length,0,&v)){
+            mode_values[i]=v;mode_valid[i]=true;found=true;
+        }
+    }
+    return found;
+}
 static void calibration_service(void){
     if(!cal_load.active)return;
     if(!wifi_up||!ecu_up){cal_load_fail("ECU NETWORK NOT READY");return;}
+    if(cal_load.stage<0){
+        static const int addresses[]={12,456,1609};
+        static const int lengths[]={4,1,28};
+        int stage=cal_load.stage+3;
+        if(bt_async_busy()){
+            int result=0;
+            for(int n=0;n<4 && result==0;n++)result=bt_async_poll(frame);
+            if(result==0)return;
+            if(result>0){
+                uint8_t raw[64];
+                if(bt_async_cal_read_result(raw,lengths[stage]))
+                    read_mode_block(addresses[stage],raw,lengths[stage]);
+            }
+            bt_async_cancel();
+            cal_load.stage++;
+            if(cal_load.stage==0){resolve_active_formats();cal_load.total=0;}
+            return;
+        }
+        int id=def.page_ids[0];
+        if(id<0||!bt_async_begin_cal_read(id,addresses[stage],lengths[stage],frame)){
+            /* Read failure never turns an unknown mode into an assumed one. */
+            cal_load.stage++;
+            if(cal_load.stage==0){resolve_active_formats();cal_load.total=0;}
+        }
+        return;
+    }
     if(bt_async_busy()){
         int result=0;
         for(int n=0;n<4&&result==0;n++)result=bt_async_poll(frame);
@@ -1462,7 +1806,9 @@ static void calibration_service(void){
         }
         uint8_t bytes[256];
         if(!bt_async_cal_read_result(bytes,cal_load.chunk)){
-            cal_skip_optional_axis("BRICKOS R RESPONSE INVALID / ECU STATUS");return;
+            if(cal_load.stage>0)cal_skip_optional_axis("BRICKOS R RESPONSE INVALID / ECU STATUS");
+            else cal_load_fail("BRICKOS R RESPONSE INVALID / ECU STATUS");
+            return;
         }
         uint8_t *destination=cal_load.stage==0?table.baseline:cal_load.axis_raw;
         memcpy(destination+cal_load.offset,bytes,(size_t)cal_load.chunk);
@@ -1471,16 +1817,32 @@ static void calibration_service(void){
         if(cal_load.offset>=cal_load.total)cal_stage_complete();
         return;
     }
-    /* Stage 0 is mandatory Z; X/Y are optional and never block the editor. */
+    /* Z is absent from ECU RAM for a declared INI virtual curve. */
+    if(cal_load.stage==0&&virtual_z_map)cal_load.stage=1;
+    /* Stage 0 is mandatory Z for real ECU maps; X/Y can be addressable or
+     * read-only [ConstantsExtensions] arrays with literal INI defaults. */
     while(cal_load.active&&cal_load.total==0){
+        if(cal_load.stage>0&&!active_field_present[cal_load.stage]&&sd_ready){
+            const BtMap *map=selected_map();
+            const char *axis=map?(cal_load.stage==1?map->x:map->y):"";
+            int required=cal_load.stage==1?table.width:table.height;
+            int count=0;
+            double *bins=cal_load.stage==1?table.xbins:table.ybins;
+            if(axis&&*axis&&bt_ini_virtual_array(bt_sd_cache_path(),axis,bins,64,&count)
+               &&count>=required){
+                if(cal_load.stage==1){table.has_x=true;table.x_count=count;}
+                else{table.has_y=true;table.y_count=count;}
+                cal_load.stage++;continue;
+            }
+        }
         const BtField *f=cal_stage_field();
         int count=f?f->width*f->height:0;
         int size=f?bt_type_size(f->type):0;
-        const BtField *z=bt_field(&def,selected_map()->z,false);
+        const BtField *z=active_field_present[0]?&active_fields[0]:NULL;
         bool optional=cal_load.stage>0;
         int required=cal_load.stage==1?table.width:table.height;
         bool usable=f&&size>0&&f->page>=1&&f->page<=64&&count>0&&
-            (!optional || (f->scaled&&count>=required&&count<=64&&size*count<=512));
+            (!optional || (count>=required&&count<=64&&size*count<=512));
         if(!usable){
             if(optional){cal_load.stage++;if(cal_load.stage>=3){
                 cal_load.active=false;table.valid=true;
@@ -1511,9 +1873,9 @@ static void calibration_service(void){
 static const BtField *focused_cal_field(void){
     const BtMap *m=selected_map();
     if(!m)return NULL;
-    if(map_focus==1&&table.has_x)return bt_field(&def,m->x,false);
-    if(map_focus==2&&table.has_y)return bt_field(&def,m->y,false);
-    return bt_field(&def,m->z,false);
+    if(map_focus==1&&table.has_x)return active_field_present[1]?&active_fields[1]:NULL;
+    if(map_focus==2&&table.has_y)return active_field_present[2]?&active_fields[2]:NULL;
+    return active_field_present[0]?&active_fields[0]:NULL;
 }
 static int focused_cell(void){return map_focus==1?cx:map_focus==2?cy:cy*table.width+cx;}
 static double focused_value(void){
@@ -1528,7 +1890,9 @@ static bool focused_buffers(const BtField **field,uint8_t **baseline,
     if(!f)return false;
     if(map_focus){
         int axis=map_focus-1;
-        if(!table.axis_length[axis])return false;
+        if(!table.axis_length[axis]){
+            snprintf(note,sizeof(note),"INI VIRTUAL AXIS / READ ONLY");return false;
+        }
         *baseline=table.axis_baseline[axis];*edited=table.axis_edited[axis];
         *length=table.axis_length[axis];
     }else{
@@ -1684,7 +2048,7 @@ static void navigate(int direction){
     if(count<=0)return;
     list_pick+=direction;if(list_pick<0)list_pick=0;if(list_pick>=count)list_pick=count-1;
     if(list_pick<list_scroll)list_scroll=list_pick;
-    int visible=page==P_TUNE?6:page==P_FAV?7:8;
+    int visible=8;
     if(list_pick>=list_scroll+visible)list_scroll=list_pick-visible+1;
 }
 static bool is_ini_view_target(const char *target,const char *label){
@@ -1731,8 +2095,8 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
         if(down&KEY_UP && bit_picker_pick>0)bit_picker_pick--;
         if(down&KEY_DOWN && bit_picker_pick+1<bit_choice_count)bit_picker_pick++;
         if(bit_picker_pick<bit_picker_scroll)bit_picker_scroll=bit_picker_pick;
-        if(bit_picker_pick>=bit_picker_scroll+7)bit_picker_scroll=bit_picker_pick-6;
-        if((down&KEY_TOUCH)&&tp->py>=49&&tp->py<161){
+        if(bit_picker_pick>=bit_picker_scroll+8)bit_picker_scroll=bit_picker_pick-7;
+        if((down&KEY_TOUCH)&&tp->py>=49&&tp->py<177){
             int next=bit_picker_scroll+(tp->py-49)/16;
             if(next>=0&&next<bit_choice_count){
                 bit_picker_pick=next;
@@ -1764,6 +2128,10 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
         return;
     }
     if(chosen_map>=0&&table.valid){
+        if(editor_help_visible){if(down&KEY_B)editor_help_visible=false;return;}
+        if((down&KEY_TOUCH)&&tp->py>=148&&tp->py<174&&editor_description[0]){
+            editor_help_visible=true;return;
+        }
         if((down|held)&KEY_LEFT&&cx>0)cx--;
         if((down|held)&KEY_RIGHT&&cx+1<table.width)cx++;
         if((down|held)&KEY_UP&&cy>0)cy--;
@@ -1785,8 +2153,14 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
             else if(action==1)change_map_cell(1);
             else if(action==2){step_index=(step_index+1)%4;table.confirm_burn=false;}
             else if(action==3){
-                map_live_trace(selected_map());
-                if(trace_valid){cx=trace_x;cy=trace_y;table.confirm_burn=false;}
+                int next=next_curve_series(chosen_map);
+                if(next>=0){
+                    if(any_map_dirty())snprintf(note,sizeof(note),"SAVE OR DISCARD EDITS BEFORE NEXT SERIES");
+                    else open_map(next);
+                }else{
+                    map_live_trace(selected_map());
+                    if(trace_valid){cx=trace_x;cy=trace_y;table.confirm_burn=false;}
+                }
             }
         }
         if(down&KEY_R)commit_map();
@@ -1827,9 +2201,9 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
             if((down&KEY_UP)&&dialog_pick>0){dialog_pick--;dialog_info=false;dialog_help_index=-1;}
             if((down&KEY_DOWN)&&dialog_pick+1<n){dialog_pick++;dialog_info=false;dialog_help_index=-1;}
             if(dialog_pick<dialog_scroll)dialog_scroll=dialog_pick;
-            if(dialog_pick>=dialog_scroll+6)dialog_scroll=dialog_pick-5;
-            if((down&KEY_TOUCH)&&tp->py>=47&&tp->py<149){
-                dialog_pick=dialog_scroll+(tp->py-47)/17;
+            if(dialog_pick>=dialog_scroll+8)dialog_scroll=dialog_pick-7;
+            if((down&KEY_TOUCH)&&tp->py>=36&&tp->py<180){
+                dialog_pick=dialog_scroll+(tp->py-36)/18;
                 if(dialog_pick>=n)dialog_pick=n-1;
                 if(dialog_pick>=0){
                     int r=dialog_at(dialog_pick);
@@ -1854,8 +2228,8 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
         if(tune_focus){
             if(down&KEY_UP)navigate(-1);
             if(down&KEY_DOWN)navigate(1);
-            if((down&KEY_TOUCH)&&tp->py>=47&&tp->py<149){
-                list_pick=list_scroll+(tp->py-47)/17;
+            if((down&KEY_TOUCH)&&tp->py>=36&&tp->py<180){
+                list_pick=list_scroll+(tp->py-36)/18;
                 if(list_pick>=tune_item_count())list_pick=tune_item_count()-1;
                 if(list_pick>=0){
                     int idx=tune_item_at(list_pick);
@@ -1875,8 +2249,8 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
             if((down&KEY_UP)&&tune_cat>0){tune_cat--;list_pick=list_scroll=0;}
             if((down&KEY_DOWN)&&tune_cat+1<total){tune_cat++;list_pick=list_scroll=0;}
             if(down&KEY_A)tune_focus=1;
-            if((down&KEY_TOUCH)&&tp->py>=47&&tp->py<149){
-                tune_focus=1;list_pick=list_scroll+(tp->py-47)/17;
+            if((down&KEY_TOUCH)&&tp->py>=36&&tp->py<180){
+                tune_focus=1;list_pick=list_scroll+(tp->py-36)/18;
                 if(list_pick>=tune_item_count())list_pick=tune_item_count()-1;
                 if(list_pick>=0)open_tune_item();
             }
@@ -1885,8 +2259,8 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
         if(down&KEY_B){goto_page(P_HOME);return;}
         if(down&KEY_UP)navigate(-1);
         if(down&KEY_DOWN)navigate(1);
-        if((down&KEY_TOUCH)&&tp->py>=47&&tp->py<166){
-            list_pick=list_scroll+(tp->py-47)/17;
+        if((down&KEY_TOUCH)&&tp->py>=36&&tp->py<180){
+            list_pick=list_scroll+(tp->py-36)/18;
             if(list_pick>=favorite_count)list_pick=favorite_count-1;
             if(list_pick>=0){
                 if(tp->px>=217)toggle_favorite(favorites[list_pick].target,favorites[list_pick].label);
@@ -1940,6 +2314,7 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
                         clear_history(slot);
                     }
                 }
+                refresh_graph_formulas();
             }
             return;
         }
@@ -2051,7 +2426,7 @@ int main(void){
         frame++;
         scanKeys();uint32_t down=keysDown(),held=keysHeld();touchPosition tp={0};
         if(down&KEY_TOUCH)touchRead(&tp);
-        if(down&KEY_START)break;
+        /* START is handled in the active editor; it must never terminate the application. */
         if(frame%20==0){
             update_wifi();
             if(!wifi_up&&wifi_initialized&&frame-wifi_attempt>=600){

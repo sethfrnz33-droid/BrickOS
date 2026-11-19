@@ -26,8 +26,8 @@ static int csv(const char *s,char a[][128],int max) {
     for (;;) {
         int c=(unsigned char)*s;
         if (c=='"') quote=!quote;
-        if (!quote && c=='[') ++depth;
-        if (!quote && c==']' && depth>0) --depth;
+        if (!quote && (c=='['||c=='{'||c=='(')) ++depth;
+        if (!quote && (c==']'||c=='}'||c==')') && depth>0) --depth;
         if (!c || (c==','&&!quote&&!depth)) {
             if (n>=max) break;
             char *v=trim(a[n]);
@@ -185,7 +185,7 @@ static void line_parse(BtDefinition *d,char *line) {
         if(!strcasecmp(key,"dialog")){
             cp(d->current_dialog,sizeof(d->current_dialog),n?a[0]:"");
             d->last_graph=-1;
-            if(n>1&&*a[1])add_ref(d,d->current_dialog,"@dialogHelp",a[1],5,"","");
+            /* A dialog title is metadata, not a selectable setting. */
         }else if(!strcasecmp(key,"liveGraph") && n>0 && *d->current_dialog && *a[0]){
             d->last_graph=-1;
             if(d->graph_count>=BTS_MAX_INI_GRAPHS ||
@@ -221,7 +221,7 @@ static void line_parse(BtDefinition *d,char *line) {
             const char *channel=n>1&&*a[1]?a[1]:a[0];
             add_ref(d,d->current_dialog,channel,a[0],4,"",n>2?a[2]:"");
         }else if(!strcasecmp(key,"topicHelp")||!strcasecmp(key,"help")||!strcasecmp(key,"helpText")){
-            if(n>0&&*a[0])add_ref(d,d->current_dialog,"@help",a[0],5,"","");
+            /* Help blocks describe the editor/dialog; never make them fields. */
         }
         return;
     }
@@ -268,7 +268,22 @@ static void line_parse(BtDefinition *d,char *line) {
         cp(m->label,sizeof(m->label),n>2&&table?a[2]:(n>1?a[1]:a[0]));
         m->curve=curve;d->last_map=d->map_count++;
     }else if(d->last_map>=0){
-        BtMap*m=&d->maps[d->last_map];char a[4][128];csv(val,a,4);
+        int original=d->last_map;
+        char a[4][128];csv(val,a,4);
+        /* A CurveEditor may contain multiple yBins series.  TunerStudio
+         * displays them all; preserve each curve rather than discarding all
+         * but the final series.  Each gets a reachable editor through NEXT. */
+        if(curve&&!strcasecmp(key,"yBins")&&d->maps[original].z[0]){
+            if(d->map_count>=BTS_MAX_MAPS ||
+               !grow(d,(void**)&d->maps,&d->map_capacity,d->map_count+1,
+                     sizeof(BtMap),BTS_MAX_MAPS,16)){d->truncated=true;return;}
+            BtMap *clone=&d->maps[d->map_count];
+            *clone=d->maps[original];
+            clone->series_index=d->maps[original].series_index+1;
+            clone->z[0]=0;
+            d->last_map=d->map_count++;
+        }
+        BtMap*m=&d->maps[d->last_map];
         if(!strcasecmp(key,"xBins")){
             cp(m->x,sizeof(m->x),a[0]);
             cp(m->xchan,sizeof(m->xchan),a[1]);
@@ -280,6 +295,13 @@ static void line_parse(BtDefinition *d,char *line) {
             m->y_readonly=!strcasecmp(a[2],"readOnly");
         }
         if(!strcasecmp(key,"zBins"))cp(m->z,sizeof(m->z),a[0]);
+        if(!strcasecmp(key,"topicHelp"))cp(m->help_topic,sizeof(m->help_topic),a[0]);
+        if(!strcasecmp(key,curve?"columnLabel":"xyLabels")){
+            cp(m->x_label,sizeof(m->x_label),a[0]);
+            cp(m->y_label,sizeof(m->y_label),a[1]);
+        }
+        if(!strcasecmp(key,"lineLabel")&&curve&&*a[0])
+            cp(m->y_label,sizeof(m->y_label),a[0]);
     }
 }
 void bt_ini_reset(BtDefinition*d) {
@@ -574,4 +596,225 @@ bool bt_ini_context_help(const char *ini_path,const char *target,char *out,size_
         found=out[0]!=0;break;
     }
     fclose(f);return found;
+}
+
+
+/* Load the exact definition without reinterpreting expressions or CSV commas.
+ * This runs only at editor opening (not per frame). */
+bool bt_ini_rhs(const char *path,const char *section,const char *name,char *out,size_t cap){
+    if(!out||cap<2)return false;
+    out[0]=0;
+    if(!path||!section||!name||!*name)return false;
+    FILE*f=fopen(path,"rb");if(!f)return false;
+    bool matching=false,found=false;
+    while(fgets(choice_line,sizeof(choice_line),f)){
+        char *p=trim(choice_line);
+        if(*p=='['){char *close=strchr(p,']');
+            if(close){*close=0;matching=!strcasecmp(p+1,section);}
+            continue;
+        }
+        if(!matching||!*p||*p==';'||*p=='#')continue;
+        char *eq=strchr(p,'=');if(!eq)continue;
+        *eq=0;if(strcasecmp(trim(p),name))continue;
+        p=trim(eq+1);
+        if(strlen(p)>=cap)break;
+        cp(out,cap,p);found=*out!=0;break;
+    }
+    fclose(f);return found;
+}
+/* TunerStudio also defines UI-only arrays without offsets. The Proteus INI
+ * supplies x-axis defaults for gear, solenoid and range values in its
+ * [ConstantsExtensions] defaultValue entries. They are not ECU addressable.
+ * Read their *declared* values as read-only axes; do not invent a wire offset. */
+bool bt_ini_virtual_array(const char *path,const char *name,double *values,int capacity,int *count){
+    if(count)*count=0;
+    if(!path||!name||!*name||!values||capacity<1||!count)return false;
+    FILE*f=fopen(path,"rb");if(!f)return false;
+    int section=0,declared=0,expected=0,n=0;
+    bool defaults=false;
+    while(fgets(choice_line,sizeof(choice_line),f)){
+        char *p=trim(choice_line);
+        if(*p=='['){
+            section=(!strncasecmp(p,"[Constants]",11)||!strncasecmp(p,"[PcVariables]",13))?1:
+                !strncasecmp(p,"[ConstantsExtensions]",21)?2:0;
+            continue;
+        }
+        if(!section||!*p||*p==';'||*p=='#')continue;
+        char *eq=strchr(p,'=');if(!eq)continue;
+        *eq=0;char *key=trim(p),*value=trim(eq+1);
+        if(section==1 && !strcasecmp(key,name)){
+            char a[6][128];int fields=csv(value,a,6);
+            if(fields>=3&&!strcasecmp(a[0],"array")&&a[2][0]=='['){
+                int w=0,h=1;
+                if(sscanf(a[2],"[ %d x %d",&w,&h)<1)w=0;
+                if(w>=1&&h>=1&&w*h<=capacity){
+                    declared=1;expected=w*h;
+                }
+            }
+        }else if(section==2 && !strcasecmp(key,"defaultValue")){
+            char *sep=strchr(value,',');if(!sep)continue;
+            *sep=0;if(strcasecmp(trim(value),name))continue;
+            const char *q=sep+1;
+            while(*q){
+                while(isspace((unsigned char)*q))q++;
+                if(!*q||*q==';')break;
+                if(n>=capacity){defaults=false;break;}
+                char *end=NULL;
+                double v=strtod(q,&end);
+                if(end==q||!isfinite(v)){defaults=false;break;}
+                values[n++]=v;q=end;
+                if(*q&&!isspace((unsigned char)*q)&&*q!=';'){defaults=false;break;}
+            }
+            defaults=n>0;
+        }
+    }
+    fclose(f);
+    if(!declared||!defaults||n<expected)return false;
+    *count=expected;return true;
+}
+
+bool bt_ini_field_format(const char *path,const char *name,BtIniFormat *format){
+    if(!format)return false;
+    memset(format,0,sizeof(*format));
+    char buffer[1100];
+    if(!bt_ini_rhs(path,"Constants",name,buffer,sizeof(buffer)))return false;
+    char a[11][128];int n=csv(buffer,a,11);
+    if(n<8)return false;
+    int idx=!strcasecmp(a[0],"array")?4:!strcasecmp(a[0],"scalar")?3:-1;
+    if(idx<0||n<=idx+4)return false;
+    cp(format->unit,sizeof(format->unit),a[idx]);
+    cp(format->scale,sizeof(format->scale),a[idx+1]);
+    cp(format->translate,sizeof(format->translate),a[idx+2]);
+    cp(format->low,sizeof(format->low),a[idx+3]);
+    cp(format->high,sizeof(format->high),a[idx+4]);
+    return true;
+}
+/* Strict, bounded evaluator for arithmetic, comparisons, boolean operators,
+ * ternaries, and existing ECU variable names in generated rusEFI INIs.
+ * Missing operands, unsupported functions, division by zero and garbage FAIL;
+ * no silent default values or arbitrary code evaluation. */
+typedef struct {const char *p;BtVarLookup lookup;void*ctx;int depth;bool ok;} BtExpr;
+static void expr_space(BtExpr*e){while(isspace((unsigned char)*e->p))e->p++;}
+static double expr_ternary(BtExpr*e);
+static double expr_atom(BtExpr*e){
+    expr_space(e);
+    if(++e->depth>48){e->ok=false;return 0;}
+    double result=0;
+    if(*e->p=='('){e->p++;result=expr_ternary(e);expr_space(e);
+        if(*e->p!=')')e->ok=false;else e->p++;
+    }else if(*e->p=='!'||*e->p=='+'||*e->p=='-'){
+        char op=*e->p++;result=expr_atom(e);
+        if(op=='!')result=!(result!=0);else if(op=='-')result=-result;
+    }else if(isalpha((unsigned char)*e->p)||*e->p=='_'){
+        char name[65];size_t n=0;
+        while(isalnum((unsigned char)*e->p)||*e->p=='_'){
+            if(n+1>=sizeof(name)){e->ok=false;break;}
+            name[n++]=*e->p++;
+        }
+        name[n]=0;
+        if(!n||!e->lookup||!e->lookup(name,e->ctx,&result))e->ok=false;
+    }else{
+        char *end=NULL;result=strtod(e->p,&end);
+        if(end==e->p)e->ok=false;
+        else e->p=end;
+    }
+    e->depth--;return result;
+}
+static double expr_mul(BtExpr*e){double x=expr_atom(e);
+    for(;;){expr_space(e);char op=*e->p;
+        if(op!='*'&&op!='/'&&op!='%')break;
+        e->p++;
+        double y=expr_atom(e);
+        if(op=='*')x*=y;else if(op=='/'){if(y==0)e->ok=false;else x/=y;}
+        else{if(y==0)e->ok=false;else x=fmod(x,y);}
+    }return x;
+}
+static double expr_add(BtExpr*e){double x=expr_mul(e);
+    for(;;){expr_space(e);char op=*e->p;
+        if(op!='+'&&op!='-')break;
+        e->p++;double y=expr_mul(e);
+        x=op=='+'?x+y:x-y;
+    }return x;
+}
+static double expr_compare(BtExpr*e){double x=expr_add(e);
+    for(;;){expr_space(e);const char*p=e->p;int n=0;enum{EQ,NE,LE,GE,LT,GT}o=EQ;
+        if(!strncmp(p,"==",2)){n=2;o=EQ;}
+        else if(!strncmp(p,"!=",2)){n=2;o=NE;}
+        else if(!strncmp(p,"<=",2)){n=2;o=LE;}
+        else if(!strncmp(p,">=",2)){n=2;o=GE;}
+        else if(*p=='<'){n=1;o=LT;}
+        else if(*p=='>'){n=1;o=GT;}
+        if(!n)break;
+        e->p+=n;double y=expr_add(e);
+        switch(o){case EQ:x=x==y;break;case NE:x=x!=y;break;case LE:x=x<=y;break;
+                  case GE:x=x>=y;break;case LT:x=x<y;break;case GT:x=x>y;break;}
+    }return x;
+}
+static double expr_and(BtExpr*e){double x=expr_compare(e);
+    for(;;){expr_space(e);if(strncmp(e->p,"&&",2))break;
+        e->p+=2;double y=expr_compare(e);x=(x!=0&&y!=0);
+    }return x;
+}
+static double expr_or(BtExpr*e){double x=expr_and(e);
+    for(;;){expr_space(e);if(strncmp(e->p,"||",2))break;
+        e->p+=2;double y=expr_and(e);x=(x!=0||y!=0);
+    }return x;
+}
+static double expr_ternary(BtExpr*e){double x=expr_or(e);
+    expr_space(e);
+    if(*e->p=='?'){
+        e->p++;double yes=expr_ternary(e);expr_space(e);
+        if(*e->p!=':'){e->ok=false;return 0;}
+        e->p++;double no=expr_ternary(e);x=x!=0?yes:no;
+    }return x;
+}
+bool bt_numeric_eval(const char *source,BtVarLookup var,void*ctx,double*out){
+    if(!source||!out)return false;
+    BtExpr e={source,var,ctx,0,true};expr_space(&e);
+    bool braces=*e.p=='{';if(braces)e.p++;
+    double x=expr_ternary(&e);expr_space(&e);
+    if(braces){if(*e.p!='}')e.ok=false;else {e.p++;expr_space(&e);}}
+    if(*e.p||!isfinite(x)||!e.ok)return false;
+    *out=x;return true;
+}
+
+/* Render ECU-provided multiline help topics rather than treating `help =`
+ * section headers as fake fields.  All topic text comes from the INI. */
+bool bt_ini_topic_help(const char *ini_path,const char *topic,char *out,size_t cap){
+    if(!out||cap<2)return false;
+    out[0]=0;
+    if(!ini_path||!topic||!*topic)return false;
+    FILE *f=fopen(ini_path,"rb");if(!f)return false;
+    bool section=false,found=false;size_t used=0;
+    while(fgets(choice_line,sizeof(choice_line),f)){
+        char *p=trim(choice_line);
+        if(*p=='['){section=!strncasecmp(p,"[UserDefined]",13)||
+            !strncasecmp(p,"[UiDialogs]",11);if(found)break;continue;}
+        if(!section||!*p||*p==';'||*p=='#')continue;
+        char *eq=strchr(p,'=');if(!eq)continue;
+        *eq=0;char *key=trim(p),*val=trim(eq+1);
+        if(!strcasecmp(key,"help")){
+            if(found)break;
+            char a[3][128];int n=csv(val,a,3);
+            if(n>0&&!strcasecmp(a[0],topic))found=true;
+            continue;
+        }
+        if(!found||strcasecmp(key,"text"))continue;
+        size_t n=strlen(val);
+        if(n>1&&val[0]=='"'&&val[n-1]=='"'){val[n-1]=0;val++;}
+        for(const char *q=val;*q&&used+1<cap;){
+            if(*q=='<'){const char *e=strchr(q,'>');if(e){q=e+1;continue;}}
+            if(*q=='&'){
+                if(!strncmp(q,"&amp;",5)){out[used++]='&';q+=5;continue;}
+                if(!strncmp(q,"&lt;",4)){out[used++]='<';q+=4;continue;}
+                if(!strncmp(q,"&gt;",4)){out[used++]='>';q+=4;continue;}
+            }
+            if(*q=='\\'&&q[1]=='n'){out[used++]=' ';q+=2;continue;}
+            out[used++]=*q++;
+        }
+        if(used+2<cap)out[used++]=' ';
+        out[used]=0;
+    }
+    fclose(f);
+    return found&&used>0;
 }

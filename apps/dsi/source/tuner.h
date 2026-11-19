@@ -24,6 +24,8 @@ typedef struct {
 } BtField;
 typedef struct {
     char name[64], alt[64], label[76], x[64], y[64], z[64], xchan[64], ychan[64];
+    char x_label[64], y_label[64], help_topic[64];
+    int series_index;
     bool curve, x_readonly, y_readonly;
 } BtMap;
 typedef struct {
@@ -74,11 +76,24 @@ typedef struct {
     bool has_x, has_y, valid, dirty, confirm_burn;
 } BtTable;
 
+typedef struct {
+    char unit[128], scale[128], translate[128], low[128], high[128];
+} BtIniFormat;
+/* Extract ECU-defined numeric formatting and computed channels from the actual INI. */
+bool bt_ini_field_format(const char *path,const char *name,BtIniFormat *format);
+/* Constant arrays without an ECU address, explicitly seeded by [ConstantsExtensions]. */
+bool bt_ini_virtual_array(const char *path,const char *name,double *values,int capacity,int *count);
+bool bt_ini_rhs(const char *path,const char *section,const char *name,char *out,size_t cap);
+typedef bool (*BtVarLookup)(const char *name,void *ctx,double *out);
+bool bt_numeric_eval(const char *expression,BtVarLookup variable,void *ctx,double *out);
+
 /* Load explicit TunerStudio bits option labels from the on-SD INI on demand.
  * Returns zero if options are expressed with an unsupported macro: never guess. */
 int bt_bit_choices(const char *ini_path,const char *field_name,char labels[][36],int cap);
 /* INI supplied [SettingContextHelp] tooltip text, never synthetic prose. */
 bool bt_ini_context_help(const char *ini_path,const char *target,char *text,size_t cap);
+/* INI [UserDefined] help topics: help=topic then text=... entries. */
+bool bt_ini_topic_help(const char *ini_path,const char *topic,char *out,size_t cap);
 void bt_ini_reset(BtDefinition *d);
 void bt_ini_feed(BtDefinition *d, const uint8_t *bytes, size_t length);
 bool bt_ini_finish(BtDefinition *d);

@@ -24,6 +24,7 @@ int main(void){
     memcpy(table.edited,table.baseline,2);
     table.cells[0]=10.0;chosen_map=BTS_MAX_MAPS;
     strcpy(scalar_map.z,"testField");
+    active_fields[0]=field;active_field_present[0]=true;
     keypad_begin();assert(keypad_open);
     keypad_key(7); /* CLEAR */
     keypad_key(8);keypad_key(9);keypad_key(12);keypad_key(5); /* 12.5 */
