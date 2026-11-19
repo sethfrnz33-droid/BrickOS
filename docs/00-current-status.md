@@ -1,4 +1,6 @@
-# Current state versus target architecture
+# Current state versus target architecture — historical v4.12 reference
+
+> **Historical source note (2026-11-19):** The v4.9–v4.12 source described below belonged to an earlier, separate BrickOS prototype; this is **not** the currently imported `firmware/esp32/` runtime in the unified GitHub repository. In current `main`, `/api/status` reports `brick_os_build=v4.8`, while Seth's guide/dialogue and reasoning run in the **phone browser**. The v4.12 VE/trim/motion modules and their `/api/autotune/*` routes are **not established as deployed current endpoints**. For a source-reviewed current capability matrix and gaps, see [Full System Gap Audit](35-full-system-gap-audit.md). Do not treat legacy source-tested behavior as available in current firmware.
 
 ## Verified from the provided BrickOS v4.12 project
 
