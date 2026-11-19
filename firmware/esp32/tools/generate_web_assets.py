@@ -12,6 +12,7 @@ assets = {
     'css': 'app.css',
     'js': 'app.js',
     'core': 'core.mjs',
+    'ini_fast_cache': 'ini-fast-cache.mjs',
     'guided': 'guided.mjs',
     'guided_ui': 'guided-ui.mjs',
     'guide_story': 'guide-story.mjs',
