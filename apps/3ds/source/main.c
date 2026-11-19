@@ -808,7 +808,11 @@ static int parse_field(const char *name,const char *value,int page,bool runtime)
  double lo=0,hi=0;
  if(pos+4<n&&number(a[pos+3],&lo)&&number(a[pos+4],&hi)&&lo<=hi){
    f->low=lo;f->high=hi;f->limitsKnown=true;
+ }else if(pos+4<n){
+   /* Conditional bounds must resolve before a calibration can be edited. */
+   f->validScale=false;
  }
+ if(f->unit[0]=='{')f->unit[0]=0;
  return 1;}
 /* Evaluate the ECU's own numeric conversion, translation AND display
  * bounds together. Unknown modes and unknown limits stay unavailable. */
