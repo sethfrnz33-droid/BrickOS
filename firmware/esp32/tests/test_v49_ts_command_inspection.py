@@ -60,6 +60,8 @@ assert '"/api/ts/inspect?name=%s"' in THREEDS
 assert 'if(is_stim_action(&results[selected]))' in THREEDS
 assert 'else if(type==TASK_COMMAND_INSPECT)' in THREEDS
 assert 'if(command_inspect_pending)' in THREEDS
-assert 'Hardware outputs unchanged' not in THREEDS or True
+assert 'post_ts("Z"' not in THREEDS
+assert 'post_api("/api/ts/inspect"' not in THREEDS
+assert 'command_inspect_name' in THREEDS
 print(f"PASS {len(buttons)} INI buttons / {len(set(x[1] for x in buttons))} unique command refs")
 print("PASS read-only, exact-signature Bridge inspection and guarded 3DS UI wiring")
