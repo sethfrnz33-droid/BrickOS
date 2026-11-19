@@ -54,3 +54,22 @@ test('critical learning distinctions are represented without unsupported engine 
   const gdi=catalog.lessons.find(x=>x.id==='gdi_not_supported');
   assert.match(gdi.variants.quick,/does not support GDI/i);
 });
+
+test('curriculum coverage distinguishes authored educational scripts from planned concepts',()=>{
+ const coverage=JSON.parse(fs.readFileSync(new URL('../../../design/education/curriculum-coverage.v1.json',import.meta.url),'utf8'));
+ assert.equal(coverage.schema,'brickos.guide.education.coverage.v1');
+ assert.equal(coverage.status,'PLANNING_INVENTORY_ONLY_NO_RUNTIME_LINK');
+ assert.ok(coverage.modules.length>=100);
+ assert.equal(new Set(coverage.modules.map(x=>x.id)).size,coverage.modules.length);
+ assert.equal(coverage.counts.topics,coverage.modules.length);
+ assert.equal(coverage.counts.authored,catalog.lessons.length);
+ assert.equal(coverage.counts.remaining,coverage.modules.length-catalog.lessons.length);
+ const mapped=new Map(coverage.modules.map(x=>[x.id,x]));
+ for(const l of catalog.lessons){
+   assert.ok(mapped.has(l.id),'missing curriculum mapping for '+l.id);
+   assert.equal(mapped.get(l.id).chapter,l.chapter);
+   assert.equal(mapped.get(l.id).status,'authored_seed_lesson');
+ }
+ for(const chapter of catalog.chapter_order)assert.ok(coverage.modules.some(x=>x.chapter===chapter));
+ assert.ok(coverage.modules.every(x=>x.policy==='concept_only_no_engine_action'));
+});
