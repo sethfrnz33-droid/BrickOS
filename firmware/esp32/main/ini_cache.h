@@ -26,6 +26,7 @@ bool ini_cache_bench_channels(const char *ecu_signature,
 typedef struct {
     bool declared;
     bool shown_as_button;
+    bool capture_payload_verified; /* four sensor-capture commands only */
     char label[96];
 } brick_ini_command_info_t;
 
