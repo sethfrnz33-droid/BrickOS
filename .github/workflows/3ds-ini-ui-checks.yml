@@ -1,0 +1,31 @@
+name: 3DS TunerStudio INI UI validation
+
+on:
+  push:
+    paths:
+      - 'apps/3ds/**'
+      - 'firmware/esp32/tests/fixtures/proteus_f7_generated.ini'
+      - 'firmware/esp32/main/main.c'
+      - '.github/workflows/3ds-ini-ui-checks.yml'
+  pull_request:
+    paths:
+      - 'apps/3ds/**'
+      - 'firmware/esp32/tests/fixtures/proteus_f7_generated.ini'
+      - 'firmware/esp32/main/main.c'
+      - '.github/workflows/3ds-ini-ui-checks.yml'
+
+jobs:
+  three-ds-ini-host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Original INI spatial layout, widgets, and real preview contract
+        run: python3 apps/3ds/tests/test_v73_ini_spatial_composite.py
+      - name: Host C syntax check for actual 3DS source
+        run: |
+          gcc -std=gnu11 -Wno-implicit-function-declaration \
+            -Wno-int-conversion -Wno-incompatible-pointer-types \
+            -fsyntax-only -Iapps/3ds/source -Iapps/3ds/tests/host_stubs \
+            apps/3ds/source/main.c
+      - name: TunerStudio INI expression and unit regression
+        run: python3 apps/3ds/tests/test_v65_ini_expressions.py
