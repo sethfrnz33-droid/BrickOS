@@ -1,0 +1,707 @@
+{
+  "schema": "brickos.ini.source.audit.v1",
+  "status": "SOURCE_VERIFIED_INI_ONLY_NOT_MATCHED_TO_CONNECTED_ECU",
+  "source": {
+    "filename": "rusefi_proteus_f7(3).ini",
+    "sha256": "24f696ac500cf48a23d3332a235654442789dac3fe08948656a36da8c320eedd",
+    "bytes": 943745,
+    "lines": 14487,
+    "signature": "rusEFI master.2026.11.09.proteus_f7.2735508644",
+    "endianness": "little",
+    "notes": "User-provided generated INI. Its declared ECU signature has not been compared against a live ECU, no live tune was uploaded, and no electrical/mechanical hardware was verified. Text contains non-UTF8 bytes; separate audit normalized CP1252 with replacement fallback."
+  },
+  "transport": {
+    "envelope": "msEnvelope_1.0",
+    "query": "S",
+    "version": "V",
+    "ordinary_output_command": "O%2o%2c",
+    "och_block_size_bytes": 2248,
+    "max_configuration_read_chunk_bytes": 1024,
+    "requested_tunerstudio_record_rate_hz": 100,
+    "notes": "These are declared protocol settings. No actual sustained USB throughput, ECU internal channel sampling rate or trigger timing performance was measured."
+  },
+  "pages": [
+    {
+      "ordinal": 1,
+      "identifier": "0x0000",
+      "bytes": 17816,
+      "content": "settings/primary tables",
+      "burn_declared": true
+    },
+    {
+      "ordinal": 2,
+      "identifier": "0x0100",
+      "bytes": 256,
+      "content": "128 high-speed offsets (2 bytes each)",
+      "burn_declared": false
+    },
+    {
+      "ordinal": 3,
+      "identifier": "0x0200",
+      "bytes": 2048,
+      "content": "two 16x16 read-only LTFT banks",
+      "burn_declared": false
+    },
+    {
+      "ordinal": 4,
+      "identifier": "0x0300",
+      "bytes": 1268,
+      "content": "secondary VE, ignition and torque tables",
+      "burn_declared": true
+    },
+    {
+      "ordinal": 5,
+      "identifier": "0x0400",
+      "bytes": 48000,
+      "content": "Lua script text",
+      "burn_declared": true
+    }
+  ],
+  "inventory": {
+    "typed_calibration_definitions": 1977,
+    "by_type": {
+      "scalar": 766,
+      "bits": 746,
+      "array": 438,
+      "string": 27
+    },
+    "typed_output_definitions": 1081,
+    "output_types": {
+      "scalar": 788,
+      "bits": 293
+    },
+    "table_editor_entries": 116,
+    "submenus": 218,
+    "command_buttons": 124,
+    "sections": 23,
+    "flags": "Parsed values are an inventory of declared entries, not enabled runtime features."
+  },
+  "primary_calibration": {
+    "veTable": {
+      "page": 1,
+      "offset": 8964,
+      "type": "U16",
+      "shape": [
+        16,
+        16
+      ],
+      "line": 1770,
+      "role": "primary_VE",
+      "notes": "0.1% display scale; active lookup must be established"
+    },
+    "veLoadBins": {
+      "page": 1,
+      "offset": 9476,
+      "type": "U16",
+      "shape": [
+        16
+      ],
+      "line": 1771,
+      "role": "primary_VE_load_axis",
+      "notes": "Conditional load units/scale tied to veOverrideMode, fuelAlgorithm, useMetricOnInterface"
+    },
+    "veRpmBins": {
+      "page": 1,
+      "offset": 9508,
+      "type": "U16",
+      "shape": [
+        16
+      ],
+      "line": 1772,
+      "role": "primary_VE_rpm_axis",
+      "notes": "Native RPM"
+    },
+    "idleVeTable": {
+      "page": 1,
+      "offset": 5884,
+      "type": "U16",
+      "shape": [
+        4,
+        4
+      ],
+      "line": 1735,
+      "role": "idle_VE",
+      "notes": "0.1% display scale; active idle strategy must be verified"
+    },
+    "idleVeLoadBins": {
+      "page": 1,
+      "offset": 5880,
+      "type": "U08",
+      "shape": [
+        4
+      ],
+      "line": 1734,
+      "role": "idle_VE_load_axis",
+      "notes": "Units load; not equivalent to primary load axes"
+    },
+    "idleVeRpmBins": {
+      "page": 1,
+      "offset": 5876,
+      "type": "U08",
+      "shape": [
+        4
+      ],
+      "line": 1733,
+      "role": "idle_VE_rpm_axis",
+      "notes": "Scale 10 RPM per raw unit"
+    },
+    "secondVeTable": {
+      "page": 4,
+      "offset": 0,
+      "type": "U16",
+      "shape": [
+        16,
+        16
+      ],
+      "line": 142,
+      "role": "second_VE",
+      "notes": "0.1% display scale; table may be present but inactive"
+    },
+    "secondVeLoadBins": {
+      "page": 4,
+      "offset": 512,
+      "type": "U16",
+      "shape": [
+        16
+      ],
+      "line": 143,
+      "role": "second_VE_load_axis",
+      "notes": "Depends on same runtime selectors as primary"
+    },
+    "secondVeRpmBins": {
+      "page": 4,
+      "offset": 544,
+      "type": "U16",
+      "shape": [
+        16
+      ],
+      "line": 144,
+      "role": "second_VE_rpm_axis",
+      "notes": "Native RPM"
+    },
+    "lambdaTable": {
+      "page": 1,
+      "offset": 9540,
+      "type": "U08",
+      "shape": [
+        16,
+        16
+      ],
+      "line": 1773,
+      "role": "target_lambda_or_AFR",
+      "notes": "Same storage; display scale switches with useLambdaOnInterface"
+    },
+    "lambdaLoadBins": {
+      "page": 1,
+      "offset": 9796,
+      "type": "U16",
+      "shape": [
+        16
+      ],
+      "line": 1774,
+      "role": "target_load_axis",
+      "notes": "Conditional mode and display units"
+    },
+    "lambdaRpmBins": {
+      "page": 1,
+      "offset": 9828,
+      "type": "U16",
+      "shape": [
+        16
+      ],
+      "line": 1775,
+      "role": "target_rpm_axis",
+      "notes": "Native RPM"
+    },
+    "ignitionTable": {
+      "page": 1,
+      "offset": 8388,
+      "type": "S16",
+      "shape": [
+        16,
+        16
+      ],
+      "line": 1767,
+      "role": "base_ignition_table",
+      "notes": "0.1 degree display scale; actual spark can have corrections"
+    },
+    "ignitionLoadBins": {
+      "page": 1,
+      "offset": 8900,
+      "type": "U16",
+      "shape": [
+        16
+      ],
+      "line": 1768,
+      "role": "ignition_load_axis",
+      "notes": "Conditional scale/units"
+    },
+    "ignitionRpmBins": {
+      "page": 1,
+      "offset": 8932,
+      "type": "U16",
+      "shape": [
+        16
+      ],
+      "line": 1769,
+      "role": "ignition_rpm_axis",
+      "notes": "Native RPM"
+    },
+    "secondIgnitionTable": {
+      "page": 4,
+      "offset": 604,
+      "type": "S16",
+      "shape": [
+        16,
+        16
+      ],
+      "line": 150,
+      "role": "second_ignition_table",
+      "notes": "Must verify active blend/selection"
+    },
+    "ltft_table_bank1": {
+      "page": 3,
+      "offset": 0,
+      "type": "F32",
+      "shape": [
+        16,
+        16
+      ],
+      "line": 137,
+      "role": "read_only_LTFT_bank1",
+      "notes": "noMsqSave, controllerPriority; distinct from live scalar correction"
+    },
+    "ltft_table_bank2": {
+      "page": 3,
+      "offset": 1024,
+      "type": "F32",
+      "shape": [
+        16,
+        16
+      ],
+      "line": 138,
+      "role": "read_only_LTFT_bank2",
+      "notes": "noMsqSave, controllerPriority"
+    },
+    "fuelPressureTargetTable": {
+      "page": 1,
+      "offset": 16808,
+      "type": "U16",
+      "shape": [
+        4,
+        4
+      ],
+      "line": 2097,
+      "role": "low_pressure_target",
+      "notes": "0.1 kPa; exposed through conditional pump mode 2 menu"
+    },
+    "fuelPumpBaseDutyTable": {
+      "page": 1,
+      "offset": 16856,
+      "type": "U16",
+      "shape": [
+        4,
+        4
+      ],
+      "line": 2100,
+      "role": "pump_PWM_base_duty",
+      "notes": "0.1% display; may be inactive"
+    },
+    "fuelAlgorithm": {
+      "page": 1,
+      "offset": 456,
+      "type": "bits U08",
+      "shape": [
+        0,
+        2
+      ],
+      "line": 303,
+      "role": "fuel_algorithm",
+      "notes": "Enum Speed Density, MAF Air Charge, Alpha-N, Lua; no actual selection known"
+    },
+    "veOverrideMode": {
+      "page": 1,
+      "offset": 1609,
+      "type": "bits U08",
+      "shape": [
+        0,
+        1
+      ],
+      "line": 894,
+      "role": "VE_axis_override",
+      "notes": "None/MAP/TPS"
+    },
+    "afrOverrideMode": {
+      "page": 1,
+      "offset": 1611,
+      "type": "bits U08",
+      "shape": [
+        0,
+        2
+      ],
+      "line": 896,
+      "role": "target_axis_override",
+      "notes": "None/MAP/TPS/Accel Pedal/Cylinder Filling"
+    },
+    "fuelPumpMode": {
+      "page": 1,
+      "offset": 4124,
+      "type": "bits U08",
+      "shape": [
+        0,
+        1
+      ],
+      "line": 1653,
+      "role": "fuel_pump_strategy",
+      "notes": "Single relay, Dual relay, PWM pressure control. Not a mechanical regulator detector."
+    },
+    "fuelPressureSensorMode": {
+      "page": 1,
+      "offset": 3002,
+      "type": "bits U08",
+      "shape": [
+        0,
+        1
+      ],
+      "line": 1278,
+      "role": "fuel_pressure_reference",
+      "notes": "Absolute, Gauge, Differential; physical hardware not proven"
+    },
+    "globalTriggerAngleOffset": {
+      "page": 1,
+      "offset": 488,
+      "type": "F32",
+      "shape": null,
+      "line": 321,
+      "role": "trigger_offset",
+      "notes": "Configured reference is not measured physical timing"
+    },
+    "enableStagedInjection": {
+      "page": 1,
+      "offset": 196,
+      "type": "bits U32",
+      "shape": [
+        28,
+        28
+      ],
+      "line": 258,
+      "role": "staged_injection_enabled",
+      "notes": "Definition only; check config and physical hardware"
+    },
+    "luaScript": {
+      "page": 5,
+      "offset": 0,
+      "type": "string ASCII",
+      "shape": [
+        48000
+      ],
+      "line": 164,
+      "role": "lua_script",
+      "notes": "Page size 48000, not runtime proof of a Lua script present"
+    }
+  },
+  "output_examples": {
+    "rpm": {
+      "offset": 4,
+      "type": "U16",
+      "line": 3389,
+      "scale": "×1 rpm",
+      "role": "RPM",
+      "notes": "Normal output block, not tooth-level capture"
+    },
+    "tps": {
+      "offset": 22,
+      "type": "S16",
+      "line": 3398,
+      "scale": "×0.01 %",
+      "role": "TPS",
+      "notes": "Measured channel validity separate"
+    },
+    "map": {
+      "offset": 30,
+      "type": "U16",
+      "line": 3402,
+      "scale": "×0.03333333333333333 kPa",
+      "role": "MAP",
+      "notes": "Channel source and sensor calibration not physically verified"
+    },
+    "clt": {
+      "offset": 14,
+      "type": "S16",
+      "line": 3394,
+      "scale": "×0.01 °C",
+      "role": "CLT",
+      "notes": "No temperatures have been observed yet"
+    },
+    "battery": {
+      "offset": 36,
+      "type": "U16",
+      "line": 3405,
+      "scale": "×0.001 V",
+      "role": "battery",
+      "notes": "Reported voltage only"
+    },
+    "lambda1": {
+      "offset": 34,
+      "type": "U16",
+      "line": 3404,
+      "scale": "×0.0001",
+      "role": "lambda_bank1",
+      "notes": "Requires lambdaCurrentlyGood and matching data freshness"
+    },
+    "lambda2": {
+      "offset": 218,
+      "type": "U16",
+      "line": 3482,
+      "scale": "×0.0001",
+      "role": "lambda_bank2",
+      "notes": "Physical bank/sensor presence unknown"
+    },
+    "lambdaValid": {
+      "offset": 2088,
+      "type": "bits U32",
+      "line": 4394,
+      "scale": "bit 0",
+      "role": "lambda_ready",
+      "notes": "Readiness flag as defined; further validation needed"
+    },
+    "targetLambda": {
+      "offset": 942,
+      "type": "U16",
+      "line": 3859,
+      "scale": "×0.0001",
+      "role": "active_target_lambda",
+      "notes": "Reported target, not universal stoichiometric assumption"
+    },
+    "targetAFR": {
+      "offset": 944,
+      "type": "U16",
+      "line": 3860,
+      "scale": "×0.001",
+      "role": "active_target_AFR",
+      "notes": "Separate live source"
+    },
+    "gego": {
+      "offset": 678,
+      "type": "U16",
+      "line": 3718,
+      "scale": "×0.01 %",
+      "role": "Gego",
+      "notes": "100-based percent; verify conventions before combining with trims"
+    },
+    "stft1": {
+      "offset": 1496,
+      "type": "F32",
+      "line": 4155,
+      "scale": "×100 −1 display transform",
+      "role": "STFT_bank1",
+      "notes": "Not same neutral convention as Gego"
+    },
+    "stft2": {
+      "offset": 1500,
+      "type": "F32",
+      "line": 4156,
+      "scale": "×100 −1 display transform",
+      "role": "STFT_bank2",
+      "notes": "Bank-specific"
+    },
+    "ltft1": {
+      "offset": 2140,
+      "type": "F32",
+      "line": 4420,
+      "scale": "×100 −1 display transform",
+      "role": "LTFT_bank1",
+      "notes": "Separate from page 3 16×16 LTFT surface"
+    },
+    "ltft2": {
+      "offset": 2144,
+      "type": "F32",
+      "line": 4421,
+      "scale": "×100 −1 display transform",
+      "role": "LTFT_bank2",
+      "notes": "Bank-specific"
+    },
+    "engineBits": {
+      "offset": 814,
+      "type": "U08",
+      "line": 3801,
+      "scale": "×1 bitmask",
+      "role": "engine_state",
+      "notes": "Multiple simultaneous flags; verify decoding per firmware"
+    },
+    "triggerErrors": {
+      "offset": 116,
+      "type": "U32",
+      "line": 3445,
+      "scale": "×1 counter",
+      "role": "trigger_error_count",
+      "notes": "Counter delta useful but not tooth timestamps"
+    },
+    "idleTarget": {
+      "offset": 1872,
+      "type": "U16",
+      "line": 4298,
+      "scale": "×1",
+      "role": "idle_target",
+      "notes": "Current guide alias idleTargetRpm was absent; this exact field exists"
+    },
+    "idlePosition": {
+      "offset": 1904,
+      "type": "F32",
+      "line": 4307,
+      "scale": "×1",
+      "role": "idle_position",
+      "notes": "Reported position/command, not physical position proof"
+    },
+    "isIdling": {
+      "offset": 1868,
+      "type": "bits U32",
+      "line": 4297,
+      "scale": "bit 14",
+      "role": "idle_active",
+      "notes": "Combined with closed-loop state"
+    },
+    "isIdleClosedLoop": {
+      "offset": 1868,
+      "type": "bits U32",
+      "line": 4296,
+      "scale": "bit 13",
+      "role": "idle_closed_loop",
+      "notes": "Distinct state bit"
+    },
+    "baseSpark": {
+      "offset": 984,
+      "type": "S16",
+      "line": 3873,
+      "scale": "×0.02°",
+      "role": "base_ignition_advance",
+      "notes": "Original browser spark aliases fail to match this field"
+    },
+    "actualSpark": {
+      "offset": 986,
+      "type": "S16",
+      "line": 3874,
+      "scale": "×0.02°",
+      "role": "corrected_ignition_advance",
+      "notes": "Live reported correction, not measured crank reference"
+    },
+    "knockRetard": {
+      "offset": 1036,
+      "type": "F32",
+      "line": 3900,
+      "scale": "×1°",
+      "role": "knock_retard",
+      "notes": "No reported knock does not prove MBT"
+    },
+    "pumpDuty": {
+      "offset": 1340,
+      "type": "U16",
+      "line": 4082,
+      "scale": "×0.1 %",
+      "role": "fuel_pump_duty",
+      "notes": "Command/request, not physical rail pressure"
+    },
+    "pressureTarget": {
+      "offset": 1342,
+      "type": "U16",
+      "line": 4083,
+      "scale": "×0.1 kPa",
+      "role": "fuel_pressure_target",
+      "notes": "Requires active PWM pressure strategy"
+    },
+    "lowFuelPressure": {
+      "offset": 106,
+      "type": "S16",
+      "line": 3440,
+      "scale": "×0.03333333333333333 kPa",
+      "role": "low_fuel_pressure",
+      "notes": "Actual sensor availability unknown"
+    },
+    "highFuelPressure": {
+      "offset": 278,
+      "type": "S16",
+      "line": 3516,
+      "scale": "×0.1 bar",
+      "role": "high_fuel_pressure",
+      "notes": "Presence of GDI-related field does not enable BrickOS GDI support"
+    }
+  },
+  "display_aliases": [
+    {
+      "alias": "wueAnalyzeTargetTable",
+      "same_storage": "lambdaTable",
+      "page": 1,
+      "offset": 9540,
+      "bytes": 256
+    },
+    {
+      "alias": "wueAnalyzeCltFuelCorr",
+      "same_storage": "cltFuelCorr",
+      "page": 1,
+      "offset": 5980,
+      "bytes": 64
+    },
+    {
+      "alias": "targetMixtureAdder1Display",
+      "same_storage": "targetAfrBlends1_table",
+      "page": 1,
+      "offset": 15756,
+      "bytes": 128
+    },
+    {
+      "alias": "targetMixtureAdder2Display",
+      "same_storage": "targetAfrBlends2_table",
+      "page": 1,
+      "offset": 15944,
+      "bytes": 128
+    }
+  ],
+  "special_logger_definitions": [
+    {
+      "kind": "composite",
+      "line": 3224,
+      "record_bytes": 8,
+      "declared": true
+    },
+    {
+      "kind": "tooth",
+      "line": 3284,
+      "record_bytes": 8,
+      "declared": true
+    },
+    {
+      "kind": "trigger_scope_csv",
+      "line": 3300,
+      "record_bytes": 2,
+      "declared": true
+    }
+  ],
+  "nonstandard_fields": [
+    {
+      "names": [
+        "i2c1_speed",
+        "i2c2_speed",
+        "i2c3_speed",
+        "i2c4_speed",
+        "pca96851_i2c_bus"
+      ],
+      "reason": "INI includes extra empty comma after U08 type before offset. Tolerated grammar / parser behavior requires test, not blind normalization.",
+      "lines": [
+        1571,
+        1575,
+        1579,
+        1583,
+        1588
+      ]
+    }
+  ],
+  "guide_research_conclusions": [
+    "Use actual 16x16 primary/secondary and 4x4 idle tables, not generic 8x8 MAP bins.",
+    "Do not auto-enable second map, idle VE or GDI from presence in INI.",
+    "Separate the 100-based Gego from 0-centered STFT/LTFT presentation semantics.",
+    "Canonicalize display-only aliases against same stored bytes.",
+    "Do not infer current config bits, calibration numbers, physical wiring, regulator/sensor installation from definitions.",
+    "Hardware tests / special commands in ControllerCommands and UserDefined commandButtons must be excluded from automatic guidance execution.",
+    "No new ECU actions or client protocol changes were made in this research."
+  ]
+}
