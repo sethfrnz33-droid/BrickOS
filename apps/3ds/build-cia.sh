@@ -22,7 +22,8 @@ if [[ -f project.rsf ]]; then sed -i 's/Brick ECU Field Guide/Brick Tuner Suite/
 # home-banner/mascot_banner.glb (separate CGFX banner). Do not silently
 # fall back to the unrelated E46 banner if conversion fails.
 if [[ ! -s home-banner/mascot_banner.glb || ! -s icon.png ]]; then
-  python3 tools/generate_mascot.py
+  echo 'Missing generated mascot HOME assets; searching for an installed Python interpreter...'
+  bash tools/run_python.sh tools/generate_mascot.py
 fi
 if [[ ! -s home-banner/banner.cgfx || ! -f home-banner/banner_source.txt ]] ||
    ! grep -qx 'home-banner/mascot_banner.glb' home-banner/banner_source.txt ||
