@@ -1,0 +1,236 @@
+{
+  "schema": "brickos.engine.profile.contract.v1",
+  "status": "DESIGN_REFERENCE_AND_OFFLINE_PROTOTYPE_NOT_ESP_PERSISTENCE",
+  "version": "1.0.0",
+  "description": "Durable engine hardware claims, independent of ECU/INI. Unknown is a first-class value; each claim retains provenance and confidence. No calibration writes or operating instructions.",
+  "record": {
+    "schema": "brickos.engine.profile.v1",
+    "profile_id": "engine-local-opaque-id",
+    "alias": "optional human project label",
+    "revision": "nonnegative monotonic local revision",
+    "created_at": "ISO 8601",
+    "updated_at": "ISO 8601",
+    "ecu_links": "zero or more (ECU signature, INI fingerprint, compatible revision ranges); a link never mutates hardware facts",
+    "facts": "versioned map of keys below; default value null with source unknown and verification unverified",
+    "events": "immutable history of changed facts with old/new, declared source, evidence references and timestamps"
+  },
+  "fields": [
+    {
+      "key": "injection_architecture",
+      "enum": [
+        "pfi",
+        "gdi",
+        "mixed",
+        "unknown"
+      ],
+      "required_for": "any fueling expertise",
+      "priority": 0,
+      "description": "BrickOS only supports PFI-relevant guided fuel analysis. GDI and mixed are explicitly unsupported."
+    },
+    {
+      "key": "pump_control",
+      "enum": [
+        "relay",
+        "pwm_compatible_controller",
+        "independent_oem_controller",
+        "other",
+        "unknown"
+      ],
+      "required_for": "pump applicability",
+      "priority": 1
+    },
+    {
+      "key": "pressure_regulation",
+      "enum": [
+        "mechanical_manifold_reference",
+        "fixed_pressure_reference",
+        "electronic_closed_loop",
+        "no_confirmed_regulator",
+        "hybrid",
+        "unknown"
+      ],
+      "required_for": "fuel pressure explanation",
+      "priority": 2
+    },
+    {
+      "key": "rail_pressure_sensor",
+      "enum": [
+        "none",
+        "ecu_sensor",
+        "external_gauge",
+        "both",
+        "unknown"
+      ],
+      "required_for": "observability branch",
+      "priority": 3
+    },
+    {
+      "key": "pressure_reference",
+      "enum": [
+        "gauge",
+        "absolute",
+        "differential",
+        "unknown"
+      ],
+      "required_for": "pressure model interpretation",
+      "priority": 4
+    },
+    {
+      "key": "fuel_type",
+      "enum": [
+        "gasoline",
+        "ethanol_blend",
+        "other",
+        "unknown"
+      ],
+      "required_for": "fuel model",
+      "priority": 5
+    },
+    {
+      "key": "injector_data",
+      "type": "text reference to user-supplied characterization",
+      "required_for": "fuel model",
+      "priority": 6
+    },
+    {
+      "key": "aspiration",
+      "enum": [
+        "naturally_aspirated",
+        "turbocharged",
+        "supercharged",
+        "other",
+        "unknown"
+      ],
+      "required_for": "load strategy",
+      "priority": 7
+    },
+    {
+      "key": "cylinders",
+      "type": "positive integer or null",
+      "required_for": "engine configuration",
+      "priority": 8
+    },
+    {
+      "key": "displacement_l",
+      "type": "positive decimal or null",
+      "required_for": "engine configuration",
+      "priority": 9
+    },
+    {
+      "key": "engine_family",
+      "type": "string label or null",
+      "required_for": "reference context",
+      "priority": 10
+    },
+    {
+      "key": "independent_pressure_check",
+      "enum": [
+        "documented",
+        "reported_checked",
+        "not_checked",
+        "unknown"
+      ],
+      "required_for": "physical fuel system verification",
+      "priority": 11
+    },
+    {
+      "key": "physical_timing_reference_check",
+      "enum": [
+        "documented",
+        "reported_checked",
+        "not_checked",
+        "unknown"
+      ],
+      "required_for": "base ignition reference",
+      "priority": 12
+    },
+    {
+      "key": "wideband_equipment",
+      "enum": [
+        "present",
+        "not_present",
+        "unknown"
+      ],
+      "required_for": "measured lambda",
+      "priority": 13
+    },
+    {
+      "key": "professional_instrumentation",
+      "enum": [
+        "available",
+        "unavailable",
+        "unknown"
+      ],
+      "required_for": "power validation",
+      "priority": 14
+    }
+  ],
+  "provenance_contract": {
+    "source_enum": [
+      "unknown",
+      "user_reported",
+      "ini_configuration",
+      "ecu_observed",
+      "independent_documented"
+    ],
+    "verification_enum": [
+      "unverified",
+      "reported_checked",
+      "documented_external"
+    ],
+    "no_automatic_promotion": "INI configuration or ECU telemetry may conflict with physical hardware, but cannot replace user-declared facts without review.",
+    "documented_external_requirement": "documented_external requires a nonempty evidence reference, independent_documented provenance, and explicit validation. It is not a certificate of engine safety."
+  },
+  "branching_rules": [
+    {
+      "id": "gdi_block",
+      "if": "injection_architecture in {gdi,mixed}",
+      "then": "BLOCK_GUIDED_FUEL_WITH_UNSUPPORTED_GDI",
+      "priority": 0
+    },
+    {
+      "id": "unknown_injection",
+      "if": "injection_architecture is unknown",
+      "then": "ASK_INJECTION_AND_HOLD",
+      "priority": 1
+    },
+    {
+      "id": "pwm_is_not_regulation",
+      "if": "pump_control=pwm_compatible_controller",
+      "then": "ASK_PRESSURE_REGULATION_SEPARATELY; NEVER_INFER_NONE",
+      "priority": 2
+    },
+    {
+      "id": "unknown_regulation",
+      "if": "pressure_regulation=unknown",
+      "then": "ASK_REGULATION_TYPE_AND_HOLD_FUEL_MODEL_VERIFICATION",
+      "priority": 3
+    },
+    {
+      "id": "unverified_pressure",
+      "if": "rail_pressure_sensor=none or independent_pressure_check!=documented",
+      "then": "NO_ECU_PRESSURE_HEALTH_CLAIM; EXTERNAL_VERIFICATION_UNKNOWN",
+      "priority": 4
+    },
+    {
+      "id": "hybrid",
+      "if": "pressure_regulation=hybrid",
+      "then": "KEEP_BOTH_REGULATOR_AND_CONTROLLER_PATHS",
+      "priority": 5
+    },
+    {
+      "id": "ini_mismatch",
+      "if": "ecu definition conflicts with profile",
+      "then": "PRESERVE_PROFILE; HOLD_DEPENDENT_EXPERTS; SHOW_CONFLICT",
+      "priority": 6
+    }
+  ],
+  "local_storage_security": "Future archive persists on the ESP only after explicit opt-in and authenticated control. On the current open Wi-Fi AP it must not be advertised as private or used to grant calibration authority. Export/import is versioned; no credentials or private identifiers required.",
+  "supported_current_release": "Design metadata + independently testable offline decision policy only. Not wired into the ESP phone UI, 3DS, DSi, or real ECU.",
+  "context_sources": [
+    "https://www.hpacademy.com/courses/practical-standalone-tuning/",
+    "https://github.com/rusefi/rusefi/wiki/Fuel-Pump",
+    "https://wiki.rusefi.com/Fuel-System/",
+    "https://wiki.rusefi.com/Fuel-Pressure/"
+  ]
+}
