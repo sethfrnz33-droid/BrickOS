@@ -240,6 +240,26 @@ finish:
 }
 
 
+/* No arbitrary INI command may authorize physical I/O; only these four
+ * non-actuating, capture-only rusEFI sensor calibration commands match.
+ * Compare the exact escaped INI command bytes, not just the command name.
+ */
+static bool capture_declaration_verified(const char *id, const char *value){
+    static const struct { const char *id,*escaped; } allowed[]={
+        {"cmd_calibrate_pedal_up", "\"Z\\x00\\x14\\x00\\x06\""},
+        {"cmd_calibrate_pedal_down", "\"Z\\x00\\x14\\x00\\x07\""},
+        {"cmd_calibrate_tps_closed", "\"Z\\x00\\x14\\x00\\x20\""},
+        {"cmd_calibrate_tps_open", "\"Z\\x00\\x14\\x00\\x21\""}
+    };
+    for(size_t i=0;i<sizeof(allowed)/sizeof(allowed[0]);i++){
+        if(strcmp(id,allowed[i].id))continue;
+        size_t n=strlen(allowed[i].escaped);
+        return strncmp(value,allowed[i].escaped,n)==0 &&
+            (value[n]==0||value[n]==';'||isspace((unsigned char)value[n]));
+    }
+    return false;
+}
+
 /* The named commands in [ControllerCommands] are metadata only. In particular,
  * resolving a command name must never forward its payload to the ECU. */
 bool ini_cache_command_info(const char *ecu_signature, const char *command_id,
@@ -284,7 +304,11 @@ bool ini_cache_command_info(const char *ecu_signature, const char *command_id,
         char *value=equals+1;
         while (*value==' '||*value=='\t')value++;
         if (section==SECTION_COMMANDS) {
-            if (!strcmp(p,command_id) && *value=='"')out->declared=true;
+            if (!strcmp(p,command_id) && *value=='"'){
+                out->declared=true;
+                out->capture_payload_verified=
+                    capture_declaration_verified(command_id,value);
+            }
         }else if(section==SECTION_USER && !strcasecmp(p,"commandButton")) {
             if (*value++!='"') continue;
             char *close=strchr(value,'"');
