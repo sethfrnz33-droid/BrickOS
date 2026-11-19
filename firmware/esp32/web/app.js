@@ -1036,20 +1036,48 @@ $('#log-upload').addEventListener('change',async evt=>{
   S.route='logs';render();toast('Imported local log for analysis');
  }catch(e){toast('Log import failed: '+e.message,true)}finally{evt.target.value=''}
 });
-async function activateIni(text){
- if(new TextEncoder().encode(text).length>1200000)throw Error('Definition is too large for the ESP32 cache');
- const def=connected()?matchingIni(text,S.ecuSignature,parseIni):parseIni(text);
- if(!def.channels.length||!def.cal.length)throw Error('Not a generated rusEFI definition');
- // An updated INI can change addresses or interpretation even with the same signature.
- if(S.rawIni!==text)clearCalibrationSession();
- S.rawIni=text;S.definition=def;rebuildTs();GUIDE.attach(def,S.ecuSignature);S.signatureMismatch=connected()&&!safeSignature();S.latest=null;
- render();toast(`Loaded ${def.cal.length} calibration fields and ${def.channels.length} channels`);
+async function activateIni(text,readyDefinition=null,revision=''){
+  if(new TextEncoder().encode(text).length>1200000)throw Error('Definition is too large for the ESP32 cache');
+  const def=readyDefinition||(connected()?matchingIni(text,S.ecuSignature,parseIni):parseIni(text));
+  if(connected()&&def.signature!==S.ecuSignature)throw Error('INI signature differs from connected ECU');
+  if(!def.channels.length||!def.cal.length)throw Error('Not a generated rusEFI definition');
+  if(S.rawIni!==text||S.iniRevision!==revision)clearCalibrationSession();
+  S.rawIni=text;S.definition=def;S.iniRevision=revision;rebuildTs();GUIDE.attach(def,S.ecuSignature);
+  S.signatureMismatch=connected()&&!safeSignature();S.latest=null;
+  render();toast('Loaded '+def.cal.length+' calibration fields and '+def.channels.length+' channels');
 }
-async function loadCachedIni(showError=false){
- try{const resp=await fetch('/api/ini/file',{cache:'no-store'});
-  if(!resp.ok)throw Error('No saved INI on ESP32');
-  await activateIni(await resp.text());
- }catch(e){if(showError)toast('Load cached INI failed: '+e.message,true)}
+let iniLoadTask=null;
+async function loadCachedIni(showError=false,expectedSignature=''){
+  // Single-flight: boot, USB handshake and status loop can request the INI at
+  // the same time. Never download/parse three copies on the phone.
+  if(iniLoadTask)return iniLoadTask;
+  iniLoadTask=(async()=>{
+    const meta=await api('/api/ini/status');
+    if(!meta.cached)throw Error('No saved INI on ESP32 yet');
+    const hash=/^[a-f0-9]{64}$/i.test(meta.sha256||'')?meta.sha256:'';
+    const size=Number(meta.size)||0;
+    if(hash&&S.iniRevision===hash&&S.definition&&
+       (!expectedSignature||S.definition.signature===expectedSignature))return true;
+    // Fast path: reuse the parsed definition previously received from the
+    // ESP's exact SD import. IndexedDB failure means a normal network load.
+    const prior=hash?await readLocalIni(hash,expectedSignature,size):null;
+    if(prior){
+      await activateIni(prior.rawIni,prior.definition,hash);
+      S.iniResolveState='Reused locally parsed INI from ESP cache';
+      return true;
+    }
+    const resp=await fetch('/api/ini/file',{cache:'no-store'});
+    if(!resp.ok)throw Error('No readable INI on ESP32 (HTTP '+resp.status+')');
+    const raw=await resp.text();
+    const def=expectedSignature?matchingIni(raw,expectedSignature,parseIni):parseIni(raw);
+    await activateIni(raw,def,hash);
+    if(hash)writeLocalIni(hash,raw,def,size).catch(()=>{});
+    S.iniResolveState='INI imported from ESP32 saved SD definition';
+    return true;
+  })();
+  try{return await iniLoadTask}
+  catch(e){if(showError)toast('Load saved INI failed: '+e.message,true);return false}
+  finally{iniLoadTask=null}
 }
 function setIniImportProgress(message,failed=false){
  S.iniImportProgress=message;
