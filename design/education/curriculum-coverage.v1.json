@@ -1,0 +1,924 @@
+{
+  "schema": "brickos.guide.education.coverage.v1",
+  "version": "1.0.0",
+  "status": "PLANNING_INVENTORY_ONLY_NO_RUNTIME_LINK",
+  "source_of_truth": "design/education/lesson-catalog.v1.json",
+  "counts": {
+    "topics": 130,
+    "authored": 22,
+    "remaining": 108
+  },
+  "notes": "Conceptual material only. Unwritten topics have no lesson script. The ESP runtime must never claim complete educational content or vehicle safety merely because a taxonomy exists.",
+  "modules": [
+    {
+      "id": "ecu_vs_engine",
+      "chapter": "configuration",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "ecu_vs_engine",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "ini_definition",
+      "chapter": "configuration",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "ini_definition",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "sensor_trust",
+      "chapter": "configuration",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "sensor_trust",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "gdi_not_supported",
+      "chapter": "configuration",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "gdi_not_supported",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "engine_archive_claims",
+      "chapter": "configuration",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "independent_verification",
+      "chapter": "configuration",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "sensor_source_freshness",
+      "chapter": "configuration",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "wiring_and_ground_theory",
+      "chapter": "configuration",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "power_and_reference_supplies",
+      "chapter": "configuration",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "injector_ignition_output_roles",
+      "chapter": "configuration",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "map_versus_maf",
+      "chapter": "configuration",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "load_strategy_overview",
+      "chapter": "configuration",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "safety_protection_overview",
+      "chapter": "configuration",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "pfi_variants_fuel_architecture",
+      "chapter": "configuration",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "ecu_usb_can_roles",
+      "chapter": "configuration",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "pinout_vs_physical_wiring",
+      "chapter": "configuration",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "trigger_sync",
+      "chapter": "trigger",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "trigger_sync",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "crank_and_cam_roles",
+      "chapter": "trigger",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "engine_phase_theory",
+      "chapter": "trigger",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "tooth_pattern_concepts",
+      "chapter": "trigger",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "hall_vs_vr_signal_types",
+      "chapter": "trigger",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "sync_state_vs_trigger_error",
+      "chapter": "trigger",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "phase_vs_speed_reference",
+      "chapter": "trigger",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "trigger_reference_concept",
+      "chapter": "trigger",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "lost_sync_event_analysis",
+      "chapter": "trigger",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "trigger_capture_vs_ordinary_telemetry",
+      "chapter": "trigger",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "trigger_wiring_signal_uncertainty",
+      "chapter": "trigger",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "active_table",
+      "chapter": "baseline",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "active_table",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "injector_model",
+      "chapter": "baseline",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "injector_model",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "base_fuel_versus_compensation",
+      "chapter": "baseline",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "rpm_load_axis_meaning",
+      "chapter": "baseline",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "interpolation_and_lookups",
+      "chapter": "baseline",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "pressure_dependent_injector_model",
+      "chapter": "baseline",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "fuel_composition_basics",
+      "chapter": "baseline",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "battery_compensation_models",
+      "chapter": "baseline",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "engine_temperature_inputs",
+      "chapter": "baseline",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "lambda_targets_and_fuel_strategies",
+      "chapter": "baseline",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "speed_density_alpha_n_maf",
+      "chapter": "baseline",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "fuel_bank_and_secondary_table_models",
+      "chapter": "baseline",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "base_spark_versus_actual",
+      "chapter": "baseline",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "correction_precedence",
+      "chapter": "baseline",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "map_revision_dependency",
+      "chapter": "baseline",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "pump_vs_regulator",
+      "chapter": "references",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "pump_vs_regulator",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "pressure_reference",
+      "chapter": "references",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "pressure_reference",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "physical_reference",
+      "chapter": "references",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "physical_reference",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "regulator_types_electronic_feedback",
+      "chapter": "references",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "fuel_pump_pwm_vs_setpoint",
+      "chapter": "references",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "absolute_gauge_differential_units",
+      "chapter": "references",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "manifold_reference_and_injector_delta",
+      "chapter": "references",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "pressure_sensor_absence_external_evidence",
+      "chapter": "references",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "external_reference_provenance",
+      "chapter": "references",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "ignition_physical_reference_vs_reported_value",
+      "chapter": "references",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "startup_states",
+      "chapter": "starting",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "startup_states",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "wideband_readiness",
+      "chapter": "starting",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "wideband_readiness",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "cranking_vs_catch_transition",
+      "chapter": "starting",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "after_start_and_warmup_separation",
+      "chapter": "starting",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "battery_during_crank_evidence",
+      "chapter": "starting",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "commanded_outputs_vs_physical_delivery",
+      "chapter": "starting",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "startup_case_log_event_markers",
+      "chapter": "starting",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "sync_fault_vs_fueling_symptom",
+      "chapter": "starting",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "sensor_validity_in_startup",
+      "chapter": "starting",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "start_event_temperature_groups",
+      "chapter": "starting",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "unexpected_reset_or_power_anomaly",
+      "chapter": "starting",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "idle_target",
+      "chapter": "idle",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "idle_target",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "warmup_strategy",
+      "chapter": "idle",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "warmup_strategy",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "idle_mode_eligibility",
+      "chapter": "idle",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "idle_actuator_strategies",
+      "chapter": "idle",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "mechanical_vs_electronic_throttle",
+      "chapter": "idle",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "idle_airflow_vs_feedback",
+      "chapter": "idle",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "pid_feedback_foundations",
+      "chapter": "idle",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "idle_spark_correction",
+      "chapter": "idle",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "idle_specific_fuel_table",
+      "chapter": "idle",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "rpm_response_vs_actuator_request",
+      "chapter": "idle",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "changing_electrical_load",
+      "chapter": "idle",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "idle_fuel_trim_masking",
+      "chapter": "idle",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "idle_oscillation_hypotheses",
+      "chapter": "idle",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "coolant_target_strategy",
+      "chapter": "idle",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "stall_vs_recovery_event",
+      "chapter": "idle",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "lambda_vs_target",
+      "chapter": "steady_fuel",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "lambda_vs_target",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "fuel_trim_masking",
+      "chapter": "steady_fuel",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "fuel_trim_masking",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "ve_interpolation",
+      "chapter": "steady_fuel",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "ve_interpolation",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "transient_classification",
+      "chapter": "steady_fuel",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "transient_classification",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "lambda_vs_afr_units",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "closed_loop_strategy_stft_ltft",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "bank_one_vs_bank_two_gains",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "gego_vs_percent_scl",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "source_time_alignment",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "sensor_transport_delay",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "fuel_cut_and_overrun",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "transient_enrichment_theory",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "stable_observation_eligibility",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "interpolation_weights_and_cell_coverage",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "repeatability_vs_sample_count",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "rejected_evidence_explanations",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "per_cell_uncertainty",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "fuel_pressure_effects_on_mixture",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "active_target_vs_stoich_nominal",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "manual_change_revision_conflicts",
+      "chapter": "steady_fuel",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "spark_actual",
+      "chapter": "steady_spark",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "spark_actual",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "knock_not_mbt",
+      "chapter": "steady_spark",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "knock_not_mbt",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "base_angle_vs_correction_layers",
+      "chapter": "steady_spark",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "knock_detection_limitations",
+      "chapter": "steady_spark",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "torque_quality_and_mbt_indirect_measurements",
+      "chapter": "steady_spark",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "air_flow_map_not_dyno",
+      "chapter": "steady_spark",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "engine_geometry_context",
+      "chapter": "steady_spark",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "temperature_and_fuel_context",
+      "chapter": "steady_spark",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "sync_timing_reference_and_spark",
+      "chapter": "steady_spark",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "validity_of_ignition_history",
+      "chapter": "steady_spark",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "external_knock_and_torque_evidence",
+      "chapter": "steady_spark",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "qualified_power",
+      "chapter": "power",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "qualified_power",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "dynamometer_data_provenance",
+      "chapter": "power",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "controlled_facility_external_signoff",
+      "chapter": "power",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "gear_grade_traction_motion_uncertainty",
+      "chapter": "power",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "measured_torque_vs_acceleration",
+      "chapter": "power",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "instrument_time_sync",
+      "chapter": "power",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "repeatability_and_variability",
+      "chapter": "power",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "fuel_pressure_evidence_scope",
+      "chapter": "power",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "protective_intervention_interpretation",
+      "chapter": "power",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "qualified_high_load_review_unobserved_region_labels",
+      "chapter": "power",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "final_audit",
+      "chapter": "confirmation",
+      "status": "authored_seed_lesson",
+      "lesson_catalog_id": "final_audit",
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "education_vs_hardware_progress",
+      "chapter": "confirmation",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "missing_validation_report",
+      "chapter": "confirmation",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "backup_and_ecu_revision",
+      "chapter": "confirmation",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "source_timestamp_data_completeness",
+      "chapter": "confirmation",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "profile_transfer_to_different_engine",
+      "chapter": "confirmation",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "fault_and_protection_review",
+      "chapter": "confirmation",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "content_revision_migration",
+      "chapter": "confirmation",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "knowledge_checks_not_safety_certification",
+      "chapter": "confirmation",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "data_export_and_privacy",
+      "chapter": "confirmation",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    },
+    {
+      "id": "unresolved_requirements_clear_labels",
+      "chapter": "confirmation",
+      "status": "planned_not_written",
+      "lesson_catalog_id": null,
+      "policy": "concept_only_no_engine_action"
+    }
+  ]
+}
