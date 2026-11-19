@@ -21,6 +21,14 @@ export const STORY_STAGE_HINTS=Object.freeze({
 const has=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 export function validateStoryCatalog(c){
  if(!c||c.schema!==STORY_SCHEMA||typeof c.version!=='string'||!c.nodes||!has(c.nodes,c.entry))throw Error('Invalid or unsupported guide catalogue');
+ if(c.tour_steps){
+  if(!Array.isArray(c.tour_steps)||c.tour_steps.length!==10)throw Error('Guide tour requires ten steps');
+  const seen=new Set();
+  for(const [i,step] of c.tour_steps.entries()){
+   if(step.step!==i+1||typeof step.node!=='string'||!has(c.nodes,step.node)||seen.has(step.node))throw Error('Invalid ten-step tour order');
+   seen.add(step.node);
+  }
+ }
  for(const [id,n] of Object.entries(c.nodes)){
   if(n.id!==id||n.speaker!=='seth'||typeof n.text!=='string'||!Array.isArray(n.choices))throw Error('Bad dialogue node '+id);
   for(const ch of n.choices){if(!ch.label||typeof ch.go!=='string')throw Error('Bad choice '+id);
@@ -83,8 +91,9 @@ export class GuideStory {
   }).join('; ');
   const text=n.text.replace(/\{\{available:([^{}]+)\}\}/g,(_,keys)=>available(keys.split('|').filter(Boolean)));
   const target=n._field?(n._menu?{id:n._menu,label:n._field.label}:null):findManualTarget(n.manual||n.stage,menuTree);
+  const chapter=this.catalog.tour_steps?.find(step=>step.node===n.id)||null;
   return {schema:this.catalog.schema,catalog_version:this.catalog.version,node_id:n.id,speaker:n.speaker,tone:n.tone,
-   title:n.tag||'Guided Tuning',text,stage:n.stage||null,definition_key:ecuKey||null,
+   title:n.tag||'Guided Tuning',text,stage:n.stage||null,tour_step:chapter?.step||null,tour_total:this.catalog.tour_steps?.length||null,tour_title:chapter?.title||null,definition_key:ecuKey||null,
    freshness:r.fresh===true?'live':r.fresh===false?'stale':'unavailable',
    choices:n.choices.map((ch,i)=>({id:n.id+':'+i,label:ch.label,go:ch.go,enabled:(!ch.go.startsWith('action.manual.')&&!ch.go.startsWith('action.field.'))||!!target,
     blocked_reason:(ch.go.startsWith('action.manual.')||ch.go.startsWith('action.field.'))&&!target?'No matching menu entry in the active INI':null})),
