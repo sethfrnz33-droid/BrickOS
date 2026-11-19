@@ -1,0 +1,39 @@
+name: Guided dialogue validation
+
+on:
+  push:
+    paths:
+      - 'firmware/esp32/web/**'
+      - 'firmware/esp32/tests/**'
+      - 'firmware/esp32/tools/**'
+      - 'docs/24-seth-complete-dialogue.md'
+      - 'docs/28-seth-chapter-questions.md'
+      - '.github/workflows/guided-dialogue-checks.yml'
+  pull_request:
+    paths:
+      - 'firmware/esp32/web/**'
+      - 'firmware/esp32/tests/**'
+      - 'firmware/esp32/tools/**'
+      - 'docs/24-seth-complete-dialogue.md'
+      - 'docs/28-seth-chapter-questions.md'
+      - '.github/workflows/guided-dialogue-checks.yml'
+
+jobs:
+  browser-guide-host-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firmware/esp32
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: JavaScript unit and dialogue link tests
+        run: node --test tests/*.test.mjs
+      - name: Regenerate ESP embedded browser assets
+        run: python3 tools/generate_web_assets.py
+      - name: Host-side C syntax checks
+        run: bash tests/run_host_syntax.sh
+      - name: Validate embedded static assets
+        run: bash tests/run_assets_host.sh
