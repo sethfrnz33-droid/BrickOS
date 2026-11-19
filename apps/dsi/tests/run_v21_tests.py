@@ -10,5 +10,5 @@ assert 'BTS_LIVE_POLL_FRAMES=2' in s
 assert 'BTS_IDLE_TIMEOUT_FRAMES=600' in s
 assert 'bt_async_live_is_new()' in s
 assert 'if(idle_dashboard)bottom_idle_gauges();' in s
-assert 'const BtField *field=bt_field(&def,m->target,false);' in s
+assert 'if(open_ini_field(target,label,false))return;' in s
 print('PASS: v2.1 30Hz target, 10s wake protection, INI direct-field editor wiring')

@@ -135,26 +135,28 @@ static void page_sizes(BtDefinition*d,const char*value){
     char (*a)[128]=page_csv_scratch;int n=csv(value,a,64);
     for(int i=0;i<64;i++)d->page_sizes[i]=i<n?positive_int(a[i],-1):-1;
 }
-static void add_menu(BtDefinition *d,const char *label,const char *target,int group){
+static void add_menu(BtDefinition *d,const char *label,const char *target,int group,const char *condition){
     if(!label||!*label)return;
     if(d->menu_count>=BTS_MAX_MENUS||!grow(d,(void**)&d->menus,&d->menu_capacity,d->menu_count+1,sizeof(BtMenu),BTS_MAX_MENUS,32)){d->truncated=true;return;}
     while(*label=='&')label++;
     if(!*label)return;
     BtMenu*m=&d->menus[d->menu_count++];memset(m,0,sizeof(*m));
     cp(m->label,sizeof(m->label),label);cp(m->target,sizeof(m->target),target);
-    m->group=group;
+    cp(m->condition,sizeof(m->condition),condition);m->group=group;
 }
-static void add_ref(BtDefinition*d,const char*owner,const char*name,const char*label,int kind){
+static void add_ref(BtDefinition*d,const char*owner,const char*name,const char*label,int kind,const char*details,const char*condition){
     if(!owner||!*owner||!name||!*name)return;
-    if(d->ref_count>=BTS_MAX_REFS||!grow(d,(void**)&d->refs,&d->ref_capacity,d->ref_count+1,sizeof(BtDialogRef),BTS_MAX_REFS,64)){d->truncated=true;return;}
+    if(d->ref_count>=BTS_MAX_REFS||!grow(d,(void**)&d->refs,&d->ref_capacity,d->ref_count+1,sizeof(BtDialogRef),BTS_MAX_REFS,32)){d->truncated=true;return;}
     BtDialogRef*r=&d->refs[d->ref_count++];memset(r,0,sizeof(*r));
     cp(r->owner,sizeof(r->owner),owner);cp(r->name,sizeof(r->name),name);
-    cp(r->label,sizeof(r->label),label);r->kind=kind;
+    cp(r->label,sizeof(r->label),label);cp(r->detail,sizeof(r->detail),details);
+    cp(r->condition,sizeof(r->condition),condition);r->kind=kind;
 }
+static bool ini_expression(const char *s){return s&&(*s=='{'||*s=='$');}
 static void line_parse(BtDefinition *d,char *line) {
     char *p=trim(line);
     if(!*p||*p==';'||*p=='#')return;
-    if(*p=='['){char *e=strchr(p,']');if(e){*e=0;cp(d->section,sizeof(d->section),p+1);d->last_map=-1;
+    if(*p=='['){char *e=strchr(p,']');if(e){*e=0;cp(d->section,sizeof(d->section),p+1);d->last_map=-1;d->last_graph=-1;
         if(!strcasecmp(d->section,"Constants"))d->had_constants=true;
         if(!strcasecmp(d->section,"OutputChannels"))d->had_outputs=true;
         d->in_main_menu=false;
@@ -178,22 +180,70 @@ static void line_parse(BtDefinition *d,char *line) {
         memcpy(d->signature,begin,length);d->signature[length]=0;
         d->had_signature=length>0;return;
     }
-    if(!strcasecmp(d->section,"UserDefined")){
-        char a[5][128];int n=csv(val,a,5);
-        if(!strcasecmp(key,"dialog")){cp(d->current_dialog,sizeof(d->current_dialog),n?a[0]:"");}
-        else if(!strcasecmp(key,"field")&&n>=2&&*a[1]&&*a[1]!='{'&&!strchr(a[1],' '))
-            add_ref(d,d->current_dialog,a[1],a[0],0);
-        else if(!strcasecmp(key,"panel")&&n>0)
-            add_ref(d,d->current_dialog,a[0],a[0],1);
+    if(!strcasecmp(d->section,"UserDefined")||!strcasecmp(d->section,"UiDialogs")){
+        char a[8][128];int n=csv(val,a,8);
+        if(!strcasecmp(key,"dialog")){
+            cp(d->current_dialog,sizeof(d->current_dialog),n?a[0]:"");
+            d->last_graph=-1;
+            if(n>1&&*a[1])add_ref(d,d->current_dialog,"@dialogHelp",a[1],5,"","");
+        }else if(!strcasecmp(key,"liveGraph") && n>0 && *d->current_dialog && *a[0]){
+            d->last_graph=-1;
+            if(d->graph_count>=BTS_MAX_INI_GRAPHS ||
+               !grow(d,(void**)&d->graphs,&d->graph_capacity,d->graph_count+1,sizeof(BtIniGraph),BTS_MAX_INI_GRAPHS,16)){
+                d->truncated=true;return;
+            }
+            BtIniGraph *g=&d->graphs[d->graph_count];memset(g,0,sizeof(*g));
+            cp(g->owner,sizeof(g->owner),d->current_dialog);
+            cp(g->name,sizeof(g->name),a[0]);
+            cp(g->title,sizeof(g->title),n>1?a[1]:"Live Graph");
+            g->first_line=d->graph_line_count;
+            d->last_graph=d->graph_count++;
+            add_ref(d,d->current_dialog,a[0],g->title,6,"","");
+        }else if(!strcasecmp(key,"graphLine")&&n>0&&*a[0]&&d->last_graph>=0){
+            if(d->graph_line_count>=BTS_MAX_GRAPH_LINES ||
+               !grow(d,(void**)&d->graph_lines,&d->graph_line_capacity,d->graph_line_count+1,sizeof(BtGraphLine),BTS_MAX_GRAPH_LINES,32)){
+                d->truncated=true;return;
+            }
+            BtGraphLine *line=&d->graph_lines[d->graph_line_count++];memset(line,0,sizeof(*line));
+            cp(line->channel,sizeof(line->channel),a[0]);line->graph=d->last_graph;
+            d->graphs[d->last_graph].line_count++;
+        }else if(!strcasecmp(key,"field")&&n>0){
+            if(n>=2&&*a[1]&&!ini_expression(a[1])&&!strchr(a[1],' '))
+                add_ref(d,d->current_dialog,a[1],a[0],0,n>4?a[4]:"",n>2?a[2]:"");
+            else if(*a[0])add_ref(d,d->current_dialog,"@text",a[0],5,"",n>2?a[2]:"");
+        }else if(!strcasecmp(key,"displayOnlyField")&&n>=2){
+            add_ref(d,d->current_dialog,a[1],a[0],3,n>4?a[4]:"",n>2?a[2]:"");
+        }else if(!strcasecmp(key,"panel")&&n>0){
+            add_ref(d,d->current_dialog,a[0],n>1&&*a[1]?a[1]:a[0],1,"",n>2?a[2]:"");
+        }else if(!strcasecmp(key,"commandButton")&&n>=2){
+            add_ref(d,d->current_dialog,a[1],a[0],2,n>3?a[3]:"",n>2?a[2]:"");
+        }else if((!strcasecmp(key,"runtimeValue")||!strcasecmp(key,"readout")||!strcasecmp(key,"gauge"))&&n>=1){
+            const char *channel=n>1&&*a[1]?a[1]:a[0];
+            add_ref(d,d->current_dialog,channel,a[0],4,"",n>2?a[2]:"");
+        }else if(!strcasecmp(key,"topicHelp")||!strcasecmp(key,"help")||!strcasecmp(key,"helpText")){
+            if(n>0&&*a[0])add_ref(d,d->current_dialog,"@help",a[0],5,"","");
+        }
         return;
     }
     if(!strcasecmp(d->section,"Menu")){
-        char a[6][128];int n=csv(val,a,6);
+        char a[7][128];int n=csv(val,a,7);
         if(!strcasecmp(key,"menuDialog"))d->in_main_menu=n>0&&!strncasecmp(a[0],"main",4);
-        else if(d->in_main_menu&&!strcasecmp(key,"menu")&&n>0)add_menu(d,a[0],"",0);
-        else if(d->in_main_menu&&!strcasecmp(key,"groupMenu")&&n>0)add_menu(d,a[0],"",1);
+        else if(d->in_main_menu&&!strcasecmp(key,"menu")&&n>0)add_menu(d,a[0],"",0,n>1?a[1]:"");
+        else if(d->in_main_menu&&!strcasecmp(key,"groupMenu")&&n>0)add_menu(d,a[0],"",1,n>1?a[1]:"");
         else if(d->in_main_menu&&(!strcasecmp(key,"subMenu")||!strcasecmp(key,"groupChildMenu"))&&n>1&&strncasecmp(a[0],"std_separator",13))
-            add_menu(d,a[1],a[0],!strcasecmp(key,"subMenu")?3:2);
+            add_menu(d,a[1],a[0],!strcasecmp(key,"subMenu")?3:2,n>2?a[2]:"");
+        return;
+    }
+    if(!strcasecmp(d->section,"ConstantsExtensions")){
+        if(!strcasecmp(key,"readOnly")||!strcasecmp(key,"requiresPowerCycle")){
+            char names[12][128];int count=csv(val,names,12);
+            for(int j=0;j<count;j++)for(int i=0;i<d->constant_count;i++){
+                if(!strcasecmp(names[j],d->constants[i].name)){
+                    if(!strcasecmp(key,"readOnly"))d->constants[i].read_only=true;
+                    else d->constants[i].power_cycle=true;
+                }
+            }
+        }
         return;
     }
     if(!strcasecmp(d->section,"Constants")){
@@ -222,17 +272,19 @@ static void line_parse(BtDefinition *d,char *line) {
         if(!strcasecmp(key,"xBins")){
             cp(m->x,sizeof(m->x),a[0]);
             cp(m->xchan,sizeof(m->xchan),a[1]);
+            m->x_readonly=!strcasecmp(a[2],"readOnly");
         }
         if(!strcasecmp(key,"yBins")){
             cp(curve?m->z:m->y,curve?sizeof(m->z):sizeof(m->y),a[0]);
             cp(m->ychan,sizeof(m->ychan),a[1]);
+            m->y_readonly=!strcasecmp(a[2],"readOnly");
         }
         if(!strcasecmp(key,"zBins"))cp(m->z,sizeof(m->z),a[0]);
     }
 }
 void bt_ini_reset(BtDefinition*d) {
-    free(d->channels);free(d->constants);free(d->maps);free(d->menus);free(d->refs);
-    memset(d,0,sizeof(*d));d->current_page=1;d->last_map=-1;
+    free(d->channels);free(d->constants);free(d->maps);free(d->menus);free(d->refs);free(d->graphs);free(d->graph_lines);
+    memset(d,0,sizeof(*d));d->current_page=1;d->last_map=-1;d->last_graph=-1;
     for(int i=0;i<64;i++){d->page_ids[i]=-1;d->page_sizes[i]=-1;}
 }
 void bt_ini_feed(BtDefinition*d,const uint8_t*b,size_t n) {
@@ -373,21 +425,22 @@ bool bt_encode_value(const BtDefinition*d,const BtField*f,uint8_t*b,int len,int 
     return true;
 }
 
-/* SD-backed enum captions from exactly the INI whose fields were parsed.
- * Supports direct lists and TunerStudio #define macro references; never
- * substitutes inferred choices for missing or unsupported definitions.
- * Temporary buffers are static to stay off the tiny ARM9 stack. */
-static char choice_line[8192],choice_spec[4096];
+/* Load the exact caption list from the cached generated ECU INI.  The old
+ * parser stopped at 32 choices and split at 64 CSV columns, silently dropping
+ * GPIO and sensor enumerations with hundreds of choices.  Keep the identifier
+ * numbering, including INVALID/reserved gaps, so the wire value is unchanged.
+ * File buffers are static to fit the small ARM9 stack. */
+static char choice_line[16384], choice_spec[16384];
 static bool find_ini_choices(FILE *f,const char *field){
     bool in_constants=false;
+    rewind(f);
     while(fgets(choice_line,sizeof(choice_line),f)){
         char *p=trim(choice_line);
         if(!*p||*p==';'||*p=='#')continue;
         if(*p=='['){in_constants=!strncasecmp(p,"[Constants]",11);continue;}
         if(!in_constants)continue;
         char *eq=strchr(p,'=');if(!eq)continue;
-        *eq=0;
-        if(strcasecmp(trim(p),field))continue;
+        *eq=0;if(strcasecmp(trim(p),field))continue;
         char *value=trim(eq+1);
         if(strncasecmp(value,"bits",4))break;
         int comma=0,quote=0,brackets=0;
@@ -397,6 +450,7 @@ static bool find_ini_choices(FILE *f,const char *field){
                 if(*q=='[')brackets++;
                 if(*q==']'&&brackets)brackets--;
                 if(*q==','&&!brackets&&++comma==4){
+                    if(strlen(trim(q+1))>=sizeof(choice_spec))return false;
                     cp(choice_spec,sizeof(choice_spec),trim(q+1));return true;
                 }
             }
@@ -409,49 +463,115 @@ static bool resolve_ini_macro(FILE *f,const char *name){
     rewind(f);
     while(fgets(choice_line,sizeof(choice_line),f)){
         char *p=trim(choice_line);
-        if(strncmp(p,"#define ",8))continue;
-        p=trim(p+8);
-        char *eq=strchr(p,'=');if(!eq)continue;
-        *eq=0;
-        if(strcasecmp(trim(p),name))continue;
-        cp(choice_spec,sizeof(choice_spec),trim(eq+1));return true;
+        if(strncmp(p,"#define",7)||!isspace((unsigned char)p[7]))continue;
+        p=trim(p+7);
+        char *end=p;while(isalnum((unsigned char)*end)||*end=='_')end++;
+        if(end==p||strncasecmp(p,name,(size_t)(end-p))||(size_t)(end-p)!=strlen(name))continue;
+        p=trim(end);if(*p=='=')p=trim(p+1);
+        if(!*p||strlen(p)>=sizeof(choice_spec))return false;
+        cp(choice_spec,sizeof(choice_spec),p);return true;
     }
     return false;
+}
+/* Extract one CSV token without allocating a huge 256x128 matrix.  Explicit
+ * index prefixes such as 42 = "Pin X" are respected. */
+static const char *next_choice(const char *p,char out[128]){
+    bool quote=false;int depth=0;size_t n=0;
+    while(*p&&isspace((unsigned char)*p))p++;
+    while(*p){
+        char c=*p;
+        if(c=='"')quote=!quote;
+        if(!quote){if(c=='{')depth++;if(c=='}'&&depth)depth--;
+            if(c==','&&depth==0){p++;break;}
+            if(c==';'&&depth==0)break;
+        }
+        if(n<127)out[n++]=c;
+        p++;
+    }
+    out[n]=0;
+    char *v=trim(out);if(v!=out)memmove(out,v,strlen(v)+1);
+    size_t len=strlen(out);
+    if(len>1&&out[0]=='"'&&out[len-1]=='"'){
+        memmove(out,out+1,len-2);out[len-2]=0;
+    }
+    return p;
 }
 int bt_bit_choices(const char *ini_path,const char *field_name,char labels[][36],int cap){
     if(!ini_path||!field_name||!labels||cap<1)return 0;
     FILE *f=fopen(ini_path,"rb");if(!f)return 0;
-    int count=0;
     memset(labels,0,(size_t)cap*36);
     if(!find_ini_choices(f,field_name)){fclose(f);return 0;}
+    /* Permit nested indirection, but never make up a missing definition. */
+    for(int depth=0;depth<8;depth++){
+        char *input=trim(choice_spec);
+        if(*input=='{'&&strchr(input,'}')){
+            size_t len=strlen(input);
+            if(len>1&&input[len-1]=='}'){
+                input[len-1]=0;memmove(choice_spec,input+1,strlen(input+1)+1);
+                input=trim(choice_spec);
+            }
+        }
+        if(*input!='$')break;
+        char name[96]={0};int n=0;input++;
+        if(*input=='{')input++;
+        while((isalnum((unsigned char)*input)||*input=='_')&&n<95)name[n++]=*input++;
+        if(n==0||!resolve_ini_macro(f,name)){fclose(f);return 0;}
+        if(depth==7){fclose(f);return 0;}
+    }
     char *input=trim(choice_spec);
-    if(*input=='$'){
-        char name[64]={0};int n=0;input++;
-        while((isalnum((unsigned char)*input)||*input=='_')&&n<63)name[n++]=*input++;
-        if(!n||!resolve_ini_macro(f,name)){fclose(f);return 0;}
-        input=trim(choice_spec);
-    }
-    /* Some INIs wrap choices in braces. The braces are syntax, not names. */
-    size_t len=strlen(input);
-    if(len>1&&input[0]=='{'&&input[len-1]=='}'){
-        input[len-1]=0;input=trim(input+1);
-    }
-    char (*a)[128]=page_csv_scratch;
-    int n=csv(input,a,64),index=0;
-    for(int i=0;i<n;i++){
-        char *label=trim(a[i]);
+    int count=0,index=0;
+    while(*input){
+        char token[128];const char *next=next_choice(input,token);
+        if(next==input)break;
+        input=(char*)next;
+        char *label=trim(token);
+        if(!*label)continue;
         char *eq=strchr(label,'=');
         if(eq){
             *eq=0;char *end=NULL;
-            long requested=strtol(trim(label),&end,10);
-            if(end!=label&&!*trim(end)&&requested>=0&&requested<=65535)index=(int)requested;
+            long requested=strtol(trim(label),&end,0);
+            if(end!=label&&!*trim(end)&&requested>=0&&requested<cap)index=(int)requested;
+            else {fclose(f);return 0;}
             label=trim(eq+1);
         }
-        if(index>=cap)break;
+        size_t len=strlen(label);
+        if(len>1&&label[0]=='"'&&label[len-1]=='"'){
+            label[len-1]=0;label++;
+        }
+        if(index>=cap){fclose(f);return 0;} /* No silently truncated enums. */
         if(*label&&strncasecmp(label,"INVALID",7)&&strcasecmp(label,"reserved"))
             cp(labels[index],36,label);
         if(index+1>count)count=index+1;
         index++;
     }
     fclose(f);return count;
+}
+
+/* Contextual help is typically generated in [SettingContextHelp].  Keeping
+ * help on SD rather than in the definition snapshot saves scarce DS RAM and
+ * preserves the entire explanation, not just the first short CSV column. */
+bool bt_ini_context_help(const char *ini_path,const char *target,char *out,size_t cap){
+    if(!out||cap<2)return false;
+    out[0]=0;
+    if(!ini_path||!target||!*target)return false;
+    FILE *f=fopen(ini_path,"rb");if(!f)return false;
+    bool section=false,found=false;
+    while(fgets(choice_line,sizeof(choice_line),f)){
+        char *p=trim(choice_line);
+        if(*p=='['){section=!strncasecmp(p,"[SettingContextHelp]",20);continue;}
+        if(!section||!*p||*p==';'||*p=='#')continue;
+        char *eq=strchr(p,'=');if(!eq)continue;
+        *eq=0;if(strcasecmp(trim(p),target))continue;
+        char *v=trim(eq+1);size_t n=strlen(v);
+        if(n>1&&v[0]=='"'){
+            char *end=strrchr(v+1,'"');
+            if(end){*end=0;v++;}
+        }else{
+            char *comment=strchr(v,';');if(comment)*comment=0;
+            v=trim(v);
+        }
+        cp(out,cap,v);
+        found=out[0]!=0;break;
+    }
+    fclose(f);return found;
 }

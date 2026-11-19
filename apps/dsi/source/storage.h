@@ -11,6 +11,10 @@ bool bt_sd_ready(void);
 const char *bt_sd_asset_root(void);
 int bt_sd_layout_load(void);
 bool bt_sd_layout_save(int layout);
+typedef struct { char target[64], label[72]; } BtFavorite;
+#define BTS_MAX_FAVORITES 48
+int bt_sd_favorites_load(const char *signature,BtFavorite *items,int capacity);
+bool bt_sd_favorites_save(const char *signature,const BtFavorite *items,int count);
 const char *bt_sd_message(void);
 size_t bt_sd_written(void);
 const char *bt_sd_cache_path(void);

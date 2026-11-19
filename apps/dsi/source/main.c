@@ -1,4 +1,4 @@
-/* Brick Tuner Suite DSi v2.1
+/* Brick Tuner Suite DSi v2.4
  * Native two-screen UI, sourced from the original 3DS v62 INI/BrickOS contract.
  * A DSi cannot render v62's Citro3D visuals; this edition retains a recognizable
  * dashboard / TunerStudio category tree / live channels / map and graph workflow.
@@ -107,11 +107,38 @@ static size_t ini_progress=0,ini_disk_bytes=0,ini_parsed_bytes=0,ini_expected_by
 static char client_ip[24]="-",gateway_ip[24]="-";
 static int page=0,list_pick=0,list_scroll=0,tune_cat=0,tune_focus=0,tune_group=-1;
 static int home_pick=0;
+static BtFavorite favorites[BTS_MAX_FAVORITES];
+static int favorite_count=0;
+static char favorite_signature[160]="";
+static bool favorites_loaded=false, editor_readonly=false;
+static bool view_from_tree=false;
+static int active_ini_graph=-1, active_ini_graph_line=0;
+static char graph_from_dialog[64]="", graph_from_label[76]="";
+static bool graph_from_ini=false;
+static void load_favorites(void);
+static void toggle_favorite(const char *target,const char *label);
+static bool is_favorite(const char *target);
+
 /* 2/3/4 top gauges; default remains 2 AFR/VBAT. L/R only on HOME. */
 static int gauge_layout=2;
 static int sound_pick=0;
 static int map_indices[BTS_MAX_MAPS],map_count=0,chosen_map=-1;
 static int cx=0,cy=0,active_slot=0;
+static int map_focus=0; /* 0=Z calibration, 1=X axis, 2=Y axis */
+/* DSi v2.3 opens ECU calibration views without blocking VBlank/touch.
+ * Three bounded HTTP/TS R stages: actual Z bytes, optional X/Y axes.
+ * Writes are separate, explicitly confirmed bench-only transactions. */
+typedef struct {
+    bool active;
+    int stage, offset, total, chunk, map_id;
+    uint8_t axis_raw[512];
+} BtCalLoad;
+static BtCalLoad cal_load;
+static void calibration_service(void);
+static const BtField *focused_cal_field(void);
+static double focused_value(void);
+static bool any_map_dirty(void);
+
 static char channel_names[SLOTS][64]={"AFRValue","VBatt"};
 static double hist[SLOTS][HISTORY],low[SLOTS],high[SLOTS],sum[SLOTS];
 static bool hist_valid[SLOTS][HISTORY];
@@ -122,34 +149,39 @@ static char dialog_name[64]="",dialog_label[76]="";
 static char dialog_owner_stack[6][64],dialog_label_stack[6][76];
 static int dialog_depth=0;
 static int dialog_pick=0,dialog_scroll=0;
-static bool dialog_value_ok=false;
-static double dialog_value=0;
-static char dialog_value_name[64]="";
+static bool dialog_info=false;
+static char dialog_context[1024];
+static int dialog_help_index=-1,dialog_help_page=0;
+
 static const double steps[]={0.1,1.0,5.0,10.0};
 static int step_index=1;
 static bool abandon_confirm=false;
 static bool keypad_open=false;
 static char keypad_input[24]="";
+/* Dynamic INI GPIO/input/output dropdowns routinely contain 100+ entries. */
+#define BTS_DSI_CHOICE_CAP 256
 static int bit_choice_count=0;
-static char bit_choice_labels[32][36];
+static char bit_choice_labels[BTS_DSI_CHOICE_CAP][36];
+static bool bit_picker_open=false;
+static int bit_picker_pick=0,bit_picker_scroll=0;
 static const char *keypad_keys[16]={
     "7","8","9","DEL", "4","5","6","CLR",
     "1","2","3","SIGN", ".","0","OK","BACK"
 };
 
-enum {P_HOME,P_TUNE,P_MAPS,P_LIVE,P_GRAPH,P_SOUNDS,P_LINK,P_COUNT};
-static const char *tabs[P_COUNT]={"HOME","TUNE","MAPS","CHANNELS","GRAPH","SOUNDS","LINK"};
-static const int home_pages[6]={P_TUNE,P_MAPS,P_LIVE,P_GRAPH,P_SOUNDS,P_LINK};
-/* Icons converted from the original 3DS the 3DS art/tsicons collection. */
-static const int home_icons[6]={5,11,12,11,6,7};
-static const char *home_labels[6]={"TUNING SYSTEMS","ECU MAPS","LIVE CHANNELS","LIVE GRAPHS","SOUNDBOARD","CONNECTION"};
+enum {P_HOME,P_TUNE,P_LIVE,P_GRAPH,P_SOUNDS,P_LINK,P_FAV,P_COUNT};
+static const char *tabs[P_COUNT]={"HOME","TUNE","VIEW","GRAPH","SOUNDS","LINK","FAV"};
+/* The graph and realtime channel screens live only behind the INI View menu. */
+static const int home_pages[4]={P_TUNE,P_FAV,P_SOUNDS,P_LINK};
+static const int home_icons[4]={5,8,6,7};
+static const char *home_labels[4]={"TUNING TREE","FAVORITE SETTINGS","SOUNDBOARD","CONNECTION"};
 static void refresh_idle_gauges(void){
     bt_idle_select(&def,channel_names[0],channel_names[1],&idle_gauges);
 }
 static bool can_show_idle(void){
     /* Never obscure an editable map, an INI dialog or uncommitted changes. */
     return ini_ok && !loading_cache && !loading_ini && !table.valid &&
-        !dialog_name[0] && (page==P_HOME || page==P_TUNE || page==P_MAPS);
+        !dialog_name[0] && (page==P_HOME || page==P_TUNE || page==P_FAV);
 }
 static void update_idle(void){
     idle_dashboard=can_show_idle() && (frame-activity_frame)>=BTS_IDLE_TIMEOUT_FRAMES;
@@ -214,6 +246,24 @@ static void text(uint16_t*d,int x,int y,const char*s,uint16_t c,int limit){
     if(!s)return;
     for(int i=0;s[i]&&i<limit&&x+i*9<W;i++)
         glyph(d,x+i*9,y,(unsigned char)s[i],c,1);
+}
+/* Draw complete INI help in readable wrapped lines, including URLs and long
+ * constant expressions that do not contain spaces. No fabricated prose. */
+static void text_wrapped(uint16_t *d,int x,int y,const char *src,uint16_t color,int columns,int lines){
+    if(!src||!*src||columns<2||columns>28)return;
+    while(*src&&lines-->0){
+        while(*src==' '||*src=='\t'||*src=='\n'||*src=='\r')src++;
+        if(!*src)break;
+        int len=0,last_space=0;
+        while(src[len]&&src[len]!='\n'&&len<columns){
+            if(src[len]==' ')last_space=len;
+            ++len;
+        }
+        if(len==columns && src[len] && src[len]!='\n'&&last_space>0)len=last_space;
+        char line[30];memcpy(line,src,(size_t)len);line[len]=0;
+        text(d,x,y,line,color,columns);y+=16;src+=len;
+        if(*src=='\n')src++;
+    }
 }
 static void right_text(uint16_t*d,int x,int y,const char*s,uint16_t c){int n=(int)strlen(s);text(d,x-n*9,y,s,c,n);}
 static void nav_icon_mini(uint16_t*d,int which,int x,int y){
@@ -361,10 +411,12 @@ static void top_channels(void){
 }
 static void build_map_index(void){
     refresh_idle_gauges();
+    load_favorites();
     map_count=0;
     for(int i=0;i<def.map_count;i++){
         const BtField*f=bt_field(&def,def.maps[i].z,false);
-        if(f&&f->scaled&&f->width>0&&f->height>0&&f->width*f->height<=BTS_MAP_CELLS)
+        if(f&&bt_type_size(f->type)>0&&f->page>=1&&f->page<=64&&
+           f->width>0&&f->height>0&&f->width*f->height<=BTS_MAP_CELLS)
             map_indices[map_count++]=i;
     }
 }
@@ -373,7 +425,35 @@ static const BtMap* selected_map(void){
     if(chosen_map>=0&&chosen_map<def.map_count)return &def.maps[chosen_map];
     return NULL;
 }
-static int map_from_row(int n){return n>=0&&n<map_count?map_indices[n]:-1;}
+static void load_favorites(void){
+    if(!def.valid||!sd_ready)return;
+    if(favorites_loaded&&!strcmp(favorite_signature,def.signature))return;
+    favorite_count=bt_sd_favorites_load(def.signature,favorites,BTS_MAX_FAVORITES);
+    snprintf(favorite_signature,sizeof(favorite_signature),"%s",def.signature);
+    favorites_loaded=true;
+}
+static bool is_favorite(const char *target){
+    if(!target||!*target)return false;
+    for(int i=0;i<favorite_count;i++)if(!strcasecmp(target,favorites[i].target))return true;
+    return false;
+}
+static void toggle_favorite(const char *target,const char *label){
+    if(!target||!*target||!label||!*label)return;
+    load_favorites();
+    for(int i=0;i<favorite_count;i++)if(!strcasecmp(target,favorites[i].target)){
+        memmove(&favorites[i],&favorites[i+1],(size_t)(favorite_count-i-1)*sizeof(favorites[0]));
+        favorite_count--;
+        snprintf(note,sizeof(note),"REMOVED FAVORITE: %.64s",label);
+        if(sd_ready)bt_sd_favorites_save(def.signature,favorites,favorite_count);
+        return;
+    }
+    if(favorite_count>=BTS_MAX_FAVORITES){snprintf(note,sizeof(note),"FAVORITES FULL (48)");return;}
+    BtFavorite *f=&favorites[favorite_count++];memset(f,0,sizeof(*f));
+    snprintf(f->target,sizeof(f->target),"%s",target);
+    snprintf(f->label,sizeof(f->label),"%s",label);
+    if(sd_ready)bt_sd_favorites_save(def.signature,favorites,favorite_count);
+    snprintf(note,sizeof(note),"FAVORITED: %.72s",label);
+}
 static int map_for_target(const char*name){
     if(!name||!*name)return -1;
     for(int j=0;j<map_count;j++){
@@ -411,6 +491,18 @@ static void map_live_trace(const BtMap*m){
 }
 static void map_top(void){
     draw_header(table.dirty?"MAP / STAGED CHANGES":"ECU CALIBRATION MAP");
+    if(cal_load.active){
+        const BtMap *loading=selected_map();
+        text(top,11,44,loading?loading->label:"ECU CALIBRATION",HIGHLIGHT,30);
+        const char *stage=cal_load.stage==0?"Z CALIBRATION":cal_load.stage==1?"X AXIS":"Y AXIS";
+        text(top,11,79,"READING ECU / NONBLOCKING",WHITE,28);
+        text(top,11,101,stage,CYAN,28);
+        char progress[44];
+        snprintf(progress,sizeof(progress),"%d / %d BYTES",cal_load.offset,cal_load.total);
+        text(top,11,123,progress,WHITE,28);
+        text(top,11,160,"B: CANCEL / ECU UNCHANGED",MUTED,27);
+        return;
+    }
     if(chosen_map<0||!table.valid){
         text(top,11,45,"REAL ECU DEFINITION",HIGHLIGHT,32);
         text(top,11,64,"MAPS AND CURVES",WHITE,32);
@@ -421,6 +513,30 @@ static void map_top(void){
     const BtMap*m=selected_map();if(!m)return;
     map_live_trace(m);
     text(top,11,31,m->label,HIGHLIGHT,27);
+    if(chosen_map==BTS_MAX_MAPS && table.width==1 && table.height==1){
+        const BtField *f=focused_cal_field();
+        text(top,11,53,f&&f->kind==2?"INI PREDEFINED SELECTION":"INI NUMERIC SCALAR",CYAN,28);
+        char val[52];number(focused_value(),val,sizeof(val));
+        text(top,11,82,val,WHITE,20);
+        if(f&&f->kind==2){
+            int index=(int)focused_value();
+            if(index>=0&&index<bit_choice_count&&bit_choice_labels[index][0])
+                text_wrapped(top,11,109,bit_choice_labels[index],HIGHLIGHT,26,2);
+            else text(top,11,109,"OPTION NAME UNAVAILABLE",RED,26);
+        }else if(f){
+            text(top,11,108,f->unit,CYAN,27);
+            if(f->limits_known){
+                snprintf(val,sizeof(val),"INI RANGE %.4g TO %.4g",f->low,f->high);
+                text(top,11,132,val,MUTED,27);
+            }
+        }
+        text(top,11,168,editor_readonly?"INI READ ONLY":"ECU VALUE / STAGED EDIT",MUTED,26);
+        return;
+    }
+    if(m->curve)text(top,145,31,"INI CURVE",CYAN,12);
+    if(map_focus){
+        text(top,11,43,map_focus==1?"X AXIS SELECTED":"Y AXIS SELECTED",CYAN,30);
+    }
     int cols=table.width<5?table.width:5,rows=table.height<5?table.height:5;
     int left=cx-cols/2,above=cy-rows/2;
     if(left<0)left=0;
@@ -482,50 +598,138 @@ static void open_dialog(const char*id,const char*label){
     }
     snprintf(dialog_name,sizeof(dialog_name),"%s",id);
     snprintf(dialog_label,sizeof(dialog_label),"%s",label);
-    dialog_pick=dialog_scroll=0;dialog_value_ok=false;
+    dialog_pick=dialog_scroll=0;dialog_info=false;
+    dialog_help_index=-1;dialog_help_page=0;
+}
+static bool open_ini_field(const char *target,const char *label,bool readonly){
+    const BtField *f=bt_field(&def,target,false);
+    if(!f||bt_type_size(f->type)<1||f->width*f->height<1||
+       f->width*f->height>BTS_MAP_CELLS)return false;
+    bit_choice_count=0;
+    if(f->kind==2&&sd_ready)
+        bit_choice_count=bt_bit_choices(bt_sd_cache_path(),f->name,bit_choice_labels,BTS_DSI_CHOICE_CAP);
+    memset(&scalar_map,0,sizeof(scalar_map));
+    snprintf(scalar_map.label,sizeof(scalar_map.label),"%s",label&&*label?label:f->name);
+    snprintf(scalar_map.z,sizeof(scalar_map.z),"%s",f->name);
+    editor_readonly=readonly||f->read_only||(f->kind==2&&!bit_choice_count);
+    bit_picker_open=false;
+    open_map(BTS_MAX_MAPS);
+    if(f->kind==2&&!bit_choice_count)
+        snprintf(note,sizeof(note),"INI OPTIONS UNRESOLVED / READ ONLY");
+    return true;
+}
+static void goto_page(int next);
+static void open_ini_graph(const char *id){
+    int index=-1;
+    for(int i=0;i<def.graph_count;i++)if(!strcasecmp(def.graphs[i].name,id)){index=i;break;}
+    if(index<0){snprintf(note,sizeof(note),"INI GRAPH NOT DEFINED");return;}
+    const BtIniGraph *g=&def.graphs[index];
+    if(!g->line_count){snprintf(note,sizeof(note),"INI GRAPH HAS NO CHANNELS");return;}
+    for(int slot=0;slot<SLOTS;slot++){
+        int line=g->first_line+(slot%g->line_count);
+        const char *channel=def.graph_lines[line].channel;
+        snprintf(channel_names[slot],sizeof(channel_names[slot]),"%s",channel);
+        clear_history(slot);
+    }
+    snprintf(graph_from_dialog,sizeof(graph_from_dialog),"%s",dialog_name);
+    snprintf(graph_from_label,sizeof(graph_from_label),"%s",dialog_label);
+    graph_from_ini=true;active_ini_graph=index;active_ini_graph_line=0;
+    view_from_tree=true;
+    goto_page(P_GRAPH);
 }
 static void dialog_action(void){
     int index=dialog_at(dialog_pick);if(index<0||!ini_ok)return;
     const BtDialogRef*r=&def.refs[index];
-    if(r->kind==1){bts_sfx_play(bts_sound_for_entry(r->label,r->name),sd_ready);open_dialog(r->name,r->label);return;}
-    int target_map=map_for_target(r->name);
-    if(target_map>=0){open_map(target_map);return;}
-    const BtField*f=bt_field(&def,r->name,false);
-    dialog_value_ok=false;
-    snprintf(dialog_value_name,sizeof(dialog_value_name),"%s",r->name);
-    if(!f||!f->scaled||f->width*f->height<1||
-       f->width*f->height>BTS_MAP_CELLS){
-        snprintf(note,sizeof(note),"INI FIELD HAS NO NUMERIC ENCODING");return;
+    if(r->kind==6){open_ini_graph(r->name);return;}
+    if(r->kind==1){
+        /* Built-in TunerStudio panels are not a set of editable fields in
+         * the INI; do not invent controls for such a panel. */
+        int children=0;
+        for(int i=0;i<def.ref_count;i++)if(!strcasecmp(def.refs[i].owner,r->name))children++;
+        if(children){bts_sfx_play(bts_sound_for_entry(r->label,r->name),sd_ready);
+            open_dialog(r->name,r->label);}
+        else snprintf(note,sizeof(note),"TS BUILT-IN PANEL / NO INI CONTROLS");
+        return;
     }
-    bit_choice_count=0;
-    if(f->kind==2&&sd_ready)
-        bit_choice_count=bt_bit_choices(bt_sd_cache_path(),f->name,bit_choice_labels,32);
-    memset(&scalar_map,0,sizeof(scalar_map));
-    snprintf(scalar_map.label,sizeof(scalar_map.label),"%s",r->label);
-    snprintf(scalar_map.z,sizeof(scalar_map.z),"%s",f->name);
-    open_map(BTS_MAX_MAPS);
+    if(r->kind==2){
+        snprintf(note,sizeof(note),"INI COMMAND %s / NOT IMPLEMENTED",r->name);return;
+    }
+    if(r->kind==5){
+        snprintf(note,sizeof(note),"INI INFO: %.78s",r->label);return;
+    }
+    if(r->kind==4){
+        double v=0;
+        if(get_value(r->name,&v)){
+            char b[36];number(v,b,sizeof(b));
+            snprintf(note,sizeof(note),"%.45s: %.24s (LIVE)",r->name,b);
+        }else snprintf(note,sizeof(note),"LIVE CHANNEL NOT AVAILABLE: %.50s",r->name);
+        return;
+    }
+    int target_map=map_for_target(r->name);
+    if(target_map>=0){editor_readonly=r->kind==3;open_map(target_map);return;}
+    if(!open_ini_field(r->name,r->label,r->kind==3))
+        snprintf(note,sizeof(note),"INI CONTROL HAS NO SUPPORTED ECU TYPE");
 }
 static void top_dialog(void){
-    draw_header("ECU SETTINGS / READ");
-    text(top,10,35,dialog_label,HIGHLIGHT,33);
+    draw_header(dialog_info?"INI HELP / DETAILS":"ECU SETTINGS / INI PANEL");
     int at=dialog_at(dialog_pick);
-    if(at>=0){
-        const BtDialogRef*r=&def.refs[at];
-        text(top,10,65,r->label,WHITE,33);
-        text(top,10,85,r->name,MUTED,33);
-        const BtField*f=bt_field(&def,r->name,false);
-        if(dialog_value_ok&&!strcasecmp(dialog_value_name,r->name)){
-            char b[32];number(dialog_value,b,sizeof(b));
-            text(top,10,109,b,HIGHLIGHT,32);
-            if(f)text(top,10,127,f->unit,MUTED,32);
-        }else text(top,10,112,"A: READ ECU SCALAR",MUTED,33);
+    if(at<0){text(top,10,46,"EMPTY INI DIALOG",MUTED,26);return;}
+    const BtDialogRef*r=&def.refs[at];
+    text(top,10,31,dialog_label,HIGHLIGHT,29);
+    text(top,10,50,r->label,WHITE,27);
+    if(dialog_info){
+        if(dialog_help_index!=at){
+            dialog_context[0]=0;dialog_help_index=at;dialog_help_page=0;
+            if(sd_ready)bt_ini_context_help(bt_sd_cache_path(),r->name,dialog_context,sizeof(dialog_context));
+        }
+        text(top,10,69,"INI CONTROL IDENTIFIER",MUTED,26);
+        text_wrapped(top,10,84,r->name,CYAN,26,2);
+        if(dialog_context[0]){
+            text(top,10,112,"INI CONTEXT HELP  L/R: PAGE",MUTED,26);
+            /* Explicit paging rather than silently truncating paragraphs. */
+            const char *q=dialog_context;
+            int skip=dialog_help_page*3;
+            while(skip-- > 0 && *q){
+                int n=0,last=0;while(q[n]&&q[n]!='\n'&&n<26){if(q[n]==' ')last=n;n++;}
+                if(n==26&&q[n]&&q[n]!='\n'&&last>0)n=last;
+                q+=n;if(*q=='\n'||*q==' ')q++;
+            }
+            text_wrapped(top,10,128,q,WHITE,26,3);
+        }else if(r->detail[0]){
+            text(top,10,113,"DETAILS FROM INI",MUTED,25);
+            text_wrapped(top,10,128,r->detail,WHITE,26,3);
+        }else if(r->kind==5){
+            text_wrapped(top,10,113,r->label,WHITE,26,4);
+        }else if(r->condition[0]){
+            text(top,10,113,"INI CONDITION",MUTED,25);
+            text_wrapped(top,10,128,r->condition,WHITE,26,3);
+        }else text(top,10,132,"NO ADDITIONAL INI HELP",MUTED,26);
+        return;
     }
-    fill(top,10,147,236,1,EDGE);
-    text(top,10,158,"A: OPEN / EDIT SCALAR FIELD",MUTED,34);
-    if(note[0])text(top,10,177,note,HIGHLIGHT,34);
+    char b[70];
+    if(r->kind==1)snprintf(b,sizeof(b),"NESTED PANEL / %.46s",r->name);
+    else if(r->kind==2)snprintf(b,sizeof(b),"ECU COMMAND / %.46s",r->name);
+    else if(r->kind==3)snprintf(b,sizeof(b),"DISPLAY ONLY / %.46s",r->name);
+    else if(r->kind==4)snprintf(b,sizeof(b),"LIVE OUTPUT / %.46s",r->name);
+    else if(r->kind==6)snprintf(b,sizeof(b),"INI LIVE GRAPH / %.46s",r->name);
+    else if(r->kind==5)snprintf(b,sizeof(b),"INI INFORMATION");
+    else {
+        const BtField*f=bt_field(&def,r->name,false);
+        snprintf(b,sizeof(b),"%s / %.48s",f?(f->kind==2?"SELECTION":f->kind==1?"ARRAY":"VALUE"):"FIELD",r->name);
+    }
+    text(top,10,72,b,MUTED,28);
+    if(r->detail[0])text_wrapped(top,10,92,r->detail,CYAN,26,2);
+    else if(r->kind==5)text_wrapped(top,10,92,r->label,CYAN,26,2);
+    if(r->condition[0])text_wrapped(top,10,125,r->condition,MUTED,26,1);
+    if(r->kind==2)text(top,10,146,"COMMAND LISTED / NOT EXECUTED",HIGHLIGHT,26);
+    else if(r->kind==4){double v=0;
+        if(get_value(r->name,&v)){number(v,b,sizeof(b));text(top,10,145,b,GREEN,20);}
+        else text(top,10,145,"NO DECODED LIVE VALUE",MUTED,27);
+    }else text(top,10,146,"Y: INI DETAILS / A OPEN",HIGHLIGHT,28);
+    if(note[0])text(top,10,176,note,HIGHLIGHT,28);
 }
 static void top_tune(void){
-    if(chosen_map>=0&&table.valid){map_top();return;}
+    if(cal_load.active || (chosen_map>=0&&table.valid)){map_top();return;}
     if(dialog_name[0]){top_dialog();return;}
     draw_header("TUNERSTUDIO TREE");
     int count=category_count();
@@ -538,7 +742,14 @@ static void top_tune(void){
         nav_icon_mini(top,category_icon(def.menus[at].label),11,y);
         text(top,30,y+1,def.menus[at].label,selected?HIGHLIGHT:WHITE,27);
     }
-    if(tune_focus)text(top,9,182,"LOWER MENU ACTIVE",HIGHLIGHT,30);
+    if(tune_focus){
+        int ix=tune_item_at(list_pick);
+        if(ix>=0){
+            const BtMenu*m=&def.menus[ix];
+            text(top,9,172,m->target[0]?m->target:"INI FOLDER",CYAN,28);
+            if(m->condition[0])text(top,9,183,m->condition,MUTED,27);
+        }
+    }
 }
 static void top_graph(void){
     draw_header(graph_stats?"LIVE STATISTICS":"LIVE GRAPH");
@@ -603,17 +814,13 @@ static void top_link(void){
     else snprintf(b,sizeof(b),"HTTP %d   LIVE %dHZ ERR %d",last_http_status,measured_hz,live_errors);
     text(top,10,182,b,MUTED,34);
 }
-static void list_rows(int count,bool maps){
-    if(count<1){text(bottom,10,65,maps?"NO COMPATIBLE MAPS YET":"WAITING FOR ECU DEFINITION",MUTED,34);return;}
+static void list_rows(int count){
+    if(count<1){text(bottom,10,65,"NO ECU OUTPUT CHANNELS",MUTED,34);return;}
     for(int row=0;row<8&&list_scroll+row<count;row++){
         int ix=list_scroll+row,y=28+row*16;
         bool selected=ix==list_pick;
         if(selected)round_fill(bottom,6,y,244,15,3,PANEL);
-        if(maps){int id=map_from_row(ix);if(id>=0){
-                text(bottom,12,y+3,def.maps[id].label,selected?HIGHLIGHT:WHITE,32);
-                text(bottom,244,y+3,def.maps[id].curve?"C":"M",MUTED,1);
-            }}
-        else text(bottom,12,y+3,def.channels[ix].name,selected?HIGHLIGHT:WHITE,32);
+        text(bottom,12,y+3,def.channels[ix].name,selected?HIGHLIGHT:WHITE,32);
     }
 }
 static void bottom_keypad(void){
@@ -630,38 +837,88 @@ static void bottom_keypad(void){
     text(bottom,7,180,"A APPLY  /  B CANCEL",MUTED,29);
 }
 static void bottom_editor(void){
-        const BtMap*map=selected_map();if(!map)return;
-        char b[48];text(bottom,10,27,map->label,WHITE,29);
-        snprintf(b,sizeof(b),"CELL %d,%d  OF %d X %d",cx+1,cy+1,table.width,table.height);
-        text(bottom,10,46,b,MUTED,29);
-        number(table.cells[cy*table.width+cx],b,sizeof(b));
-        text(bottom,10,65,selected_map() && bt_field(&def,selected_map()->z,false) && bt_field(&def,selected_map()->z,false)->kind==2?"OPTION":"VALUE",MUTED,9);
-        text(bottom,66,65,b,HIGHLIGHT,18);
-        const BtField *edit_field=bt_field(&def,map->z,false);
-        if(edit_field&&edit_field->kind==2){
-            int option=(int)table.cells[cy*table.width+cx];
-            if(option>=0&&option<bit_choice_count)
-                text(bottom,10,104,bit_choice_labels[option],CYAN,25);
+    const BtMap *map=selected_map();if(!map)return;
+    const BtField *f=focused_cal_field();
+    char b[60];
+    bool option=f&&f->kind==2;
+    bool scalar=chosen_map==BTS_MAX_MAPS&&table.width==1&&table.height==1;
+    text(bottom,8,26,map->label,HIGHLIGHT,27);
+    text(bottom,226,26,is_favorite(chosen_map==BTS_MAX_MAPS?map->z:map->name)?"[*]":"[+]",HIGHLIGHT,3);
+    if(option){
+        int current=(int)focused_value();
+        snprintf(b,sizeof(b),"INI SELECTION / RAW %d",current);
+        text(bottom,9,48,b,MUTED,28);
+        if(bit_choice_count>0&&current>=0&&current<bit_choice_count&&bit_choice_labels[current][0]){
+            round_fill(bottom,9,72,237,30,5,LITE);
+            text(bottom,16,81,bit_choice_labels[current],WHITE,24);
+            text(bottom,9,110,"A OPTION LIST / X NEXT / Y PREV",CYAN,26);
+        }else text(bottom,9,76,"UNDEFINED INI CHOICE / READ ONLY",RED,26);
+    }else if(scalar){
+        number(focused_value(),b,sizeof(b));
+        text(bottom,9,52,"ECU CALIBRATION VALUE",MUTED,26);
+        text(bottom,14,73,b,WHITE,24);
+        text(bottom,151,79,f&&f->unit[0]?f->unit:"",MUTED,16);
+        if(f&&f->limits_known){
+            snprintf(b,sizeof(b),"LIMITS %.4g TO %.4g",f->low,f->high);
+            text(bottom,9,105,b,CYAN,27);
         }
-        char step[24];number(steps[step_index],step,sizeof(step));
-        snprintf(b,sizeof(b),"A: ENTER     STEP %s",step);
-        text(bottom,10,87,b,WHITE,29);
+    }else{
+        snprintf(b,sizeof(b),"CELL %d,%d / %d X %d",cx+1,cy+1,table.width,table.height);
+        text(bottom,10,49,b,MUTED,28);
+        number(focused_value(),b,sizeof(b));
+        text(bottom,12,73,b,WHITE,23);
         if(table.has_x){number(table.xbins[cx],b,sizeof(b));text(bottom,10,102,"X:",MUTED,2);text(bottom,31,102,b,WHITE,13);}
         if(table.has_y){number(table.ybins[cy],b,sizeof(b));text(bottom,135,102,"Y:",MUTED,2);text(bottom,156,102,b,WHITE,12);}
+    }
+    if(f&&f->power_cycle){
+        text(bottom,9,112,"ECU RESTART REQUIRED AFTER WRITE",HIGHLIGHT,30);
+    }
+    if(!option){
         static const char *actions[]={"-","+","STEP","TRACE"};
         for(int i=0;i<4;i++){
             int x=6+i*62;
             round_fill(bottom,x,120,57,26,4,i==1?LITE:PANEL);
             text(bottom,x+(57-(int)strlen(actions[i])*9)/2,127,actions[i],WHITE,5);
         }
-        if(note[0])text(bottom,8,152,note,HIGHLIGHT,29);
-        else text(bottom,8,152,table.dirty?"LOCAL EDIT / NOT WRITTEN":"ECU ORIGINAL / UNCHANGED",table.dirty?HIGHLIGHT:MUTED,29);
-        text(bottom,8,171,table.confirm_burn?"R AGAIN: BACKUP + VERIFY":"R TWICE: VERIFIED BURN",HIGHLIGHT,30);
-        return;
+    }else{
+        round_fill(bottom,9,120,115,26,4,PANEL);
+        round_fill(bottom,132,120,115,26,4,PANEL);
+        text(bottom,20,128,"< PREVIOUS",WHITE,12);text(bottom,140,128,"NEXT >",WHITE,12);
+    }
+    if(note[0])text(bottom,8,151,note,HIGHLIGHT,29);
+    else text(bottom,8,151,any_map_dirty()?"LOCAL EDIT / NOT WRITTEN":
+            editor_readonly?"INI DISPLAY ONLY":"ECU ORIGINAL / UNCHANGED",any_map_dirty()?HIGHLIGHT:MUTED,28);
+    text(bottom,8,171,editor_readonly?"READ ONLY / B BACK":
+         table.confirm_burn?"R AGAIN: BACKUP + VERIFY":"START STAR  R TWICE TO BURN",HIGHLIGHT,28);
+}
+static void bottom_bit_picker(void){
+    fill(bottom,0,0,W,H,BG);text(bottom,9,8,"INI DROPDOWN / PREDEFINED",HIGHLIGHT,26);
+    const BtField *f=focused_cal_field();
+    text(bottom,10,31,f?f->name:"ECU OPTIONS",HIGHLIGHT,27);
+    for(int row=0;row<7;row++){
+        int index=bit_picker_scroll+row;
+        if(index>=bit_choice_count)break;
+        int y=49+row*16;
+        bool chosen=index==bit_picker_pick;
+        if(chosen)round_fill(bottom,6,y-2,244,16,3,LITE);
+        char number[12];snprintf(number,sizeof(number),"%d",index);
+        text(bottom,10,y,number,MUTED,4);
+        text(bottom,49,y,bit_choice_labels[index][0]?bit_choice_labels[index]:"(INI RESERVED)",
+             bit_choice_labels[index][0]?(chosen?HIGHLIGHT:WHITE):MUTED,21);
+    }
+    text(bottom,9,172,"A SELECT    B CANCEL",MUTED,27);
 }
 static void bottom_tune(void){
+    if(cal_load.active){
+        text(bottom,9,39,"READING ACTUAL ECU DATA",HIGHLIGHT,28);
+        text(bottom,9,68,"THE UI REMAINS RESPONSIVE",WHITE,29);
+        text(bottom,9,100,"PLEASE CHECK THE UPPER SCREEN",MUTED,28);
+        text(bottom,9,149,"B CANCELS THE READ",HIGHLIGHT,29);
+        return;
+    }
     /* The active editor takes priority over its parent nested dialog. */
     if(keypad_open){bottom_keypad();return;}
+    if(bit_picker_open){bottom_bit_picker();return;}
     if(chosen_map>=0&&table.valid){
         bottom_editor();
         return;
@@ -675,9 +932,14 @@ static void bottom_tune(void){
             if(at<0)continue;
             bool sel=ix==dialog_pick;
             if(sel)round_fill(bottom,6,y,244,16,3,PANEL);
-            text(bottom,12,y+4,def.refs[at].label,sel?HIGHLIGHT:WHITE,31);
+            const BtDialogRef *r=&def.refs[at];
+            text(bottom,12,y+4,r->label,sel?HIGHLIGHT:WHITE,31);
+            if(is_favorite(r->name))text(bottom,228,y+3,"*",HIGHLIGHT,2);
+            if(r->kind==2)text(bottom,241,y+4,"!",CYAN,1);
+            if(r->kind==6)text(bottom,241,y+4,"G",CYAN,1);
+            if(r->kind==1)text(bottom,241,y+4,">",CYAN,1);
         }
-        text(bottom,9,150,"A: OPEN SETTING   B: BACK",MUTED,35);
+        text(bottom,9,150,"A OPEN X STAR Y HELP B BACK",MUTED,27);
         return;
     }
     int count=tune_item_count();
@@ -692,23 +954,37 @@ static void bottom_tune(void){
         if(selected)round_fill(bottom,6,y,244,16,3,PANEL);
         nav_icon_mini(bottom,category_icon(def.menus[idx].label),10,y+1);
         text(bottom,29,y+3,def.menus[idx].label,selected?HIGHLIGHT:WHITE,26);
+        if(def.menus[idx].target[0] && is_favorite(def.menus[idx].target))
+            text(bottom,224,y+3,"*",HIGHLIGHT,2);
         if(def.menus[idx].group==1)text(bottom,240,y+4,">",CYAN,1);
         else if(map_for_target(def.menus[idx].target)>=0)text(bottom,240,y+4,"M",CYAN,1);
     }
-    text(bottom,9,150,tune_focus?"A: OPEN   B: CATEGORIES":"UP/DOWN: CATEGORY   A: MENU",MUTED,35);
+    text(bottom,9,150,tune_focus?"A OPEN  X FAVORITE  B BACK":"UP/DOWN: CATEGORY   A: MENU",MUTED,30);
+    if(note[0])text(bottom,9,170,note,HIGHLIGHT,28);
 }
 /* 3DS layout parity: workspace launcher is a vertical icon-left list.
  * The upper screen remains exclusively the live dashboard. */
+static void bottom_favorites(void){
+    text(bottom,8,28,"STARRED TUNING SETTINGS",HIGHLIGHT,27);
+    if(!favorite_count)text(bottom,9,79,"PRESS X ON A TUNING SETTING",MUTED,27);
+    for(int r=0;r<7&&list_scroll+r<favorite_count;r++){
+        int i=list_scroll+r,y=47+r*17;
+        if(i==list_pick)round_fill(bottom,6,y,244,16,3,PANEL);
+        text(bottom,10,y+3,favorites[i].label,i==list_pick?HIGHLIGHT:WHITE,26);
+        text(bottom,228,y+3,"*",HIGHLIGHT,2);
+    }
+    text(bottom,9,174,"A OPEN   X REMOVE   B HOME",MUTED,28);
+}
 static void bottom_home(void){
     text(bottom,8,5,"BRICK TUNER / WORKSPACES",HIGHLIGHT,26);
-    for(int i=0;i<6;i++){
-        int y=27+i*24;
+    for(int i=0;i<4;i++){
+        int y=27+i*32;
         bool selected=home_pick==i;
-        round_fill(bottom,6,y,244,22,4,selected?LITE:PANEL);
-        if(selected)fill(bottom,7,y+4,3,14,HIGHLIGHT);
-        nav_icon_mini(bottom,home_icons[i],14,y+4);
-        text(bottom,34,y+4,home_labels[i],selected?WHITE:MUTED,23);
-        text(bottom,237,y+4,">",selected?HIGHLIGHT:EDGE,1);
+        round_fill(bottom,6,y,244,29,4,selected?LITE:PANEL);
+        if(selected)fill(bottom,7,y+6,3,17,HIGHLIGHT);
+        nav_icon_mini(bottom,home_icons[i],14,y+7);
+        text(bottom,34,y+9,home_labels[i],selected?WHITE:MUTED,23);
+        text(bottom,237,y+9,">",selected?HIGHLIGHT:EDGE,1);
     }
     text(bottom,9,175,"UP/DOWN  A OPEN  L/R GAUGES",HIGHLIGHT,27);
 }
@@ -804,20 +1080,27 @@ static void render(void){
      * remain accessible throughout the status/INI/live network phases. */
     if(page==P_HOME)top_dashboard();
     else if(page==P_TUNE)top_tune();
-    else if(page==P_MAPS)map_top();
     else if(page==P_LIVE)top_channels();
     else if(page==P_GRAPH)top_graph();
     else if(page==P_SOUNDS)top_sounds();
+    else if(page==P_FAV && (cal_load.active||(chosen_map>=0&&table.valid)))map_top();
+    else if(page==P_FAV){
+        draw_header("FAVORITE ECU SETTINGS");
+        text(top,11,44,"QUICK ACCESS TO INI SETTINGS",HIGHLIGHT,27);
+        text(top,11,75,"SAME EDITORS AS THE TUNING TREE",WHITE,27);
+        text(top,11,104,"X: REMOVE SELECTED FAVORITE",MUTED,27);
+        text(top,11,133,"FAVORITES SAVED ON SD PER ECU",MUTED,27);
+    }
     else top_link();
     fill(bottom,0,0,W,H,BG);fill(bottom,0,0,W,23,PANEL);fill(bottom,0,22,W,1,EDGE);
     if(page!=P_HOME){text(bottom,9,6,"< HOME",HIGHLIGHT,6);text(bottom,94,6,tabs[page],WHITE,18);}
     if(idle_dashboard)bottom_idle_gauges();
     else if(page==P_HOME)bottom_home();
     else if(page==P_TUNE)bottom_tune();
-    else if(page==P_MAPS){if(chosen_map>=0&&table.valid)bottom_tune();else list_rows(map_count,true);}
-    else if(page==P_LIVE)list_rows(def.channel_count,false);
+    else if(page==P_LIVE)list_rows(def.channel_count);
     else if(page==P_GRAPH)bottom_graph();
     else if(page==P_SOUNDS)bottom_sounds();
+    else if(page==P_FAV){if(cal_load.active||(chosen_map>=0&&table.valid)||keypad_open)bottom_tune();else bottom_favorites();}
     else bottom_link();
     if((loading_ini||loading_cache) && page!=P_LINK){
         char b[42];size_t bytes=loading_cache?bt_cache_bytes():bt_async_bytes();
@@ -987,6 +1270,7 @@ static int live_length(void){
     return length;
 }
 static void service_network(void){
+    if(cal_load.active){calibration_service();return;}
     if(loading_cache){
         /* Cache parsing is a one-time fallback, never the steady-state
          * launch path. Process a few KB per frame without blocking touch. */
@@ -1066,75 +1350,243 @@ static void service_network(void){
         }else last_socket_begin_frame=frame;
     }
 }
+static void favorite_current_editor(void){
+    const BtMap *m=selected_map();
+    if(!m)return;
+    toggle_favorite(chosen_map==BTS_MAX_MAPS?m->z:m->name,m->label);
+}
 static void open_map(int id){
     if(id<0||(id>=def.map_count&&id!=BTS_MAX_MAPS)||!ini_ok)return;
-    const BtMap*m=id==BTS_MAX_MAPS?&scalar_map:&def.maps[id];
-    const BtField*z=bt_field(&def,m->z,false);
-    if(!z||!z->scaled||z->width*z->height>BTS_MAP_CELLS){
-        snprintf(note,sizeof(note),"MAP TYPE UNSUPPORTED");return;
+    const BtMap *m=id==BTS_MAX_MAPS?&scalar_map:&def.maps[id];
+    const BtField *z=bt_field(&def,m->z,false);
+    int size=z?bt_type_size(z->type):0;
+    if(!z||size<1||z->page<1||z->page>64||z->width<1||z->height<1||
+       z->width*z->height>BTS_MAP_CELLS){
+        snprintf(note,sizeof(note),"INI FIELD ADDRESS / TYPE UNSUPPORTED");return;
     }
+    int bytes=size*z->width*z->height;
+    if(bytes<1||bytes>(int)sizeof(table.baseline)){
+        snprintf(note,sizeof(note),"INI CALIBRATION EXCEEDS DS RAM BUDGET");return;
+    }
+    /* Select the workspace immediately. Do not perform blocking socket I/O
+     * in a D-pad or touchscreen handler. Only the calibration R worker reads. */
+    bt_async_cancel();
     memset(&table,0,sizeof(table));
-    table.width=z->width;table.height=z->height;
-    table.raw_length=bt_type_size(z->type)*z->width*z->height;
-    /* Don't overlap the intentional synchronous ECU read with a live poll. */
-    bt_async_cancel();bt_async_forget_connection();
-    snprintf(status_msg,sizeof(status_msg),"READING ORIGINAL ECU MAP");render();swiWaitForVBlank();present();
-    if(table.raw_length<1||table.raw_length>(int)sizeof(table.baseline)||
-       !bt_read_raw(&def,z,table.baseline,sizeof(table.baseline))){
-        snprintf(status_msg,sizeof(status_msg),"ECU MAP READ FAILED");return;
-    }
-    memcpy(table.edited,table.baseline,(size_t)table.raw_length);
-    BtField rel=*z;rel.offset=0;
-    for(int i=0;i<z->width*z->height;i++){
-        if(!bt_field_value(&def,&rel,table.baseline,table.raw_length,i,&table.cells[i])){
-            snprintf(status_msg,sizeof(status_msg),"INI FIELD SCALING UNSUPPORTED");return;
-        }
-    }
-    const BtField*x=bt_field(&def,m->x,false),*y=bt_field(&def,m->y,false);
-    if(x&&x->scaled&&x->width*x->height>=z->width&&x->width*x->height<=64){
-        table.has_x=bt_read_field(&def,x,table.xbins,64);
-        if(table.has_x)table.x_count=x->width*x->height;
-    }
-    if(y&&y->scaled&&y->width*y->height>=z->height&&y->width*y->height<=64){
-        table.has_y=bt_read_field(&def,y,table.ybins,64);
-        if(table.has_y)table.y_count=y->width*y->height;
-    }
-    chosen_map=id;cx=cy=0;table.valid=true;abandon_confirm=false;
+    memset(&cal_load,0,sizeof(cal_load));
+    table.width=z->width;table.height=z->height;table.raw_length=bytes;
+    editor_readonly=editor_readonly||z->read_only;
+    chosen_map=id;cx=cy=0;map_focus=0;abandon_confirm=false;keypad_open=false;bit_picker_open=false;
+    cal_load.active=true;cal_load.stage=0;cal_load.total=bytes;cal_load.map_id=id;
+    snprintf(status_msg,sizeof(status_msg),"READING ECU CALIBRATION");
+    snprintf(note,sizeof(note),"READING %s FROM ECU",m->label);
 }
+static const BtField *cal_stage_field(void){
+    const BtMap *m=selected_map();
+    if(!m)return NULL;
+    return bt_field(&def,cal_load.stage==0?m->z:
+                    cal_load.stage==1?m->x:m->y,false);
+}
+static void cal_load_fail(const char *why){
+    cal_load.active=false;bt_async_cancel();
+    chosen_map=-1;table.valid=false;
+    snprintf(status_msg,sizeof(status_msg),"CALIBRATION READ FAILED");
+    snprintf(note,sizeof(note),"READ FAILED: %.76s",why?why:"NO ECU DATA");
+}
+static void cal_stage_complete(void){
+    const BtField *f=cal_stage_field();
+    if(cal_load.stage==0){
+        if(!f){cal_load_fail("INI FIELD DISAPPEARED");return;}
+        memcpy(table.edited,table.baseline,(size_t)table.raw_length);
+        BtField relative=*f;relative.offset=0;
+        /* A conditional/macro INI formula cannot safely be invented. Such
+         * fields are viewable in raw units but editing stays disabled. */
+        if(!relative.scaled){relative.scaled=true;relative.scale=1;relative.translate=0;}
+        for(int i=0;i<table.width*table.height;i++){
+            if(!bt_field_value(&def,&relative,table.baseline,table.raw_length,i,&table.cells[i])){
+                cal_load_fail("ECU BYTES OR INI REPRESENTATION INVALID");return;
+            }
+        }
+    }else if(f&&f->scaled){
+        BtField relative=*f;relative.offset=0;
+        int count=f->width*f->height;
+        double *axis=cal_load.stage==1?table.xbins:table.ybins;
+        bool valid=count>0&&count<=64;
+        for(int i=0;i<count&&valid;i++)
+            valid=bt_field_value(&def,&relative,cal_load.axis_raw,cal_load.total,i,&axis[i]);
+        if(valid){
+            int axis_index=cal_load.stage-1;
+            memcpy(table.axis_baseline[axis_index],cal_load.axis_raw,(size_t)cal_load.total);
+            memcpy(table.axis_edited[axis_index],cal_load.axis_raw,(size_t)cal_load.total);
+            table.axis_length[axis_index]=cal_load.total;
+        }
+        if(cal_load.stage==1){table.has_x=valid;table.x_count=valid?count:0;}
+        else {table.has_y=valid;table.y_count=valid?count:0;}
+    }
+    cal_load.stage++;
+    cal_load.offset=0;cal_load.total=0;
+    if(cal_load.stage>=3){
+        cal_load.active=false;table.valid=true;
+        const BtField *z=bt_field(&def,selected_map()->z,false);
+        snprintf(status_msg,sizeof(status_msg),"ECU CALIBRATION READ COMPLETE");
+        snprintf(note,sizeof(note),"%s",z&&z->scaled?
+            "ECU VALUES LOADED / EDIT LOCALLY":"RAW VIEW ONLY / INI FORMULA NOT DECODED");
+    }
+}
+static void cal_skip_optional_axis(const char *cause){
+    /* A broken/unavailable X/Y-axis read must not lock out a perfectly valid
+     * Z table; retain its calibrated ECU data and disable only that axis. */
+    if(cal_load.stage==0){cal_load_fail(cause);return;}
+    bt_async_cancel();
+    cal_load.stage++;cal_load.offset=0;cal_load.total=0;
+    snprintf(note,sizeof(note),"AXIS READ SKIPPED: %.64s",cause?cause:"UNAVAILABLE");
+    if(cal_load.stage>=3){
+        cal_load.active=false;table.valid=true;
+        snprintf(status_msg,sizeof(status_msg),"ECU MAP READY / AXIS UNAVAILABLE");
+    }
+}
+static void calibration_service(void){
+    if(!cal_load.active)return;
+    if(!wifi_up||!ecu_up){cal_load_fail("ECU NETWORK NOT READY");return;}
+    if(bt_async_busy()){
+        int result=0;
+        for(int n=0;n<4&&result==0;n++)result=bt_async_poll(frame);
+        if(result==0)return;
+        if(result<0){
+            char error[92];
+            const char *reason=bt_async_reject_body();
+            if(reason[0])snprintf(error,sizeof(error),"HTTP %d: %.65s",bt_async_http_status(),reason);
+            else snprintf(error,sizeof(error),"%.90s",bt_async_error());
+            if(cal_load.stage>0)cal_skip_optional_axis(error);
+            else cal_load_fail(error);
+            return;
+        }
+        uint8_t bytes[256];
+        if(!bt_async_cal_read_result(bytes,cal_load.chunk)){
+            cal_skip_optional_axis("BRICKOS R RESPONSE INVALID / ECU STATUS");return;
+        }
+        uint8_t *destination=cal_load.stage==0?table.baseline:cal_load.axis_raw;
+        memcpy(destination+cal_load.offset,bytes,(size_t)cal_load.chunk);
+        cal_load.offset+=cal_load.chunk;
+        bt_async_cancel();
+        if(cal_load.offset>=cal_load.total)cal_stage_complete();
+        return;
+    }
+    /* Stage 0 is mandatory Z; X/Y are optional and never block the editor. */
+    while(cal_load.active&&cal_load.total==0){
+        const BtField *f=cal_stage_field();
+        int count=f?f->width*f->height:0;
+        int size=f?bt_type_size(f->type):0;
+        const BtField *z=bt_field(&def,selected_map()->z,false);
+        bool optional=cal_load.stage>0;
+        int required=cal_load.stage==1?table.width:table.height;
+        bool usable=f&&size>0&&f->page>=1&&f->page<=64&&count>0&&
+            (!optional || (f->scaled&&count>=required&&count<=64&&size*count<=512));
+        if(!usable){
+            if(optional){cal_load.stage++;if(cal_load.stage>=3){
+                cal_load.active=false;table.valid=true;
+                snprintf(note,sizeof(note),"%s",z&&z->scaled?
+                   "ECU VALUES LOADED / EDIT LOCALLY":"RAW VIEW / INI FORMULA UNRESOLVED");
+                snprintf(status_msg,sizeof(status_msg),"ECU CALIBRATION READY");
+            }continue;}
+            cal_load_fail("INVALID ECU Z CALIBRATION DEFINITION");return;
+        }
+        cal_load.total=count*size;
+        cal_load.offset=0;
+    }
+    if(!cal_load.active)return;
+    const BtField *f=cal_stage_field();
+    int id=f->page<=def.page_count?def.page_ids[f->page-1]:(f->page-1)<<8;
+    if(id<0||id>65535||f->offset<0||f->offset+cal_load.total>65536){
+        if(cal_load.stage>0){cal_load.stage++;cal_load.total=0;return;}
+        cal_load_fail("ECU PAGE ID OR OFFSET INVALID");return;
+    }
+    cal_load.chunk=cal_load.total-cal_load.offset;
+    if(cal_load.chunk>256)cal_load.chunk=256;
+    if(!bt_async_begin_cal_read(id,f->offset+cal_load.offset,cal_load.chunk,frame)){
+        char error[92];snprintf(error,sizeof(error),"%.90s",bt_async_error());
+        if(cal_load.stage>0)cal_skip_optional_axis(error[0]?error:"NO AXIS DATA");
+        else cal_load_fail(error[0]?error:"COULD NOT START ECU R REQUEST");
+    }
+}
+static const BtField *focused_cal_field(void){
+    const BtMap *m=selected_map();
+    if(!m)return NULL;
+    if(map_focus==1&&table.has_x)return bt_field(&def,m->x,false);
+    if(map_focus==2&&table.has_y)return bt_field(&def,m->y,false);
+    return bt_field(&def,m->z,false);
+}
+static int focused_cell(void){return map_focus==1?cx:map_focus==2?cy:cy*table.width+cx;}
+static double focused_value(void){
+    if(map_focus==1&&table.has_x)return table.xbins[cx];
+    if(map_focus==2&&table.has_y)return table.ybins[cy];
+    return table.cells[cy*table.width+cx];
+}
+static bool focused_buffers(const BtField **field,uint8_t **baseline,
+                            uint8_t **edited,int *length,int *cell){
+    if(!table.valid||chosen_map<0)return false;
+    const BtField *f=focused_cal_field();
+    if(!f)return false;
+    if(map_focus){
+        int axis=map_focus-1;
+        if(!table.axis_length[axis])return false;
+        *baseline=table.axis_baseline[axis];*edited=table.axis_edited[axis];
+        *length=table.axis_length[axis];
+    }else{
+        *baseline=table.baseline;*edited=table.edited;*length=table.raw_length;
+    }
+    *field=f;*cell=focused_cell();return true;
+}
+static bool any_map_dirty(void){
+    return table.dirty||table.axis_dirty[0]||table.axis_dirty[1];
+}
+/* Staged axes, table and scalars have the SAME write gates but independent
+ * EEPROM/flash byte ranges. Each committed field is verified on its own. */
 /* All keypad and +/- edits pass through the same INI-scaled encoder.
  * This only changes the local staged buffer, never ECU memory. */
 static bool set_map_cell(double value){
-    if(chosen_map<0||!table.valid||!ini_ok||!isfinite(value))return false;
-    const BtMap *m=selected_map();if(!m)return false;
-    const BtField *z=bt_field(&def,m->z,false);
-    if(!z||!z->scaled){snprintf(note,sizeof(note),"INI SCALING NOT SUPPORTED");return false;}
-    if(z->kind==2&&bit_choice_count>0){
+    if(chosen_map<0||!table.valid||!ini_ok||!isfinite(value)||editor_readonly)return false;
+    const BtMap *m=selected_map();
+    if(m && ((map_focus==1&&m->x_readonly)||(map_focus==2&&m->y_readonly))){
+        snprintf(note,sizeof(note),"ECU INI MARKS AXIS READ ONLY");return false;
+    }
+    const BtField *z=focused_cal_field();
+    if(!z||!z->scaled){snprintf(note,sizeof(note),"INI SCALING UNAVAILABLE / READ ONLY");return false;}
+    if(map_focus==0&&z->kind==2&&bit_choice_count==0){
+        snprintf(note,sizeof(note),"INI OPTIONS NOT AVAILABLE / READ ONLY");return false;
+    }
+    if(map_focus==0&&z->kind==2&&bit_choice_count>0){
         int choice=(int)value;
         if(value!=floor(value)||choice<0||choice>=bit_choice_count||!bit_choice_labels[choice][0]){
             snprintf(note,sizeof(note),"CHOICE NOT DEFINED BY ECU INI");return false;
         }
     }
-    int cell=cy*table.width+cx,size=bt_type_size(z->type);
-    if(size<1||size>8||cell<0||cell>=BTS_MAP_CELLS||cell*size+size>table.raw_length)return false;
-    BtField rel=*z;rel.offset=0;
-    uint8_t previous[8];memcpy(previous,table.edited+cell*size,(size_t)size);
-    if(!bt_encode_value(&def,&rel,table.edited,table.raw_length,cell,value)||
-       !bt_field_value(&def,&rel,table.edited,table.raw_length,cell,&value)){
-        memcpy(table.edited+cell*size,previous,(size_t)size);
+    const BtField *field=NULL;
+    uint8_t *baseline=NULL,*edited=NULL;
+    int length=0,cell=0;
+    if(!focused_buffers(&field,&baseline,&edited,&length,&cell))return false;
+    int size=bt_type_size(field->type);
+    if(size<1||size>8||cell<0||cell*size+size>length)return false;
+    BtField rel=*field;rel.offset=0;
+    uint8_t previous[8];memcpy(previous,edited+cell*size,(size_t)size);
+    if(!bt_encode_value(&def,&rel,edited,length,cell,value)||
+       !bt_field_value(&def,&rel,edited,length,cell,&value)){
+        memcpy(edited+cell*size,previous,(size_t)size);
         snprintf(note,sizeof(note),"VALUE OUTSIDE ECU INI LIMITS");return false;
     }
-    table.cells[cell]=value;
-    table.dirty=memcmp(table.edited,table.baseline,(size_t)table.raw_length)!=0;
+    if(map_focus==1)table.xbins[cx]=value;
+    else if(map_focus==2)table.ybins[cy]=value;
+    else table.cells[cell]=value;
+    if(map_focus==0)table.dirty=memcmp(edited,baseline,(size_t)length)!=0;
+    else table.axis_dirty[map_focus-1]=memcmp(edited,baseline,(size_t)length)!=0;
     table.confirm_burn=false;abandon_confirm=false;note[0]=0;
     return true;
 }
 static void change_map_cell(int direction){
-    if(chosen_map<0||!table.valid)return;
-    const BtMap *m=selected_map();if(!m)return;
-    const BtField *z=bt_field(&def,m->z,false);if(!z)return;
+    if(chosen_map<0||!table.valid||editor_readonly)return;
+    const BtField *z=focused_cal_field();if(!z)return;
     double delta=z->kind==2?1.0:steps[step_index];
     if(fabs(z->scale)>delta)delta=fabs(z->scale);
-    double next=table.cells[cy*table.width+cx]+delta*direction;
+    double next=focused_value()+delta*direction;
     if(z->kind==2&&bit_choice_count>0){
         for(int attempt=0;attempt<bit_choice_count;attempt++){
             int index=(int)next;
@@ -1144,9 +1596,22 @@ static void change_map_cell(int direction){
     }
     (void)set_map_cell(next);
 }
+static void bit_picker_show(void){
+    if(chosen_map<0||!table.valid||editor_readonly||!bit_choice_count)return;
+    const BtField *z=focused_cal_field();
+    if(!z||z->kind!=2||map_focus!=0)return;
+    int current=(int)focused_value();
+    if(current<0||current>=bit_choice_count)current=0;
+    bit_picker_pick=current;
+    bit_picker_scroll=current>3?current-3:0;
+    bit_picker_open=true;
+}
 static void keypad_begin(void){
-    if(!table.valid||chosen_map<0)return;
-    snprintf(keypad_input,sizeof(keypad_input),"%.8g",table.cells[cy*table.width+cx]);
+    if(!table.valid||chosen_map<0||editor_readonly)return;
+    const BtField *z=focused_cal_field();
+    if(z&&z->kind==2){bit_picker_show();return;}
+    if(!z||!z->scaled){snprintf(note,sizeof(note),"INI EXPRESSION NOT DECODABLE / READ ONLY");return;}
+    snprintf(keypad_input,sizeof(keypad_input),"%.8g",focused_value());
     keypad_open=true;
 }
 static void keypad_apply(void){
@@ -1176,63 +1641,111 @@ static void keypad_key(int key){
     }
 }
 static void commit_map(void){
-    if(!table.dirty||!selected_map()||!ini_ok){snprintf(note,sizeof(note),"NO PENDING MAP EDITS");return;}
+    if(editor_readonly){snprintf(note,sizeof(note),"INI DISPLAY ONLY / WRITE BLOCKED");return;}
+    const BtMap *map=selected_map();
+    if(map && ((map_focus==1&&map->x_readonly)||(map_focus==2&&map->y_readonly))){
+        snprintf(note,sizeof(note),"ECU INI AXIS READ ONLY / WRITE BLOCKED");return;
+    }
+    if(!any_map_dirty()||!selected_map()||!ini_ok){
+        snprintf(note,sizeof(note),"NO PENDING CALIBRATION EDITS");return;
+    }
+    const BtField *field=NULL;
+    uint8_t *baseline=NULL,*edited=NULL;
+    int length=0,cell=0;
+    if(!focused_buffers(&field,&baseline,&edited,&length,&cell)||!field||!field->scaled){
+        snprintf(note,sizeof(note),"INI SCALE UNKNOWN / ECU WRITE BLOCKED");return;
+    }
+    if(!memcmp(baseline,edited,(size_t)length)){
+        snprintf(note,sizeof(note),"SELECT YOUR EDITED Z/X/Y FIELD FIRST");return;
+    }
     if(!table.confirm_burn){table.confirm_burn=true;
         snprintf(note,sizeof(note),"R AGAIN: BENCH ONLY / BACKUP / BURN");return;}
     table.confirm_burn=false;
-    bt_async_cancel();bt_async_forget_connection(); /* Write path owns transport. */
-    const BtMap*m=selected_map();if(!m)return;
-    const BtField*z=bt_field(&def,m->z,false);
-    if(!z){snprintf(note,sizeof(note),"INI FIELD LOST / NO WRITE");return;}
-    snprintf(status_msg,sizeof(status_msg),"VERIFYING ECU / WRITING BENCH ONLY");render();swiWaitForVBlank();present();
-    if(bt_commit_field(&def,z,table.baseline,table.edited,table.raw_length,note,sizeof(note))){
-        memcpy(table.baseline,table.edited,(size_t)table.raw_length);
-        table.dirty=false;snprintf(status_msg,sizeof(status_msg),"ECU BURN VERIFIED");
+    bt_async_cancel();bt_async_forget_connection();
+    snprintf(status_msg,sizeof(status_msg),"VERIFYING ECU / WRITING BENCH ONLY");
+    render();swiWaitForVBlank();present();
+    if(bt_commit_field(&def,field,baseline,edited,length,note,sizeof(note))){
+        memcpy(baseline,edited,(size_t)length);
+        if(map_focus==0)table.dirty=false;
+        else table.axis_dirty[map_focus-1]=false;
+        snprintf(status_msg,sizeof(status_msg),"ECU BURN VERIFIED");
     }else snprintf(status_msg,sizeof(status_msg),"WRITE REFUSED / SEE LOWER SCREEN");
 }
 static void goto_page(int next){
     if(next<0||next>=P_COUNT)return;
-    page=next;chosen_map=-1;table.valid=false;bit_choice_count=0;list_pick=list_scroll=0;
+    page=next;chosen_map=-1;table.valid=false;map_focus=0;bit_picker_open=false;bit_choice_count=0;list_pick=list_scroll=0;editor_readonly=false;
     keypad_open=false;
     activity_frame=frame;idle_dashboard=false;
-    dialog_name[0]=0;dialog_value_ok=false;note[0]=0;dialog_depth=0;
+    dialog_name[0]=0;note[0]=0;dialog_depth=0;
     tune_focus=0;tune_group=-1;
 }
 static void navigate(int direction){
-    int count=page==P_LIVE?def.channel_count:page==P_MAPS?map_count:tune_item_count();
+    int count=page==P_LIVE?def.channel_count:page==P_FAV?favorite_count:tune_item_count();
     if(count<=0)return;
     list_pick+=direction;if(list_pick<0)list_pick=0;if(list_pick>=count)list_pick=count-1;
     if(list_pick<list_scroll)list_scroll=list_pick;
-    int visible=page==P_TUNE?6:8;
+    int visible=page==P_TUNE?6:page==P_FAV?7:8;
     if(list_pick>=list_scroll+visible)list_scroll=list_pick-visible+1;
+}
+static bool is_ini_view_target(const char *target,const char *label){
+    if(!target||!label)return false;
+    return !strcasecmp(target,"std_realtime")||
+           !strcasecmp(target,"std_dashboard")||
+           !strcasecmp(target,"std_outputChannels")||
+           !strcasecmp(target,"std_outputChannel")||
+           !strcasecmp(target,"std_realtimeDisplay")||
+           !strcasecmp(target,"std_runtime")||
+           !strcasecmp(target,"std_liveGraph");
+}
+static void open_target(const char *target,const char *label,bool from_view){
+    if(!target||!*target)return;
+    int map=map_for_target(target);
+    if(map>=0){editor_readonly=false;open_map(map);return;}
+    for(int i=0;i<def.ref_count;i++)if(!strcasecmp(target,def.refs[i].owner)){
+        open_dialog(target,label);note[0]=0;return;
+    }
+    if(open_ini_field(target,label,false))return;
+    if(is_ini_view_target(target,label) && from_view){
+        graph_from_ini=false;active_ini_graph=-1;
+        view_from_tree=true;goto_page(P_LIVE);return;
+    }
+    snprintf(note,sizeof(note),"INI TARGET %.39s / UNSUPPORTED",target);
 }
 static void open_tune_item(void){
     int id=tune_item_at(list_pick);if(id<0)return;
     const BtMenu*m=&def.menus[id];
     bts_sfx_play(bts_sound_for_entry(m->label,m->target),sd_ready);
     if(m->group==1){tune_group=id;list_pick=list_scroll=0;return;}
-    int map=map_for_target(m->target);
-    if(map>=0){open_map(map);return;}
-    for(int i=0;i<def.ref_count;i++)if(!strcasecmp(m->target,def.refs[i].owner)){
-        open_dialog(m->target,m->label);note[0]=0;return;
-    }
-    /* Some valid INI menus link directly to a scalar or array constant,
-     * without an intermediate dialog. Do not discard these tunable fields. */
-    const BtField *field=bt_field(&def,m->target,false);
-    if(field&&field->scaled&&field->width*field->height>0&&
-       field->width*field->height<=BTS_MAP_CELLS){
-        bit_choice_count=0;
-        if(field->kind==2&&sd_ready)
-            bit_choice_count=bt_bit_choices(bt_sd_cache_path(),field->name,bit_choice_labels,32);
-        memset(&scalar_map,0,sizeof(scalar_map));
-        snprintf(scalar_map.label,sizeof(scalar_map.label),"%s",m->label);
-        snprintf(scalar_map.z,sizeof(scalar_map.z),"%s",field->name);
-        open_map(BTS_MAX_MAPS);
-        return;
-    }
-    snprintf(note,sizeof(note),"%.32s / NO EDITABLE FIELD",m->label);
+    int cat=category_at(tune_cat);
+    bool from_view=cat>=0&&!strcasecmp(def.menus[cat].label,"View");
+    open_target(m->target,m->label,from_view);
 }
 static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
+    if(cal_load.active){
+        if(down&KEY_B){cal_load.active=false;bt_async_cancel();chosen_map=-1;
+            snprintf(note,sizeof(note),"ECU READ CANCELLED");}
+        return;
+    }
+    if(bit_picker_open){
+        if(down&KEY_B){bit_picker_open=false;return;}
+        if(down&KEY_UP && bit_picker_pick>0)bit_picker_pick--;
+        if(down&KEY_DOWN && bit_picker_pick+1<bit_choice_count)bit_picker_pick++;
+        if(bit_picker_pick<bit_picker_scroll)bit_picker_scroll=bit_picker_pick;
+        if(bit_picker_pick>=bit_picker_scroll+7)bit_picker_scroll=bit_picker_pick-6;
+        if((down&KEY_TOUCH)&&tp->py>=49&&tp->py<161){
+            int next=bit_picker_scroll+(tp->py-49)/16;
+            if(next>=0&&next<bit_choice_count){
+                bit_picker_pick=next;
+                if(bit_choice_labels[next][0] && set_map_cell((double)next))bit_picker_open=false;
+            }
+        }
+        if(down&KEY_A){
+            if(bit_picker_pick>=0&&bit_picker_pick<bit_choice_count&&bit_choice_labels[bit_picker_pick][0]){
+                if(set_map_cell((double)bit_picker_pick))bit_picker_open=false;
+            }else snprintf(note,sizeof(note),"INI RESERVED / CANNOT SELECT");
+        }
+        return;
+    }
     if(keypad_open){
         if(down&KEY_B){keypad_open=false;return;}
         if(down&KEY_A){keypad_apply();return;}
@@ -1255,10 +1768,17 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
         if((down|held)&KEY_RIGHT&&cx+1<table.width)cx++;
         if((down|held)&KEY_UP&&cy>0)cy--;
         if((down|held)&KEY_DOWN&&cy+1<table.height)cy++;
+        if(down&KEY_START)favorite_current_editor();
+        if((down&KEY_TOUCH)&&tp->py>=24&&tp->py<46&&tp->px>=215)favorite_current_editor();
         if(down&KEY_X)change_map_cell(1);
         if(down&KEY_Y)change_map_cell(-1);
         if(down&KEY_A)keypad_begin();
         if(down&KEY_L){step_index=(step_index+1)%4;table.confirm_burn=false;}
+        if(down&KEY_SELECT){
+            map_focus=map_focus==0&&table.has_x?1:
+                map_focus<=1&&table.has_y?2:0;
+            table.confirm_burn=false;
+        }
         if((down&KEY_TOUCH)&&tp->py>=120&&tp->py<146&&tp->px>=6&&tp->px<254){
             int action=(tp->px-6)/62;
             if(action==0)change_map_cell(-1);
@@ -1271,7 +1791,7 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
         }
         if(down&KEY_R)commit_map();
         if(down&KEY_B){
-            if(table.dirty&&!abandon_confirm){abandon_confirm=true;table.confirm_burn=false;
+            if(any_map_dirty()&&!abandon_confirm){abandon_confirm=true;table.confirm_burn=false;
                 snprintf(note,sizeof(note),"B AGAIN TO DISCARD UNSAVED EDITS");return;}
             chosen_map=-1;table.valid=false;note[0]=0;abandon_confirm=false;
         }
@@ -1281,13 +1801,13 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
     if((down&KEY_TOUCH)&&page!=P_HOME&&tp->py<23){goto_page(P_HOME);return;}
     if(page==P_HOME){
         if((down&KEY_UP)&&home_pick>0)home_pick--;
-        if((down&KEY_DOWN)&&home_pick<5)home_pick++;
+        if((down&KEY_DOWN)&&home_pick<3)home_pick++;
         if(down&KEY_L){gauge_layout=gauge_layout==2?4:gauge_layout-1;if(sd_ready)bt_sd_layout_save(gauge_layout);}
         if(down&KEY_R){gauge_layout=gauge_layout==4?2:gauge_layout+1;if(sd_ready)bt_sd_layout_save(gauge_layout);}
         if(down&KEY_A)goto_page(home_pages[home_pick]);
-        if((down&KEY_TOUCH)&&tp->py>=27&&tp->py<171){
-            int row=(tp->py-27)/24;
-            if(row>=0&&row<6){home_pick=row;goto_page(home_pages[home_pick]);}
+        if((down&KEY_TOUCH)&&tp->py>=27&&tp->py<155){
+            int row=(tp->py-27)/32;
+            if(row>=0&&row<4){home_pick=row;goto_page(home_pages[home_pick]);}
         }
     }else if(page==P_TUNE){
         if(dialog_name[0]){
@@ -1297,18 +1817,31 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
                     dialog_depth--;
                     memcpy(dialog_name,dialog_owner_stack[dialog_depth],sizeof(dialog_name));
                     memcpy(dialog_label,dialog_label_stack[dialog_depth],sizeof(dialog_label));
-                    dialog_pick=dialog_scroll=0;
+                    dialog_pick=dialog_scroll=0;dialog_info=false;dialog_info=false;
                 }else dialog_name[0]=0;
-                dialog_value_ok=false;return;
+                return;
             }
-            if((down&KEY_UP)&&dialog_pick>0)dialog_pick--;
-            if((down&KEY_DOWN)&&dialog_pick+1<n)dialog_pick++;
+            if(down&KEY_Y){dialog_info=!dialog_info;dialog_help_index=-1;dialog_help_page=0;}
+            if(dialog_info && (down&KEY_L) && dialog_help_page>0)dialog_help_page--;
+            if(dialog_info && (down&KEY_R) && dialog_help_page<30)dialog_help_page++;
+            if((down&KEY_UP)&&dialog_pick>0){dialog_pick--;dialog_info=false;dialog_help_index=-1;}
+            if((down&KEY_DOWN)&&dialog_pick+1<n){dialog_pick++;dialog_info=false;dialog_help_index=-1;}
             if(dialog_pick<dialog_scroll)dialog_scroll=dialog_pick;
             if(dialog_pick>=dialog_scroll+6)dialog_scroll=dialog_pick-5;
             if((down&KEY_TOUCH)&&tp->py>=47&&tp->py<149){
                 dialog_pick=dialog_scroll+(tp->py-47)/17;
                 if(dialog_pick>=n)dialog_pick=n-1;
-                if(dialog_pick>=0)dialog_action();
+                if(dialog_pick>=0){
+                    int r=dialog_at(dialog_pick);
+                    if(tp->px>=217 && r>=0 && def.refs[r].kind!=5 && def.refs[r].kind!=2)
+                        toggle_favorite(def.refs[r].name,def.refs[r].label);
+                    else dialog_action();
+                }
+            }
+            if(down&KEY_X){
+                int r=dialog_at(dialog_pick);
+                if(r>=0&&def.refs[r].kind!=5&&def.refs[r].kind!=2)
+                    toggle_favorite(def.refs[r].name,def.refs[r].label);
             }
             if(down&KEY_A)dialog_action();
             return;
@@ -1324,7 +1857,17 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
             if((down&KEY_TOUCH)&&tp->py>=47&&tp->py<149){
                 list_pick=list_scroll+(tp->py-47)/17;
                 if(list_pick>=tune_item_count())list_pick=tune_item_count()-1;
-                if(list_pick>=0)open_tune_item();
+                if(list_pick>=0){
+                    int idx=tune_item_at(list_pick);
+                    if(tp->px>=217&&idx>=0 && def.menus[idx].target[0])
+                        toggle_favorite(def.menus[idx].target,def.menus[idx].label);
+                    else open_tune_item();
+                }
+            }
+            if(down&KEY_X){
+                int idx=tune_item_at(list_pick);
+                if(idx>=0&&def.menus[idx].target[0])
+                    toggle_favorite(def.menus[idx].target,def.menus[idx].label);
             }
             if(down&KEY_A)open_tune_item();
         }else{
@@ -1338,36 +1881,72 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
                 if(list_pick>=0)open_tune_item();
             }
         }
-    }else if(page==P_MAPS||page==P_LIVE){
-        if(down&KEY_B)goto_page(P_HOME);
+    }else if(page==P_FAV){
+        if(down&KEY_B){goto_page(P_HOME);return;}
+        if(down&KEY_UP)navigate(-1);
+        if(down&KEY_DOWN)navigate(1);
+        if((down&KEY_TOUCH)&&tp->py>=47&&tp->py<166){
+            list_pick=list_scroll+(tp->py-47)/17;
+            if(list_pick>=favorite_count)list_pick=favorite_count-1;
+            if(list_pick>=0){
+                if(tp->px>=217)toggle_favorite(favorites[list_pick].target,favorites[list_pick].label);
+                else open_target(favorites[list_pick].target,favorites[list_pick].label,true);
+            }
+        }
+        if((down&KEY_X)&&list_pick<favorite_count)
+            toggle_favorite(favorites[list_pick].target,favorites[list_pick].label);
+        if((down&KEY_A)&&list_pick<favorite_count)
+            open_target(favorites[list_pick].target,favorites[list_pick].label,true);
+        if(list_pick>=favorite_count){list_pick=favorite_count?favorite_count-1:0;
+            if(list_scroll>list_pick)list_scroll=list_pick;}
+    }else if(page==P_LIVE){
+        if(down&KEY_B){goto_page(view_from_tree?P_TUNE:P_HOME);return;}
         if(down&KEY_UP)navigate(-1);
         if(down&KEY_DOWN)navigate(1);
         if((down&KEY_TOUCH)&&tp->py>=28&&tp->py<156){
             list_pick=list_scroll+(tp->py-28)/16;
-            int total=page==P_MAPS?map_count:def.channel_count;
-            if(list_pick>=total)list_pick=total-1;
-            if(page==P_MAPS&&list_pick>=0)open_map(map_from_row(list_pick));
+            if(list_pick>=def.channel_count)list_pick=def.channel_count-1;
         }
-        if(page==P_MAPS&&(down&KEY_A))open_map(map_from_row(list_pick));
-        if(page==P_LIVE){
-            if(down&KEY_L)active_slot=(active_slot+SLOTS-1)%SLOTS;
-            if(down&KEY_R)active_slot=(active_slot+1)%SLOTS;
-            if((down&KEY_X)&&list_pick>=0&&list_pick<def.channel_count){
-                const BtField*f=&def.channels[list_pick];
-                if(f->scaled&&f->width*f->height==1){
-                    snprintf(channel_names[active_slot],sizeof(channel_names[active_slot]),"%s",f->name);
-                    clear_history(active_slot);
-                    refresh_idle_gauges();
-                    if(sd_ready)(void)bt_sd_gauges_save((const char (*)[64])channel_names);
-                }
+        if(down&KEY_Y){goto_page(P_GRAPH);return;}
+        if(down&KEY_L)active_slot=(active_slot+SLOTS-1)%SLOTS;
+        if(down&KEY_R)active_slot=(active_slot+1)%SLOTS;
+        if((down&KEY_X)&&list_pick>=0&&list_pick<def.channel_count){
+            const BtField*f=&def.channels[list_pick];
+            if(f->scaled&&f->width*f->height==1){
+                snprintf(channel_names[active_slot],sizeof(channel_names[active_slot]),"%s",f->name);
+                clear_history(active_slot);refresh_idle_gauges();
+                if(sd_ready)(void)bt_sd_gauges_save((const char (*)[64])channel_names);
             }
         }
     }else if(page==P_GRAPH){
-        if(down&KEY_B)goto_page(P_HOME);
+        if(down&KEY_B){
+            if(graph_from_ini && graph_from_dialog[0]){
+                goto_page(P_TUNE);
+                open_dialog(graph_from_dialog,graph_from_label);
+                graph_from_ini=false;active_ini_graph=-1;
+            }else goto_page(P_LIVE);
+            return;
+        }
+        if(graph_from_ini && active_ini_graph>=0 && active_ini_graph<def.graph_count &&
+           (down&KEY_X)){
+            const BtIniGraph *g=&def.graphs[active_ini_graph];
+            if(g->line_count>0){
+                active_ini_graph_line=(active_ini_graph_line+1)%g->line_count;
+                for(int slot=0;slot<SLOTS;slot++){
+                    int idx=g->first_line+(active_ini_graph_line+slot)%g->line_count;
+                    if(idx>=0&&idx<def.graph_line_count){
+                        const char *ch=def.graph_lines[idx].channel;
+                        snprintf(channel_names[slot],sizeof(channel_names[slot]),"%s",ch);
+                        clear_history(slot);
+                    }
+                }
+            }
+            return;
+        }
         if(down&KEY_Y)graph_stats=!graph_stats;
         if(down&KEY_L)active_slot=(active_slot+SLOTS-1)%SLOTS;
         if(down&KEY_R)active_slot=(active_slot+1)%SLOTS;
-        if(down&KEY_X)goto_page(P_LIVE);
+        if((down&KEY_X)&&!graph_from_ini)goto_page(P_LIVE);
         if((down&KEY_TOUCH)&&tp->py>=49&&tp->py<142){
             int n=tp->px>=128?1:0;
             if(n>=0&&n<SLOTS)active_slot=n;

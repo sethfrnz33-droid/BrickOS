@@ -88,6 +88,54 @@ bool bt_sd_layout_save(int layout){
     return ok;
 }
 
+/* Stable INI target identifiers are never pointer indexes. Do not reuse a
+ * favorite list for a different ECU signature or after a malformed read. */
+static bool fav_text_ok(const char *s,size_t cap){
+    size_t n=strnlen(s,cap);if(!n||n==cap)return false;
+    for(size_t i=0;i<n;i++)if((unsigned char)s[i]<32)return false;
+    return true;
+}
+int bt_sd_favorites_load(const char *signature,BtFavorite *items,int capacity){
+    if(!ready||!signature||!items||capacity<1||capacity>BTS_MAX_FAVORITES)return 0;
+    char path[155],saved[160],header[28];
+    snprintf(path,sizeof(path),"%s/dsi-favorites.cfg",folder);
+    FILE *f=fopen(path,"rb");if(!f)return 0;
+    int n=0,count=0;
+    bool ok=fgets(header,sizeof(header),f)!=NULL && !strcmp(header,"BTS_FAVORITES_V1\n") &&
+       fgets(saved,sizeof(saved),f)!=NULL;
+    if(ok){size_t len=strlen(saved);if(len&&saved[len-1]=='\n')saved[len-1]=0;
+        ok=!strcmp(saved,signature);}
+    if(ok){ok=fscanf(f,"%d\n",&count)==1&&count>=0&&count<=capacity;}
+    while(ok&&n<count){
+        BtFavorite item={{0},{0}};
+        ok=fread(&item,1,sizeof(item),f)==sizeof(item) &&
+           fav_text_ok(item.target,sizeof(item.target)) &&
+           fav_text_ok(item.label,sizeof(item.label));
+        if(ok)items[n++]=item;
+    }
+    if(fclose(f)!=0)ok=false;
+    return ok?n:0;
+}
+bool bt_sd_favorites_save(const char *signature,const BtFavorite *items,int count){
+    if(!ready||!signature||!fav_text_ok(signature,160)||count<0||count>BTS_MAX_FAVORITES||
+       (count&&!items))return false;
+    char path[155],tmp[155];
+    snprintf(path,sizeof(path),"%s/dsi-favorites.cfg",folder);
+    snprintf(tmp,sizeof(tmp),"%s/dsi-favorites.tmp",folder);
+    FILE *f=fopen(tmp,"wb");if(!f)return false;
+    bool ok=fprintf(f,"BTS_FAVORITES_V1\n%s\n%d\n",signature,count)>0;
+    for(int i=0;i<count&&ok;i++){
+        ok=fav_text_ok(items[i].target,sizeof(items[i].target))&&
+          fav_text_ok(items[i].label,sizeof(items[i].label))&&
+          fwrite(&items[i],1,sizeof(items[i]),f)==sizeof(items[i]);
+    }
+    if(fflush(f)!=0)ok=false;
+    if(fclose(f)!=0)ok=false;
+    if(!ok){remove(tmp);return false;}
+    remove(path);if(rename(tmp,path)!=0){remove(tmp);return false;}
+    return true;
+}
+
 const char *bt_sd_message(void){return message;}
 size_t bt_sd_written(void){return written;}
 const char *bt_sd_cache_path(void){return ready?cached:"";}
@@ -190,8 +238,8 @@ bool bt_sd_http_report(const char *path,const char *status_line,int code,const c
 typedef struct {
     char magic[8];
     uint32_t format, raw_size, raw_crc, payload_crc;
-    uint32_t field_size, map_size, menu_size, ref_size;
-    uint32_t channels, constants, maps, menus, refs, pages;
+    uint32_t field_size, map_size, menu_size, ref_size, graph_size, graph_line_size;
+    uint32_t channels, constants, maps, menus, refs, pages, graphs, graph_lines;
     uint32_t big_endian;
     int32_t page_ids[64], page_sizes[64];
     uint8_t page_writeable[64], page_burnable[64];
@@ -230,18 +278,22 @@ static bool snapshot_arrays(FILE*f,BtDefinition*d,uint32_t *hash,bool write){
       snap_rw(f,d->constants,(size_t)d->constant_count,sizeof(BtField),hash,write) &&
       snap_rw(f,d->maps,(size_t)d->map_count,sizeof(BtMap),hash,write) &&
       snap_rw(f,d->menus,(size_t)d->menu_count,sizeof(BtMenu),hash,write) &&
-      snap_rw(f,d->refs,(size_t)d->ref_count,sizeof(BtDialogRef),hash,write);
+      snap_rw(f,d->refs,(size_t)d->ref_count,sizeof(BtDialogRef),hash,write) &&
+      snap_rw(f,d->graphs,(size_t)d->graph_count,sizeof(BtIniGraph),hash,write) &&
+      snap_rw(f,d->graph_lines,(size_t)d->graph_line_count,sizeof(BtGraphLine),hash,write);
 }
 bool bt_sd_snapshot_save(const BtDefinition*d){
     if(!ready||!d||!d->valid)return false;
     BtsSnapshotHeader head={0};
-    memcpy(head.magic,"BTSMD20",8);head.format=1;
+    memcpy(head.magic,"BTSMD24",8);head.format=2;
     if(!bts_raw_identity(&head.raw_size,&head.raw_crc))return false;
     head.field_size=sizeof(BtField);head.map_size=sizeof(BtMap);
     head.menu_size=sizeof(BtMenu);head.ref_size=sizeof(BtDialogRef);
+    head.graph_size=sizeof(BtIniGraph);head.graph_line_size=sizeof(BtGraphLine);
     head.channels=(uint32_t)d->channel_count;head.constants=(uint32_t)d->constant_count;
     head.maps=(uint32_t)d->map_count;head.menus=(uint32_t)d->menu_count;
     head.refs=(uint32_t)d->ref_count;head.pages=(uint32_t)d->page_count;
+    head.graphs=(uint32_t)d->graph_count;head.graph_lines=(uint32_t)d->graph_line_count;
     head.big_endian=(uint32_t)d->big_endian;
     memcpy(head.page_ids,d->page_ids,sizeof(head.page_ids));
     memcpy(head.page_sizes,d->page_sizes,sizeof(head.page_sizes));
@@ -273,28 +325,35 @@ bool bt_sd_snapshot_load(BtDefinition*d){
     FILE *f=fopen(path,"rb");if(!f)return false;
     BtsSnapshotHeader h={0};
     bool ok=fread(&h,1,sizeof(h),f)==sizeof(h);
-    if(ok)ok=memcmp(h.magic,"BTSMD20",8)==0&&h.format==1&&
+    if(ok)ok=memcmp(h.magic,"BTSMD24",8)==0&&h.format==2&&
         h.raw_size==raw_size&&h.raw_crc==raw_crc&&
         h.field_size==sizeof(BtField)&&h.map_size==sizeof(BtMap)&&
         h.menu_size==sizeof(BtMenu)&&h.ref_size==sizeof(BtDialogRef)&&
+        h.graph_size==sizeof(BtIniGraph)&&h.graph_line_size==sizeof(BtGraphLine)&&
         h.channels<=BTS_MAX_CHANNELS&&h.constants<=BTS_MAX_CONSTANTS&&
         h.maps<=BTS_MAX_MAPS&&h.menus<=BTS_MAX_MENUS&&
-        h.refs<=BTS_MAX_REFS&&h.pages<=64&&h.signature[159]==0&&
+        h.refs<=BTS_MAX_REFS&&h.graphs<=BTS_MAX_INI_GRAPHS&&
+        h.graph_lines<=BTS_MAX_GRAPH_LINES&&h.pages<=64&&h.signature[159]==0&&
         h.signature[0]!=0;
     static BtDefinition t; /* Never put the 8KB line buffer on the ARM9 stack. */
     bt_ini_reset(&t);
     if(ok){
         t.channel_count=(int)h.channels;t.constant_count=(int)h.constants;
         t.map_count=(int)h.maps;t.menu_count=(int)h.menus;t.ref_count=(int)h.refs;
+        t.graph_count=(int)h.graphs;t.graph_line_count=(int)h.graph_lines;
         t.channel_capacity=t.channel_count;t.constant_capacity=t.constant_count;
         t.map_capacity=t.map_count;t.menu_capacity=t.menu_count;t.ref_capacity=t.ref_count;
+        t.graph_capacity=t.graph_count;t.graph_line_capacity=t.graph_line_count;
         if(t.channel_count)t.channels=malloc((size_t)t.channel_count*sizeof(BtField));
         if(t.constant_count)t.constants=malloc((size_t)t.constant_count*sizeof(BtField));
         if(t.map_count)t.maps=malloc((size_t)t.map_count*sizeof(BtMap));
         if(t.menu_count)t.menus=malloc((size_t)t.menu_count*sizeof(BtMenu));
         if(t.ref_count)t.refs=malloc((size_t)t.ref_count*sizeof(BtDialogRef));
+        if(t.graph_count)t.graphs=malloc((size_t)t.graph_count*sizeof(BtIniGraph));
+        if(t.graph_line_count)t.graph_lines=malloc((size_t)t.graph_line_count*sizeof(BtGraphLine));
         ok=(!t.channel_count||t.channels)&&(!t.constant_count||t.constants)&&
-            (!t.map_count||t.maps)&&(!t.menu_count||t.menus)&&(!t.ref_count||t.refs);
+            (!t.map_count||t.maps)&&(!t.menu_count||t.menus)&&(!t.ref_count||t.refs)&&
+            (!t.graph_count||t.graphs)&&(!t.graph_line_count||t.graph_lines);
         uint32_t hash=2166136261u;
         if(ok)ok=snapshot_arrays(f,&t,&hash,false)&&hash==h.payload_crc;
         if(ok){
@@ -308,7 +367,7 @@ bool bt_sd_snapshot_load(BtDefinition*d){
         memcpy(t.page_sizes,h.page_sizes,sizeof(t.page_sizes));
         for(int i=0;i<64;i++){t.page_writeable[i]=h.page_writeable[i]!=0;
             t.page_burnable[i]=h.page_burnable[i]!=0;}
-        t.page_count=(int)h.pages;t.current_page=1;t.last_map=-1;
+        t.page_count=(int)h.pages;t.current_page=1;t.last_map=-1;t.last_graph=-1;
         t.big_endian=h.big_endian!=0;
         snprintf(t.signature,sizeof(t.signature),"%s",h.signature);
         t.had_constants=true;t.had_outputs=true;t.had_signature=true;

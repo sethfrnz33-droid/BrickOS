@@ -25,6 +25,15 @@ extern int closesocket(int socket_fd);
 #define bts_socket_close close
 #endif
 
+/* Synchronous protected writes execute only on the UI thread. Their nested
+ * HTTP stack used >14 KiB of local arrays (JSON, network packets and verify
+ * readback), easily exhausting the DSi ARM9 stack. One shared static set
+ * eliminates that stack hazard; the async live client is cancelled before
+ * the protected synchronous write path is invoked. */
+static char sync_http_header[4096];
+static uint8_t sync_http_pending[1024],sync_http_recv[2048];
+static uint8_t sync_field_raw[4096],sync_write_verify[8192],sync_get_live_buf[BTS_LIVE_CAP+32];
+static char sync_write_status[4096];
 static BtProgressFn progress_fn=NULL;
 void bt_set_progress(BtProgressFn callback){progress_fn=callback;}
 /* One short-lived socket per request. The ESP32 endpoints are identical to
@@ -80,21 +89,21 @@ BtHttpResult bt_http(const char *method,const char *path,const char *post_data,B
         if(h<0||h>=(int)sizeof(req))goto cleanup;
     }
     if(send_all(s,req,(size_t)h)<0||(post_data&&send_all(s,post_data,length)<0))goto cleanup;
-    char header[4096];size_t hpos=0;
+    char *header=sync_http_header;size_t hpos=0;
     bool headers=false,chunked=false,peer_closed=false,failed=false,zero_chunk=false;
     long content_len=-1;size_t body_count=0,remaining=0;
     enum{CHUNK_SIZE,CHUNK_BYTES,CHUNK_CR,CHUNK_LF,CHUNK_DONE} state=CHUNK_SIZE;
     char size_line[40];int size_at=0;
-    uint8_t pending[1024];size_t psize=0;
+    uint8_t *pending=sync_http_pending;size_t psize=0;
     size_t last_progress=0;
     for(int attempts=0;attempts<4000&&!failed&&!zero_chunk;attempts++){
-        uint8_t chunk[2048];int got=(int)recv(s,chunk,sizeof(chunk),0);
+        uint8_t *chunk=sync_http_recv;int got=(int)recv(s,chunk,2048,0);
         if(got==0){peer_closed=true;break;}
         if(got<0){failed=true;break;}
         for(int i=0;i<got&&!failed&&!zero_chunk;i++){
             uint8_t c=chunk[i];
             if(!headers){
-                if(hpos+1>=sizeof(header)){failed=true;break;}
+                if(hpos+1>=4096){failed=true;break;}
                 header[hpos++]=(char)c;header[hpos]=0;
                 if(hpos<4||memcmp(header+hpos-4,"\r\n\r\n",4))continue;
                 headers=true;
@@ -122,7 +131,7 @@ BtHttpResult bt_http(const char *method,const char *path,const char *post_data,B
                     else failed=true;
                 }else if(state==CHUNK_BYTES){
                     pending[psize++]=c;remaining--;
-                    if(psize==sizeof(pending)){
+                    if(psize==1024){
                         if(!deliver(fn,user,pending,psize,&r.received,maxbytes)){failed=true;break;}
                         psize=0;
                     }
@@ -131,7 +140,7 @@ BtHttpResult bt_http(const char *method,const char *path,const char *post_data,B
                 else if(state==CHUNK_LF){if(c!='\n')failed=true;else state=CHUNK_SIZE;}
             }else if(content_len<0||(long)body_count<content_len){
                 pending[psize++]=c;++body_count;
-                if(psize==sizeof(pending)){
+                if(psize==1024){
                     if(!deliver(fn,user,pending,psize,&r.received,maxbytes)){failed=true;break;}
                     psize=0;
                 }
@@ -168,8 +177,8 @@ bool bt_get_ini(BtDefinition*d){
 bool bt_get_live(BtLive *live,int length){
     if(length<4||length>BTS_LIVE_CAP)return false;
     char path[80];snprintf(path,sizeof(path),"/api/live?length=%d&hz=50",length);
-    uint8_t response[BTS_LIVE_CAP+32];Buffer b={response,sizeof(response),0};
-    BtHttpResult r=bt_http("GET",path,NULL,copy_callback,&b,sizeof(response));
+    uint8_t *response=sync_get_live_buf;Buffer b={response,BTS_LIVE_CAP+32,0};
+    BtHttpResult r=bt_http("GET",path,NULL,copy_callback,&b,BTS_LIVE_CAP+32);
     return r.complete&&bt_live_decode(live,response,b.pos);
 }
 static const char *key_at(const char*json,const char*key){
@@ -235,7 +244,7 @@ bool bt_read_field(const BtDefinition *d,const BtField*f,double*values,int capac
     if(!d||!f||!f->scaled||!values)return false;
     int count=f->width*f->height,elem=bt_type_size(f->type);
     if(count<1||count>capacity||count*elem>4096||elem<1)return false;
-    uint8_t raw[4096];
+    uint8_t *raw=sync_field_raw;
     if(!ts_read_page(d,f->page,f->offset,raw,count*elem))return false;
     /* bt_field_value() expects offsets relative to a full ECU page. */
     BtField copy=*f;copy.offset=0;
@@ -248,7 +257,7 @@ bool bt_read_field(const BtDefinition *d,const BtField*f,double*values,int capac
  * verified C chunks, explicit B and post-burn readback. Never retry an
  * uncertain write. Only exposed through a separate two-stage user action. */
 bool bt_read_raw(const BtDefinition*d,const BtField*f,uint8_t*dest,int cap){
-    if(!d||!f||!dest||f->kind==2)return false;
+    if(!d||!f||!dest)return false;
     int size=bt_type_size(f->type),length=size*f->width*f->height;
     return size>0&&length>0&&length<=cap&&ts_read_page(d,f->page,f->offset,dest,length);
 }
@@ -355,7 +364,7 @@ static bool write_range(const BtDefinition*d,const BtField*f,const uint8_t*data,
 bool bt_commit_field(const BtDefinition*d,const BtField*f,const uint8_t*old_data,
                      const uint8_t*new_data,int length,char*reason,size_t reason_cap){
     if(!d||!d->valid||!f||!old_data||!new_data||length<1||length>8192||
-       f->kind==2||f->page<1||f->page>64||!memcmp(old_data,new_data,(size_t)length))
+       f->page<1||f->page>64||!memcmp(old_data,new_data,(size_t)length))
         return bt_reason(reason,reason_cap,"NO VALID STAGED CHANGE");
     int size=bt_type_size(f->type)*f->width*f->height,pg=f->page;
     if(size!=length||f->offset<0||d->page_sizes[pg-1]<1||
@@ -368,9 +377,9 @@ bool bt_commit_field(const BtDefinition*d,const BtField*f,const uint8_t*old_data
            (f->limits_known&&(v<f->low-1e-8||v>f->high+1e-8)))
             return bt_reason(reason,reason_cap,"EDITED VALUE FAILS INI LIMIT CHECK");
     }
-    char status[4096];bool connected=false,compiled=false,ready=false,backup_ready=false;
+    char *status=sync_write_status;bool connected=false,compiled=false,ready=false,backup_ready=false;
     char signature[160]="";
-    if(!bt_get_status(status,sizeof(status))||
+    if(!bt_get_status(status,4096)||
        !bt_json_bool(status,"ecu_session_connected",&connected)||!connected||
        !bt_json_bool(status,"write_compiled",&compiled)||!compiled||
        !bt_json_bool(status,"write_access_ready",&ready)||!ready||
@@ -378,7 +387,7 @@ bool bt_commit_field(const BtDefinition*d,const BtField*f,const uint8_t*old_data
        !bt_json_string(status,"ecu_signature",signature,sizeof(signature))||
        !signature[0]||!bt_signature_matches(signature,d->signature))
         return bt_reason(reason,reason_cap,"SESSION / BACKUP / WRITE GATE FAILED");
-    uint8_t check[8192];
+    uint8_t *check=sync_write_verify;
     if(!ts_read_page(d,f->page,f->offset,check,length)||memcmp(check,old_data,(size_t)length))
         return bt_reason(reason,reason_cap,"ECU BASELINE CHANGED / RELOAD MAP");
     if(!engine_is_stopped(d))return bt_reason(reason,reason_cap,"ENGINE MUST BE STOPPED (FRESH RPM)");
@@ -495,7 +504,8 @@ const char *bt_async_phase(void){
         case NET_ERROR_BODY:return "READING ESP ERROR";
         case NET_HEADER:return "WAITING HTTP HEADERS";
         case NET_BODY:return async_net.job==BT_NET_INI?"RECEIVING INI FROM ESP":
-                              async_net.job==BT_NET_LIVE?"RECEIVING LIVE DATA":"RECEIVING ECU STATUS";
+                              async_net.job==BT_NET_LIVE?"RECEIVING LIVE DATA":
+                              async_net.job==BT_NET_READ?"READING ECU CALIBRATION":"RECEIVING ECU STATUS";
         case NET_DRAIN:return "FINISHING SD INI FILE";
         case NET_PARSE:return "PARSING INI FROM SD";
         case NET_DONE:return "TRANSFER COMPLETE";
@@ -543,6 +553,9 @@ bool bt_async_begin(BtNetJob job,BtDefinition*d,BtLive*live,int live_length,int 
         if(!live||live_length<4||live_length>BTS_LIVE_CAP)return false;
         snprintf(live_path,sizeof(live_path),"/api/live?length=%d&hz=50",live_length);
         path=live_path;async_net.max_body=BTS_LIVE_CAP+32;
+    }else if(job==BT_NET_READ){
+        path="/api/ts";
+        async_net.max_body=sizeof(async_net.store)-1;
     }else async_net.max_body=sizeof(async_net.store)-1;
     snprintf(async_net.path,sizeof(async_net.path),"%s",path);
     int n=snprintf(async_net.request,sizeof(async_net.request),
@@ -580,6 +593,56 @@ bool bt_async_begin(BtNetJob job,BtDefinition*d,BtLive*live,int live_length,int 
     }
     {int saved=errno;async_fail_errno("TCP CONNECT",saved);return false;}
 }
+/* A map/scalar read uses the same nonblocking request scheduler and socket
+ * as dashboard/status. The old synchronous bt_http allocated new sockets on
+ * every user action, then blocked the ARM9 button loop until it finished. */
+bool bt_async_begin_cal_read(int page_id,int offset,int count,int frame){
+    if(page_id<0||page_id>65535||offset<0||offset>65535||
+       count<1||count>256||offset+count>65536)return false;
+    if(!bt_async_begin(BT_NET_READ,NULL,NULL,0,frame))return false;
+    uint8_t args[6]={
+        (uint8_t)page_id,(uint8_t)(page_id>>8),
+        (uint8_t)offset,(uint8_t)(offset>>8),
+        (uint8_t)count,(uint8_t)(count>>8)};
+    char arg_hex[13];static const char digits[]="0123456789abcdef";
+    for(int i=0;i<6;i++){
+        arg_hex[2*i]=digits[args[i]>>4];
+        arg_hex[2*i+1]=digits[args[i]&15];
+    }
+    arg_hex[12]=0;
+    char payload[100];
+    int p=snprintf(payload,sizeof(payload),
+        "{\"cmd\":\"R\",\"args\":\"%s\",\"timeout_ms\":6000}",arg_hex);
+    if(p<1||(size_t)p>=sizeof(payload)){bt_async_cancel();return false;}
+    int n=snprintf(async_net.request,sizeof(async_net.request),
+        "POST /api/ts HTTP/1.1\r\nHost: %s\r\nAccept: application/json\r\n"
+        "Connection: keep-alive\r\nContent-Type: application/json\r\n"
+        "Content-Length: %d\r\n\r\n%s",BTS_ESP_HOST,p,payload);
+    if(n<1||(size_t)n>=sizeof(async_net.request)){
+        bt_async_cancel();return false;
+    }
+    async_net.request_len=(size_t)n;
+    return true;
+}
+bool bt_async_cal_read_result(uint8_t *dst,int count){
+    if(async_net.job!=BT_NET_READ||async_net.phase!=NET_DONE||
+       !dst||count<1||count>256||async_net.stored>=sizeof(async_net.store))return false;
+    const char *json=(const char*)async_net.store;
+    const char *p=key_at(json,"status");
+    if(!p)return false;
+    char *end=NULL;long status=strtol(p,&end,10);
+    if(end==p||status!=0)return false;
+    while(*end==' '||*end=='\t')end++;
+    if(*end!=','&&*end!='}')return false;
+    const char *length_value=key_at(json,"length");
+    if(length_value){
+        char *len_end=NULL;
+        long response_length=strtol(length_value,&len_end,10);
+        if(len_end==length_value||response_length!=count)return false;
+    }
+    return hex_reply(json,dst,count);
+}
+
 /* Drain at most 2KB of RAM data to the SD filesystem on one UI frame.
  * On a DSi, interleaving FAT writes with DSWiFi's recv() byte-loop can
  * stall both network and touch. Only bt_async_poll() invokes SD I/O. */
@@ -635,9 +698,9 @@ static int async_done(void){
         return 0;
     }
     while(async_net.block_len)if(async_flush_block()<0)return -1;
-    if(async_net.job==BT_NET_STATUS){
+    if(async_net.job==BT_NET_STATUS||async_net.job==BT_NET_READ){
         async_net.store[async_net.stored]=0;
-        if(async_net.stored<2)return async_fail("EMPTY STATUS RESPONSE");
+        if(async_net.stored<2)return async_fail("EMPTY JSON RESPONSE");
     }
     if(async_net.job==BT_NET_LIVE&&!bt_live_decode_http(async_net.live,async_net.store,async_net.stored,&async_net.live_new))
         return async_fail("LIVE FRAME FORMAT INVALID");
