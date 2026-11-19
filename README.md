@@ -117,3 +117,13 @@ The learner's `understanding`, the **engine's physical-hardware verification**, 
 **Key findings:** The real rusEFI `engine` channel is a bitmask; generated INI page ordinals and optional pages can vary; display aliases may share one stored calibration value; specialized trigger capture is not ordinary 100 Hz output telemetry; PWM pump control does not imply a missing regulator or verified rail pressure; and the current 4 MB ESP partition plan has no dedicated profile/content storage or OTA slot. The exact live ECU INI, hardware flash/PSRAM, bus throughput and physical build facts remain **unverified** and must be checked before production claims.
 
 **Behavioral constraint:** the full educational guide is separate from hardware/vehicle verification, and the current Bridge/Manual Tuning/3DS connection paths remain untouched. GDI and mixed GDI/PFI Guided Fuel Tuning are unsupported.
+
+## Real generated Proteus F7 INI research (November 19, 2026)
+
+A complete customer-supplied generated INI was analyzed **as a definition, not a live ECU configuration**: signature `rusEFI master.2026.11.09.proteus_f7.2735508644` (SHA-256 `24f696ac500cf48a23d3332a235654442789dac3fe08948656a36da8c320eedd`). It declares five pages, 1,977 typed calibration definitions, 1,081 typed output fields, 116 table editors, 218 submenu entries and 124 command buttons.
+
+- [Detailed generated-INI audit, role corrections, true table geometry and ten-stage guide mapping](docs/42-proteus-f7-generated-ini-deep-audit.md)
+- [Exact-source research metadata / selected canonical byte locations](design/ini/proteus-f7-2026-11-09-source-audit.v1.json)
+- [Reusable read-only INI research scanner](tools/ini_research_scan.py), with [synthetic parser tests](tools/tests/test_ini_research_scan.py) and [source-fact tests](firmware/esp32/tests/proteus-f7-ini-audit.test.mjs)
+
+**Important:** This INI's declared identity has **not** been matched to a live ECU and supplies no actual tune values or physical engine facts. The browser Guide's current alias candidate for spark and low-pressure fuel sensing misses the correct output channels; the existing `sync` and `knock` aliases conflate counters with other quantities. **These are research findings, not runtime fixes.** Present primary/secondary/idle VE shapes are 16×16 / 16×16 / 4×4, and page 3 LTFT is explicitly read-only. GDI and mixed PFI/GDI Guided Fuel Tuning stay unsupported. Manual Tuning, ESP bridge and DS/DSi connection code were not modified.
