@@ -87,7 +87,7 @@ required=(
  'bts_next_region_field(-1)',
  'bts_next_region_field(1)',
  'if(spatial){',
- 'return bts_effective_region(i)==region',
+ 'if(bts_effective_region(i)==region)return i;',
 )
 for fragment in required:
     if fragment not in src:
