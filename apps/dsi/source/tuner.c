@@ -209,7 +209,22 @@ static void line_parse(BtDefinition *d,char *line) {
     }
     if(!strcasecmp(d->section,"UserDefined")||!strcasecmp(d->section,"UiDialogs")){
         char a[8][128];int n=csv(val,a,8);
-        if(!strcasecmp(key,"dialog")){
+        if(!strcasecmp(key,"indicatorPanel")&&n>0){
+            /* Indicator panels are read-only live status groups. They contain
+             * indicator declarations and are referenced by `panel = ...`. */
+            cp(d->current_dialog,sizeof(d->current_dialog),a[0]);
+            d->last_graph=-1;
+        }else if(!strcasecmp(key,"indicator")&&n>=3&&d->current_dialog[0]){
+            char expr[128];cp(expr,sizeof(expr),a[0]);
+            char *p=trim(expr);size_t size=strlen(p);
+            if(size>1&&p[0]=='{'&&p[size-1]=='}'){
+                p[size-1]=0;p=trim(p+1);
+            }
+            /* Preserve both INI captions as a pair separated by US (0x1f).
+             * An indicator has no writable calibration field. */
+            char detail[120];snprintf(detail,sizeof(detail),"%.56s%.56s",a[1],a[2]);
+            add_ref(d,d->current_dialog,p,a[2],8,detail,"");
+        }else if(!strcasecmp(key,"dialog")){
             cp(d->current_dialog,sizeof(d->current_dialog),n?a[0]:"");
             d->last_graph=-1;
             /* A dialog title is metadata, not a selectable setting. */
@@ -259,6 +274,9 @@ static void line_parse(BtDefinition *d,char *line) {
             const char *channel=n>1&&*a[1]&&!placement(a[1])?a[1]:a[0];
             add_ref(d,d->current_dialog,channel,a[0],4,"",n>2?a[2]:"");
             set_placement(d,n>1?a[1]:"");
+        }else if(!strcasecmp(key,"text")&&n>0&&d->current_dialog[0]){
+            /* Display headings/instructions as labels, never as fake fields. */
+            add_ref(d,d->current_dialog,"@text",a[0],5,"","");
         }else if(!strcasecmp(key,"topicHelp")||!strcasecmp(key,"help")||!strcasecmp(key,"helpText")){
             /* Help blocks describe the editor/dialog; never make them fields. */
         }

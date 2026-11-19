@@ -36,7 +36,7 @@ typedef struct {
 typedef struct {
     char owner[64], name[64], label[72], detail[120], condition[80];
     char placement[8]; /* TunerStudio North/South/East/West/Center; layout, not a field */
-    int kind; /* 0 field, 1 panel, 2 command button, 3 read-only field, 4 runtime, 5 text/help, 6 liveGraph, 7 gauge */
+    int kind; /* 0 field, 1 panel, 2 command button, 3 read-only field, 4 runtime, 5 text/help, 6 liveGraph, 7 gauge, 8 status indicator */
 } BtDialogRef;
 typedef struct {
     char name[64], channel[64], label[72], unit[40];

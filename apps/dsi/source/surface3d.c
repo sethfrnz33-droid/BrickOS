@@ -39,12 +39,13 @@ static uint16_t mix_rgb(double f,double shade){
                clamp_int((int)(b*shade),0,31));
 }
 static double axis_pos(const double *axis,int index,int count,double low,double high,bool known){
-    if(count<=1)return 0.5;
-    if(known){
-        double p=(axis[index]-low)/(high-low);
-        if(isfinite(p))return p<0?0:p>1?1:p;
-    }
-    return (double)index/(count-1);
+    /* This is a table CELL lattice, not a geometric interpolation of uneven
+     * calibration bins. Physical-value spacing used to stretch one edge into
+     * huge rectangles (especially when bins repeat or crowd at one end).
+     * Preserve actual X/Y bin data for labels and live trace, but make all
+     * cell widths and depths uniform in the 3D mesh. */
+    (void)axis;(void)low;(void)high;(void)known;
+    return count<=1?0.5:(double)index/(count-1);
 }
 static Vertex project(const BtSurface3D *s,int x,int y){
     Vertex vertex={0};

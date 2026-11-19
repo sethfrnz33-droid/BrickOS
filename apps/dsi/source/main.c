@@ -110,6 +110,7 @@ static size_t ini_progress=0,ini_disk_bytes=0,ini_parsed_bytes=0,ini_expected_by
 static char client_ip[24]="-",gateway_ip[24]="-";
 static int page=0,list_pick=0,list_scroll=0,tune_cat=0,tune_focus=0,tune_group=-1;
 static int home_pick=0;
+static bool favorite_return=false; /* B from a favorited panel returns to Favorites */
 /* UI font upgrade: 9x14 glyphs for browsable tuning folders and settings.
  * 6x9 stays reserved for map-cell numbers and footers. */
 static bool map_surface_3d=false;
@@ -483,6 +484,13 @@ static bool get_value(const char*name,double*value){
     }
     return false;
 }
+/* UI-only status evaluation. TunerStudio indicator expressions are read-only
+ * display rules; do not treat them as ECU calibration fields or commands. */
+static bool indicator_live_value(const char *expression,double *out){
+    if(!fresh()||!expression||!*expression||!out)return false;
+    if(get_value(expression,out))return true;
+    return bt_numeric_eval(expression,computed_value_lookup,NULL,out);
+}
 static void clear_history(int slot){
     for(int i=0;i<HISTORY;i++)hist_valid[slot][i]=false;
     sample_count[slot]=0;sum[slot]=0;low[slot]=0;high[slot]=0;
@@ -641,11 +649,18 @@ static int next_curve_series(int current){
 }
 static int map_for_target(const char*name){
     if(!name||!*name)return -1;
-    for(int j=0;j<map_count;j++){
-        int i=map_indices[j];const BtMap*m=&def.maps[i];
-        if(!strcasecmp(name,m->name)||(m->alt[0]&&!strcasecmp(name,m->alt)))return i;
+    int fallback=-1;
+    /* TunerStudio maps and 2D curves can be nested as `panel = curveId`.
+     * Search every INI editor (not only the ECU-backed map index), and prefer
+     * a valid ECU constant when a multi-series curve also has virtual items. */
+    for(int i=0;i<def.map_count;i++){
+        const BtMap*m=&def.maps[i];
+        if(strcasecmp(name,m->name)&&(m->alt[0]==0||strcasecmp(name,m->alt)))continue;
+        if(fallback<0)fallback=i;
+        const BtField*z=bt_field(&def,m->z,false);
+        if(z&&bt_type_size(z->type)>0&&z->width*z->height>0)return i;
     }
-    return -1;
+    return fallback;
 }
 /* Trace only INI-declared live runtime axes. Never guess missing channels. */
 static int trace_x=-1,trace_y=-1;
@@ -764,6 +779,49 @@ static void map_top(void){
         if(table.dirty)tiny_text(top,198,49,"STAGED",HIGHLIGHT,55);
         tiny_fit(top,8,181,trace_valid?"3D SURFACE / LIVE TRACE ACTIVE":
                   "3D SURFACE / L + DPAD TO ORBIT",trace_valid?GREEN:CYAN,242);
+        return;
+    }
+    if(m->curve && table.height==1 && table.width>1){
+        /* TunerStudio 2D curves are X versus Z, not 3D heatmaps. Render a
+         * full-width line plot with the true X bins and Z values. */
+        int x0=33,x1=244,y0=69,y1=157;
+        double low=INFINITY,high=-INFINITY;
+        for(int i=0;i<table.width;i++){
+            double v=table.cells[i];if(!isfinite(v))continue;
+            if(v<low)low=v;
+            if(v>high)high=v;
+        }
+        if(!isfinite(low)||!isfinite(high)){low=0;high=1;}
+        double delta=high-low;if(delta<1e-9)delta=1;
+        fill(top,x0,y0,1,y1-y0+1,EDGE);
+        fill(top,x0,y1,x1-x0+1,1,EDGE);
+        for(int i=1;i<4;i++){
+            int y=y0+(y1-y0)*i/4;
+            for(int x=x0;x<=x1;x+=8)pix(top,x,y,EDGE);
+        }
+        int oldx=-1,oldy=-1;
+        for(int i=0;i<table.width;i++){
+            int x=x0+(x1-x0)*i/(table.width-1);
+            double v=table.cells[i];
+            if(!isfinite(v)){oldx=oldy=-1;continue;}
+            int y=y1-(int)((v-low)*(y1-y0)/delta+0.5);
+            if(y<y0)y=y0;
+            if(y>y1)y=y1;
+            if(oldx>=0)ln(top,oldx,oldy,x,y,CYAN);
+            round_fill(top,x-2,y-2,5,5,2,i==cx?HIGHLIGHT:GREEN);
+            if(trace_valid&&trace_x==i)
+                round_fill(top,x-3,y-3,7,7,3,WHITE);
+            oldx=x;oldy=y;
+        }
+        char v[28];map_number(v,sizeof(v),high);
+        tiny_fit(top,2,68,v,MUTED,34);
+        map_number(v,sizeof(v),low);tiny_fit(top,2,145,v,MUTED,34);
+        if(table.has_x&&table.x_count>=table.width){
+            map_number(v,sizeof(v),table.xbins[0]);tiny_fit(top,33,163,v,CYAN,76);
+            map_number(v,sizeof(v),table.xbins[table.width-1]);
+            tiny_fit(top,184,163,v,CYAN,68);
+        }else tiny_fit(top,33,163,"X BINS NOT AVAILABLE",MUTED,185);
+        tiny_fit(top,8,181,trace_valid?"2D CURVE / LIVE TRACE ACTIVE":"2D CURVE / SELECT X POINT TO EDIT",trace_valid?GREEN:MUTED,244);
         return;
     }
     int cols=table.width<5?table.width:5,rows=table.height<5?table.height:5;
@@ -912,6 +970,21 @@ static void rebuild_dialog_entries(void){
     if(dialog_name[0])dialog_entry_find(dialog_name,0);
 }
 static int dialog_count(void){return dialog_visible_total;}
+static bool dialog_selectable(int row){
+    if(row<0||row>=dialog_visible_total)return false;
+    int at=dialog_visible_ids[row];
+    return def.refs[at].kind!=5&&def.refs[at].kind!=8&&def.refs[at].kind!=2;
+}
+static void dialog_advance(int direction){
+    int row=dialog_pick+direction;
+    while(row>=0&&row<dialog_visible_total&&!dialog_selectable(row))row+=direction;
+    if(row>=0&&row<dialog_visible_total)dialog_pick=row;
+}
+static void dialog_first_selectable(void){
+    dialog_pick=0;
+    while(dialog_pick<dialog_visible_total&&!dialog_selectable(dialog_pick))dialog_pick++;
+    if(dialog_pick>=dialog_visible_total)dialog_pick=0;
+}
 static void open_map(int id);
 static int dialog_at(int row){
     return row>=0&&row<dialog_visible_total?dialog_visible_ids[row]:-1;
@@ -929,6 +1002,7 @@ static void open_dialog(const char*id,const char*label){
     dialog_pick=dialog_scroll=0;dialog_info=false;dialog_gauge_page=0;
     dialog_help_index=-1;dialog_help_page=0;
     rebuild_dialog_entries();
+    dialog_first_selectable();
     rebuild_dialog_gauges();
 }
 static bool open_ini_field(const char *target,const char *label,bool readonly){
@@ -975,6 +1049,10 @@ static void dialog_action(void){
     const BtDialogRef*r=&def.refs[index];
     if(r->kind==6){open_ini_graph(r->name);return;}
     if(r->kind==1){
+        /* A panel can be a TunerStudio 2D CurveEditor link, NOT a subfolder.
+         * Resolve the referenced editor before trying nested dialog owners. */
+        int linked_map=map_for_target(r->name);
+        if(linked_map>=0){editor_readonly=false;open_map(linked_map);return;}
         /* Built-in TunerStudio panels are not a set of editable fields in
          * the INI; do not invent controls for such a panel. */
         int children=0;
@@ -986,11 +1064,9 @@ static void dialog_action(void){
         return;
     }
     if(r->kind==2){
-        snprintf(note,sizeof(note),"INI COMMAND %s / NOT IMPLEMENTED",r->name);return;
+        snprintf(note,sizeof(note),"COMMAND BUTTON UNAVAILABLE: %.55s",r->label);return;
     }
-    if(r->kind==5){
-        snprintf(note,sizeof(note),"INI INFO: %.78s",r->label);return;
-    }
+    if(r->kind==5||r->kind==8)return; /* Labels/indicators are not controls. */
     if(r->kind==4){
         double v=0;
         if(get_value(r->name,&v)){
@@ -1137,6 +1213,7 @@ static void top_dialog(void){
     else if(r->kind==3)snprintf(b,sizeof(b),"READ ONLY / %.53s",r->name);
     else if(r->kind==4)snprintf(b,sizeof(b),"LIVE OUTPUT / %.53s",r->name);
     else if(r->kind==6)snprintf(b,sizeof(b),"INI LIVE GRAPH / %.53s",r->name);
+    else if(r->kind==8)snprintf(b,sizeof(b),"READ-ONLY ON/OFF INDICATOR");
     else if(r->kind==5)snprintf(b,sizeof(b),"INI INFORMATION");
     else {
         const BtField*f=bt_field(&def,r->name,false);
@@ -1145,6 +1222,10 @@ static void top_dialog(void){
     tiny_fit(top,9,71,b,CYAN,238);
     if(r->kind==4){double v=0;
         if(get_value(r->name,&v)){number(v,b,sizeof(b));text(top,10,89,b,GREEN,20);}
+    }
+    if(r->kind==8){
+        double v=0;bool ok=indicator_live_value(r->name,&v);
+        tiny_text(top,10,91,!ok?"UNKNOWN / NO LIVE DATA":v!=0?"ON / ACTIVE":"OFF / INACTIVE",!ok?MUTED:v!=0?GREEN:RED,235);
     }
     int gauges=dialog_gauge_count();
     if(gauges>0){
@@ -1422,12 +1503,33 @@ static void bottom_tune(void){
         for(int row=0;row<8&&dialog_scroll+row<total;row++){
             int ix=dialog_scroll+row,at=dialog_at(ix),y=36+row*18;
             if(at<0)continue;
-            bool sel=ix==dialog_pick;
-            if(sel)round_fill(bottom,6,y,244,16,3,PANEL);
             const BtDialogRef *r=&def.refs[at];
+            bool noncontrol=r->kind==5||r->kind==8;
+            bool action=r->kind==2;
+            bool sel=ix==dialog_pick&&!noncontrol;
+            if(sel)round_fill(bottom,6,y,244,16,3,PANEL);
+            if(noncontrol&&r->kind==5){
+                tiny_fit(bottom,12,y+4,r->label,MUTED,225);
+                continue;
+            }
+            if(r->kind==8){
+                /* The actual ON/OFF state comes from a live ECU output.
+                 * No connection means UNKNOWN, not an invented OFF. */
+                double state=0;bool ok=indicator_live_value(r->name,&state);
+                const char *on=strchr(r->detail,'\x1f');
+                const char *caption=on&&ok?(state!=0?on+1:r->detail):r->label;
+                tiny_fit(bottom,12,y+4,caption,MUTED,168);
+                tiny_text(bottom,191,y+4,!ok?"UNKNOWN":state!=0?"ON":"OFF",!ok?MUTED:state!=0?GREEN:RED,63);
+                continue;
+            }
+            if(action){
+                round_fill(bottom,11,y+1,230,15,3,LITE);
+                tiny_fit(bottom,16,y+4,r->label,MUTED,195);
+                tiny_text(bottom,211,y+4,"CMD",RED,30);
+                continue;
+            }
             menu_text(bottom,12,y+1,r->label,sel?HIGHLIGHT:WHITE,207);
             if(is_favorite(r->name))text(bottom,228,y+3,"*",HIGHLIGHT,2);
-            if(r->kind==2)text(bottom,241,y+4,"!",CYAN,1);
             if(r->kind==6)text(bottom,241,y+4,"G",CYAN,1);
             if(r->kind==1)text(bottom,241,y+4,">",CYAN,1);
         }
@@ -2351,6 +2453,7 @@ static void commit_map(void){
 }
 static void goto_page(int next){
     if(next<0||next>=P_COUNT)return;
+    if(next!=P_TUNE)favorite_return=false;
     page=next;chosen_map=-1;table.valid=false;table.confirm_burn=false;map_focus=0;bit_picker_open=false;bit_choice_count=bit_visible_count=0;list_pick=list_scroll=0;editor_readonly=false;
     keypad_open=false;
     activity_frame=frame;idle_dashboard=false;
@@ -2389,6 +2492,18 @@ static void open_target(const char *target,const char *label,bool from_view){
         view_from_tree=true;goto_page(P_LIVE);return;
     }
     snprintf(note,sizeof(note),"INI TARGET %.39s / UNSUPPORTED",target);
+}
+static void open_favorite(void){
+    if(list_pick<0||list_pick>=favorite_count)return;
+    /* Copy before opening: an SD favorite can itself be changed by editor UI.
+     * Favorites has no nested-dialog renderer or controls, so use TUNE's
+     * regular dialog path and remember the origin for the Back button. */
+    char target[64],label[72];
+    snprintf(target,sizeof(target),"%s",favorites[list_pick].target);
+    snprintf(label,sizeof(label),"%s",favorites[list_pick].label);
+    goto_page(P_TUNE);
+    favorite_return=true;
+    open_target(target,label,true);
 }
 static void open_tune_item(void){
     int id=tune_item_at(list_pick);if(id<0)return;
@@ -2512,6 +2627,7 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
             if(any_map_dirty()&&!abandon_confirm){abandon_confirm=true;table.confirm_burn=false;
                 snprintf(note,sizeof(note),"B AGAIN TO DISCARD UNSAVED EDITS");return;}
             chosen_map=-1;table.valid=false;note[0]=0;abandon_confirm=false;
+            if(favorite_return){goto_page(P_FAV);return;}
         }
         return;
     }
@@ -2537,8 +2653,10 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
                     memcpy(dialog_label,dialog_label_stack[dialog_depth],sizeof(dialog_label));
                     dialog_pick=dialog_scroll=0;dialog_info=false;dialog_gauge_page=0;
                     rebuild_dialog_entries();
+                    dialog_first_selectable();
                     rebuild_dialog_gauges();
-                }else dialog_name[0]=0;
+                }else if(favorite_return){goto_page(P_FAV);return;}
+                else dialog_name[0]=0;
                 return;
             }
             if(down&KEY_Y){dialog_info=!dialog_info;dialog_help_index=-1;dialog_help_page=0;}
@@ -2550,29 +2668,30 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
                 if((down&KEY_L)&&dialog_gauge_page>0)dialog_gauge_page--;
                 if((down&KEY_R)&&dialog_gauge_page+1<pages)dialog_gauge_page++;
             }
-            if((down&KEY_UP)&&dialog_pick>0){dialog_pick--;dialog_info=false;dialog_help_index=-1;}
-            if((down&KEY_DOWN)&&dialog_pick+1<n){dialog_pick++;dialog_info=false;dialog_help_index=-1;}
+            if((down&KEY_UP)&&dialog_pick>0){dialog_advance(-1);dialog_info=false;dialog_help_index=-1;}
+            if((down&KEY_DOWN)&&dialog_pick+1<n){dialog_advance(1);dialog_info=false;dialog_help_index=-1;}
             if(dialog_pick<dialog_scroll)dialog_scroll=dialog_pick;
             if(dialog_pick>=dialog_scroll+8)dialog_scroll=dialog_pick-7;
             if((down&KEY_TOUCH)&&tp->py>=36&&tp->py<180){
                 dialog_pick=dialog_scroll+(tp->py-36)/18;
                 if(dialog_pick>=n)dialog_pick=n-1;
-                if(dialog_pick>=0){
+                if(dialog_pick>=0 && dialog_selectable(dialog_pick)){
                     int r=dialog_at(dialog_pick);
-                    if(tp->px>=217 && r>=0 && def.refs[r].kind!=5 && def.refs[r].kind!=2)
+                    if(tp->px>=217 && r>=0)
                         toggle_favorite(def.refs[r].name,def.refs[r].label);
                     else dialog_action();
                 }
             }
             if(down&KEY_X){
                 int r=dialog_at(dialog_pick);
-                if(r>=0&&def.refs[r].kind!=5&&def.refs[r].kind!=2)
+                if(r>=0&&dialog_selectable(dialog_pick))
                     toggle_favorite(def.refs[r].name,def.refs[r].label);
             }
-            if(down&KEY_A)dialog_action();
+            if((down&KEY_A)&&dialog_selectable(dialog_pick))dialog_action();
             return;
         }
         if(down&KEY_B){
+            if(favorite_return){goto_page(P_FAV);return;}
             if(tune_group>=0){tune_group=-1;list_pick=list_scroll=0;}
             else if(tune_focus){tune_focus=0;list_pick=list_scroll=0;}
             else goto_page(P_HOME);
@@ -2616,13 +2735,12 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
             if(list_pick>=favorite_count)list_pick=favorite_count-1;
             if(list_pick>=0){
                 if(tp->px>=217)toggle_favorite(favorites[list_pick].target,favorites[list_pick].label);
-                else open_target(favorites[list_pick].target,favorites[list_pick].label,true);
+                else open_favorite();
             }
         }
         if((down&KEY_X)&&list_pick<favorite_count)
             toggle_favorite(favorites[list_pick].target,favorites[list_pick].label);
-        if((down&KEY_A)&&list_pick<favorite_count)
-            open_target(favorites[list_pick].target,favorites[list_pick].label,true);
+        if((down&KEY_A)&&list_pick<favorite_count)open_favorite();
         if(list_pick>=favorite_count){list_pick=favorite_count?favorite_count-1:0;
             if(list_scroll>list_pick)list_scroll=list_pick;}
     }else if(page==P_LIVE){
