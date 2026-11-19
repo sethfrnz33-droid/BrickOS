@@ -27,14 +27,16 @@ start=source.index('else if(ui_page==PAGE_DETAIL){if(selected>=0&&selected<resul
 end=source.index('else if(ui_page==PAGE_SEARCH)',start)
 action=source[start:end]
 assert 'if(is_stim_action(&results[selected]))' in action
-assert 'copy_text(command_inspect_name,sizeof(command_inspect_name),results[selected].command);' in action
+assert 'else if(is_sensor_capture_command(results[selected].command))' in action
+assert 'else note("Physical output test unavailable in BrickOS")' in action
 assert 'warn_before_hazardous_test(hazard)' not in action
 
-assert '"INSPECT"' in source
-assert '"A INSPECT INI / NO ECU ACTUATION"' in source
+assert '"CAPTURE"' in source
+assert '"NO BRIDGE"' in source
+assert '"A REAL SENSOR CAPTURE / L+R CONFIRM"' in source
 assert 'static void draw_config_dialog_bottom(void)' in source
 assert 'config_group_count()' in source
 assert 'TASK_COMMAND_INSPECT' in source
 assert '/api/ts/inspect?name=%s' in source
-print('PASS real INI ControllerCommands mapped to read-only bridge inspection')
+print('PASS real TPS/pedal calibration, abort, guarded trigger and disabled unsupported commands')
 print('PASS no unsupported actuator dispatch or deceptive confirmation screen')
