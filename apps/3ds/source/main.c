@@ -5,6 +5,7 @@
 #include <3ds.h>
 #include <citro2d.h>
 #include "test_confirm.h"
+#include "bts_demo_confirm.h"
 #include "bts_ini_numeric.h"
 #include <3ds/services/soc.h>
 #include <3ds/services/ac.h>
@@ -496,6 +497,12 @@ static uint8_t task_calibration[EDIT_CAP];
 /* Metadata inspection only; no actuator commands or payload bytes. */
 static bool command_inspect_pending=false,command_inspect_defined=false,command_inspect_visible=false;
 static char command_inspect_name[64]="";
+/* Multi-step, offline-safe UI demo for TunerStudio command buttons.
+ * The demo never sends an ECU output command. */
+static BtsDemoConfirm demo_confirm={0};
+static char demo_command[64]="",demo_label[72]="";
+static u64 demo_started_ms=0;
+static unsigned demo_completed_count=0;
 static volatile bool worker_stop=false,worker_reconnect=false;
 static Thread worker=NULL;
 static bool ini_refresh=false,status_requested=true,cal_requested=false;
@@ -2743,6 +2750,17 @@ static void warn_before_hazardous_test(unsigned kind){
  hazardous_test.released=(hidKeysHeld()&(KEY_L|KEY_R))==0;
  note("Hazardous-test warning: L+R acknowledge, B cancel");
 }
+static void begin_output_demo(const Resolved *r){
+ if(!r||r->type!=3)return;
+ if(demo_confirm.phase||hazardous_test.kind){
+    note("Finish or cancel the current confirmation first");return;
+ }
+ copy_text(demo_command,sizeof(demo_command),r->command);
+ copy_text(demo_label,sizeof(demo_label),r->label);
+ bts_demo_begin(&demo_confirm);
+ demo_started_ms=osGetTime();
+ note("DEMO: Press A to enable, then release and hold L+R; B cancels");
+}
 static bool is_stim_action(const Resolved *r){
  return r&&r->type==3&&
   (!strcmp(r->command,"cmd_enable_self_stim")||
@@ -3959,15 +3977,7 @@ static void enter_selected(void){
         * /api/ts endpoint rejects all Z physical output test commands. */
        if(is_stim_action(&results[selected]))
            preview_stim_action(&results[selected]);
-       else if(!net_ok||!ecu_session||!ecu_signature[0]||
-               !menu_loaded||strcmp(ini_signature,ecu_signature))
-           note("Matching ECU/INI connection required for inspection");
-       else if(command_inspect_pending)note("INI command inspection already queued");
-       else{
-           copy_text(command_inspect_name,sizeof(command_inspect_name),results[selected].command);
-           command_inspect_pending=true;
-           note("Inspecting INI definition only; no hardware output");
-       }
+       else begin_output_demo(&results[selected]);
      }
      else if(results[selected].type==4){open_ini_graph(results[selected].field,PAGE_DETAIL,selected);}
       else if(results[selected].type==6){note("INI description: read only");}
@@ -4367,7 +4377,7 @@ static void draw_tune_dialog_top(void){
        text(190,149,.46f,orange,"TUNERSTUDIO COMMAND");
        text(179,168,.36f,secondary,
           is_stim_action(r)?"Uses guarded trigger action":
-          "A INSPECT INI / NO ECU ACTUATION");
+          "A DEMO / 2-STEP CONFIRM / NO OUTPUT");
     }else if(r->type==6){
        text(178,144,.44f,secondary,"INI INFORMATION / READ ONLY");
     }else if(r->type==7){
@@ -5083,7 +5093,7 @@ static void draw_config_dialog_bottom(void){
            stim_stop_supported:stim_start_supported);
        round_panel(215,y+2,88,19,4,supported?muted_leaf:outline);
        text(222,y+5,.34f,supported?bright:orange,
-            supported?"COMMAND":"INSPECT");
+            supported?"COMMAND":"DEMO");
     }else if(item->type==6){
        text(268,y+5,.32f,secondary,"INFO");
     }else if(item->type==7){
@@ -6569,6 +6579,31 @@ static void draw_trigger_deck(void){
  text(14,181,.43f,cream,stim_preview?"A   PAUSE LOCAL ANIMATION":"A   START LOCAL ANIMATION");
  draw_note("X RESET   B BACK  |  ECU UNTOUCHED");
 }
+/* This overlay demonstrates a confirmation sequence only: no physical output. */
+static void draw_demo_confirm(void){
+ if(!demo_confirm.phase)return;
+ rect(0,0,320,240,soil);
+ rect(7,7,306,226,orange);
+ rect(11,11,298,218,bg);
+ text(20,18,.53f,cream,"OUTPUT TEST - UI DEMO");
+ rect(20,44,278,2,orange);
+ char label[80];shorten(label,sizeof(label),demo_label,31);
+ text(20,54,.48f,white,label);
+ text(20,78,.35f,orange,"CONNECTED HARDWARE CAN BE DANGEROUS.");
+ text(20,95,.35f,cream,"THIS DEMO NEVER SENDS AN OUTPUT COMMAND.");
+ text(20,112,.35f,secondary,"Simulates the user's approval sequence.");
+ round_panel(18,140,284,58,5,panel2);
+ if(demo_confirm.phase==BTS_DEMO_ENABLE){
+    text(27,147,.47f,bright,"STEP 1 / 2    A  ENABLE DEMO");
+    text(27,174,.37f,secondary,"No ECU output will be activated");
+ }else{
+    text(27,147,.45f,bright,"STEP 2 / 2    HOLD L + R");
+    text(27,174,.36f,secondary,demo_confirm.shoulders_released?
+         "Both shoulder buttons: hold together":
+         "Release both shoulder buttons first");
+ }
+ text(20,211,.37f,cream,"B  CANCEL  |  No hardware actuation");
+}
 static void draw_hazard_confirm(void){
  if(hazardous_test.kind==BRICK_TEST_NONE)return;
  /* Full-screen overlay on 320x240 lower display; no clipped title, no
@@ -6680,6 +6715,7 @@ static void draw_bottom(void){draw_depth_grid(320,240);draw_topbar();
  else if(ui_page==PAGE_DIAG)draw_diag();else if(ui_page==PAGE_SOUND_TEST)draw_sound_test();else if(ui_page==PAGE_DISPLAY)draw_display();else if(ui_page==PAGE_GAUGE_PICK)draw_channel_picker();else if(ui_page==PAGE_GRAPH)draw_graph_deck();else if(ui_page==PAGE_INI_GRAPH)draw_ini_graph_deck();else if(ui_page==PAGE_RECORDER)draw_recorder();else if(in_map_view()&&current_table>=0&&tables[current_table].curve)draw_curve_deck();
  else if(in_map_view())draw_map_deck();else if(ui_page==PAGE_FIELD)draw_field();else draw_list();
  if(hazardous_test.kind)draw_hazard_confirm();
+ if(demo_confirm.phase)draw_demo_confirm();
  if(log_delete_pending && ui_page==PAGE_LOG_BROWSER){
     round_panel(8,59,304,134,7,panel2);
     text(18,67,.62f,white,"DELETE THIS SAVED LOG?");
@@ -6913,6 +6949,28 @@ static void tune_switch_bucket(int direction){
  enter_selected();
 }
 static void handle_keys(u32 k){
+ if(demo_confirm.phase){
+    if(osGetTime()-demo_started_ms>20000){
+       bts_demo_reset(&demo_confirm);
+       note("Demo confirmation expired; outputs unchanged");
+       return;
+    }
+    int result=bts_demo_input(&demo_confirm,k,hidKeysHeld(),
+                              KEY_A,KEY_L,KEY_R,KEY_B);
+    if(result<0)note("Demo cancelled; outputs unchanged");
+    else if(result==2)note("Demo enabled: release L/R, then hold both");
+    else if(result>0){
+       demo_completed_count++;
+       note("LOCAL DEMO COMPLETE; NO ECU HARDWARE COMMAND SENT");
+       if(net_ok&&ecu_session&&ecu_signature[0]&&menu_loaded&&
+          !strcmp(ecu_signature,ini_signature)&&!command_inspect_pending){
+          copy_text(command_inspect_name,sizeof(command_inspect_name),demo_command);
+          command_inspect_pending=true;
+       }
+    }
+    return;
+ }
+
  if(log_delete_pending){
     if(k&KEY_A)log_delete_confirm();
     else if(k&KEY_B){log_delete_pending=false;note("Log deletion cancelled");}
