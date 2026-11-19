@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <ctype.h>
 #include <sys/stat.h>
 #include "esp_log.h"
 #include "esp_spiffs.h"
@@ -236,4 +237,75 @@ bool ini_cache_bench_channels(const char *ecu_signature,
 finish:
     xSemaphoreGive(lock);
     return found_rpm && found_battery;
+}
+
+
+/* The named commands in [ControllerCommands] are metadata only. In particular,
+ * resolving a command name must never forward its payload to the ECU. */
+bool ini_cache_command_info(const char *ecu_signature, const char *command_id,
+                             brick_ini_command_info_t *out) {
+    if (!command_id || !out) return false;
+    size_t idlen=strlen(command_id);
+    if (idlen<2 || idlen>63) return false;
+    for (size_t i=0;i<idlen;i++) {
+        unsigned char ch=(unsigned char)command_id[i];
+        if (!(isalnum(ch) || ch=='_')) return false;
+    }
+    memset(out,0,sizeof(*out));
+    if (!ecu_signature || !*ecu_signature || !acquire()) return false;
+    if (!exact_signature(INI_PATH,ecu_signature)) {
+        xSemaphoreGive(lock);
+        return false;
+    }
+    FILE *file=fopen(INI_PATH,"r");
+    if (!file) {xSemaphoreGive(lock);return false;}
+    enum {SECTION_OTHER,SECTION_COMMANDS,SECTION_USER} section=SECTION_OTHER;
+    char line[1024];
+    while (fgets(line,sizeof(line),file)) {
+        /* Skip oversized lines rather than partially parsing an INI entry. */
+        if (!strchr(line,'\n') && !feof(file)) {
+            int ch;
+            while ((ch=fgetc(file))!=EOF && ch!='\n') {}
+            continue;
+        }
+        char *p=line;
+        while (*p==' '||*p=='\t')p++;
+        if (*p=='[') {
+            section=!strncasecmp(p,"[ControllerCommands]",20)?SECTION_COMMANDS:
+                    !strncasecmp(p,"[UserDefined]",13)?SECTION_USER:SECTION_OTHER;
+            continue;
+        }
+        if (*p==';'||*p=='#'||!*p||section==SECTION_OTHER) continue;
+        char *equals=strchr(p,'=');
+        if (!equals) continue;
+        *equals=0;
+        char *end=equals;
+        while (end>p && (end[-1]==' '||end[-1]=='\t')) *--end=0;
+        char *value=equals+1;
+        while (*value==' '||*value=='\t')value++;
+        if (section==SECTION_COMMANDS) {
+            if (!strcmp(p,command_id) && *value=='"')out->declared=true;
+        }else if(section==SECTION_USER && !strcasecmp(p,"commandButton")) {
+            if (*value++!='"') continue;
+            char *close=strchr(value,'"');
+            if (!close)continue;
+            char *ref=close+1;
+            while (*ref==' '||*ref=='\t')ref++;
+            if (*ref++!=',')continue;
+            while (*ref==' '||*ref=='\t')ref++;
+            char *stop=ref;
+            while (isalnum((unsigned char)*stop)||*stop=='_')stop++;
+            size_t ref_len=(size_t)(stop-ref);
+            if (ref_len!=idlen||strncmp(ref,command_id,idlen))continue;
+            out->shown_as_button=true;
+            size_t label_len=(size_t)(close-value);
+            if (label_len>=sizeof(out->label))label_len=sizeof(out->label)-1;
+            memcpy(out->label,value,label_len);
+            out->label[label_len]=0;
+        }
+    }
+    bool ok=!ferror(file);
+    fclose(file);
+    xSemaphoreGive(lock);
+    return ok;
 }
