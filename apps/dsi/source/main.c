@@ -712,6 +712,17 @@ static void map_number(char *dst,size_t cap,double value){
     else if(fabs(value)>=10)snprintf(dst,cap,"%.1f",value);
     else snprintf(dst,cap,"%.2f",value);
 }
+/* CurveEditor is a *two-dimensional X/Y plot*, not a TableEditor terrain.
+ * Use the calibration's actual X bin values instead of distributing points
+ * evenly by index: temperature/RPM bins may be unevenly spaced. */
+static int curve_plot_x(double value,double minimum,double maximum,int left,int right){
+    if(!isfinite(value)||!isfinite(minimum)||!isfinite(maximum)||
+       !(maximum>minimum)||right<=left)return left;
+    double t=(value-minimum)/(maximum-minimum);
+    if(t<0)t=0;
+    if(t>1)t=1;
+    return left+(int)(t*(right-left)+0.5);
+}
 static void map_top(void){
     draw_header(table.dirty?"MAP / STAGED CHANGES":"ECU CALIBRATION MAP");
     if(cal_load.active){
@@ -766,7 +777,7 @@ static void map_top(void){
     snprintf(labels,sizeof(labels),"X %.17s   Y %.17s",
              m->x_label[0]?m->x_label:m->x,m->y_label[0]?m->y_label:m->y);
     tiny_fit(top,9,48,labels,MUTED,241);
-    if(map_surface_3d&&table.width>1&&table.height>1){
+    if(!m->curve&&map_surface_3d&&table.width>1&&table.height>1){
         BtSurface3D view={0};
         view.values=table.cells;view.xbins=table.xbins;view.ybins=table.ybins;
         view.width=table.width;view.height=table.height;
@@ -781,18 +792,32 @@ static void map_top(void){
                   "3D SURFACE / L + DPAD TO ORBIT",trace_valid?GREEN:CYAN,242);
         return;
     }
-    if(m->curve && table.height==1 && table.width>1){
-        /* TunerStudio 2D curves are X versus Z, not 3D heatmaps. Render a
-         * full-width line plot with the true X bins and Z values. */
+    if(m->curve && table.width>1){
+        /* CurveEditor is always a flat X/Y graph; even an atypical multiple-row
+         * constant must never be accidentally rendered as 3D terrain. A
+         * multi-row curve uses the selected row for its visible line. */
         int x0=33,x1=244,y0=69,y1=157;
         double low=INFINITY,high=-INFINITY;
         for(int i=0;i<table.width;i++){
-            double v=table.cells[i];if(!isfinite(v))continue;
+            double v=table.cells[cy*table.width+i];if(!isfinite(v))continue;
             if(v<low)low=v;
             if(v>high)high=v;
         }
         if(!isfinite(low)||!isfinite(high)){low=0;high=1;}
         double delta=high-low;if(delta<1e-9)delta=1;
+        bool real_x=table.has_x&&table.x_count>=table.width;
+        double xmin=0,xmax=(double)(table.width-1);
+        if(real_x){
+            xmin=INFINITY;xmax=-INFINITY;
+            for(int i=0;i<table.width;i++){
+                double v=table.xbins[i];if(!isfinite(v))continue;
+                if(v<xmin)xmin=v;
+                if(v>xmax)xmax=v;
+            }
+            if(!isfinite(xmin)||!isfinite(xmax)||xmax<=xmin){
+                real_x=false;xmin=0;xmax=(double)(table.width-1);
+            }
+        }
         fill(top,x0,y0,1,y1-y0+1,EDGE);
         fill(top,x0,y1,x1-x0+1,1,EDGE);
         for(int i=1;i<4;i++){
@@ -801,8 +826,8 @@ static void map_top(void){
         }
         int oldx=-1,oldy=-1;
         for(int i=0;i<table.width;i++){
-            int x=x0+(x1-x0)*i/(table.width-1);
-            double v=table.cells[i];
+            int x=curve_plot_x(real_x?table.xbins[i]:(double)i,xmin,xmax,x0,x1);
+            double v=table.cells[cy*table.width+i];
             if(!isfinite(v)){oldx=oldy=-1;continue;}
             int y=y1-(int)((v-low)*(y1-y0)/delta+0.5);
             if(y<y0)y=y0;
@@ -816,12 +841,12 @@ static void map_top(void){
         char v[28];map_number(v,sizeof(v),high);
         tiny_fit(top,2,68,v,MUTED,34);
         map_number(v,sizeof(v),low);tiny_fit(top,2,145,v,MUTED,34);
-        if(table.has_x&&table.x_count>=table.width){
-            map_number(v,sizeof(v),table.xbins[0]);tiny_fit(top,33,163,v,CYAN,76);
-            map_number(v,sizeof(v),table.xbins[table.width-1]);
+        if(real_x){
+            map_number(v,sizeof(v),xmin);tiny_fit(top,33,163,v,CYAN,76);
+            map_number(v,sizeof(v),xmax);
             tiny_fit(top,184,163,v,CYAN,68);
         }else tiny_fit(top,33,163,"X BINS NOT AVAILABLE",MUTED,185);
-        tiny_fit(top,8,181,trace_valid?"2D CURVE / LIVE TRACE ACTIVE":"2D CURVE / SELECT X POINT TO EDIT",trace_valid?GREEN:MUTED,244);
+        tiny_fit(top,8,181,trace_valid?"FLAT 2D CURVE / LIVE TRACE ACTIVE":"FLAT 2D CURVE / X AND Y VALUES",trace_valid?GREEN:MUTED,244);
         return;
     }
     int cols=table.width<5?table.width:5,rows=table.height<5?table.height:5;
@@ -865,11 +890,11 @@ static void map_top(void){
         }
     }else tiny_text(top,38,164,"NO INI X AXIS",MUTED,125);
     char line[80];
-    if(trace_valid)snprintf(line,sizeof(line),"TRACE %d,%d  /  CELL %d,%d",
+    if(trace_valid)snprintf(line,sizeof(line),"2D GRID / TRACE %d,%d CELL %d,%d",
                   trace_x+1,trace_y+1,cx+1,cy+1);
     else if(table.has_x && (table.height==1||table.has_y))
-        snprintf(line,sizeof(line),"TRACE: WAITING FOR INI OUTPUT DATA");
-    else snprintf(line,sizeof(line),"AXIS INI DEFINITION UNAVAILABLE");
+        snprintf(line,sizeof(line),"2D GRID / WAITING FOR LIVE TRACE");
+    else snprintf(line,sizeof(line),"2D GRID / AXIS INI UNAVAILABLE");
     tiny_fit(top,8,181,line,trace_valid?GREEN:MUTED,246);
     if(table.dirty)tiny_text(top,180,48,"STAGED",HIGHLIGHT,64);
 }
@@ -1369,9 +1394,9 @@ static void bottom_editor(void){
     bool option=f&&f->kind==2;
     bool scalar=chosen_map==BTS_MAX_MAPS&&table.width==1&&table.height==1;
     tiny_fit(bottom,8,24,map->label,HIGHLIGHT,table.width>1&&table.height>1?150:207);
-    if(table.width>1&&table.height>1){
+    if(!map->curve&&table.width>1&&table.height>1){
         round_fill(bottom,165,23,46,17,3,PANEL);
-        tiny_text(bottom,172,27,map_surface_3d?"2D MAP":"3D MAP",CYAN,42);
+        tiny_text(bottom,168,27,map_surface_3d?"VIEW 2D":"VIEW 3D",CYAN,44);
     }
     tiny_text(bottom,224,24,is_favorite(chosen_map==BTS_MAX_MAPS?map->z:map->name)?"[*]":"[+]",HIGHLIGHT,28);
     if(option){
@@ -1426,7 +1451,8 @@ static void bottom_editor(void){
             editor_readonly?"INI DISPLAY ONLY":"ECU ORIGINAL / UNCHANGED",MUTED,240);
     tiny_text(bottom,8,181,editor_readonly?"READ ONLY  /  B BACK":
          map_surface_3d?"L+DPAD ORBIT / START BURN / R STAR":
-         "START BURN / R FAVORITE / B BACK",HIGHLIGHT,246);
+         map->curve?"2D CURVE / START BURN / R STAR":
+         "2D GRID / START BURN / R STAR",HIGHLIGHT,246);
 }
 static void bottom_write_progress(void){
     fill(bottom,0,0,W,H,BG);
@@ -2093,7 +2119,7 @@ static void open_map(int id){
         active_fields[0].read_only=true;active_field_present[0]=true;
     }
     chosen_map=id;cx=cy=0;map_focus=0;abandon_confirm=false;keypad_open=false;bit_picker_open=false;
-    map_surface_3d=table.width>1&&table.height>1;
+    map_surface_3d=false; /* Open flat 2D grid; 3D surface is optional. */
     cal_load.active=true;cal_load.stage=-3;cal_load.total=0;cal_load.map_id=id;
     snprintf(status_msg,sizeof(status_msg),"READING ECU CALIBRATION");
     snprintf(note,sizeof(note),"READING %s FROM ECU",m->label);
@@ -2594,7 +2620,7 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
         if(down&KEY_R)favorite_current_editor();
         if((down&KEY_TOUCH)&&tp->py>=24&&tp->py<46){
             if(tp->px>=215)favorite_current_editor();
-            else if(tp->px>=163&&table.width>1&&table.height>1)
+            else if(tp->px>=163&&!selected_map()->curve&&table.width>1&&table.height>1)
                 map_surface_3d=!map_surface_3d;
         }
         if(down&KEY_X)change_map_cell(1);
