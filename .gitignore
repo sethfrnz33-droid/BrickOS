@@ -1,0 +1,10 @@
+# Sensitive ECU/private session files are not checked in by default.
+*.msq
+*.bin
+*.log
+*.csv
+.env
+*.key
+*.pem
+__pycache__/
+.DS_Store
