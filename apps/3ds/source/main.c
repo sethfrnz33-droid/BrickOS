@@ -74,8 +74,10 @@ typedef struct {char name[60],unit[26];int page,offset,width,height,kind,type,by
 typedef struct {char name[64];const char *value;} MacroDef;
 typedef struct {int value;char label[56];} Choice;
 typedef struct {char id[64],alt[64],label[76],x[60],y[60],z[60],xchan[60],ychan[60];bool curve,xro,yro;} TableDef;
-typedef struct {char owner[64],ref[64],label[60];int panel;} DialogRef;
-typedef struct {char label[72],command[64],info[128],group[68];int field;int type;} Resolved;
+enum {BTS_REGION_INHERIT=0,BTS_REGION_NORTH=1,BTS_REGION_WEST=2,
+      BTS_REGION_CENTER=3,BTS_REGION_EAST=4,BTS_REGION_SOUTH=5};
+typedef struct {char owner[64],ref[64],label[60];int panel;unsigned char region;} DialogRef;
+typedef struct {char label[72],command[64],info[128],group[68];int field;int type;unsigned char region;} Resolved;
 
 enum {T_U08,T_S08,T_U16,T_S16,T_U32,T_S32,T_F32,T_F64,T_BAD};
 enum {K_SCALAR,K_ARRAY,K_BITS};
@@ -110,6 +112,20 @@ static Resolved results[RES_CAP];static int result_count=0;
  * reconstruct TunerStudio's panel grouping on the dual screens. */
 #define DIALOG_CAPTION_CAP 768
 typedef struct {char id[64],title[68];} DialogCaption;
+/* TunerStudio indicatorPanel/readoutPanel are not ordinary dialogs. */
+#define BTS_INDICATOR_CAP 256
+typedef struct {char channel[64],off[72],on[72];} BtsIniIndicator;
+static BtsIniIndicator ini_indicators[BTS_INDICATOR_CAP];
+static int ini_indicator_count=0;
+static int bts_ini_region(const char *name){
+ if(!name||!*name)return BTS_REGION_INHERIT;
+ if(!strcasecmp(name,"North"))return BTS_REGION_NORTH;
+ if(!strcasecmp(name,"West"))return BTS_REGION_WEST;
+ if(!strcasecmp(name,"Center"))return BTS_REGION_CENTER;
+ if(!strcasecmp(name,"East"))return BTS_REGION_EAST;
+ if(!strcasecmp(name,"South"))return BTS_REGION_SOUTH;
+ return BTS_REGION_INHERIT;
+}
 static DialogCaption dialog_captions[DIALOG_CAPTION_CAP];
 static int dialog_caption_count=0;
 static const char *dialog_caption(const char *id){
@@ -906,7 +922,14 @@ static void parse_int_list(const char*value,int*dest,int max,int*count){char a[6
 static void add_menu(const char*label,const char*target,int group){
  while(*label=='&')label++;
  if(menu_count>=MENU_CAP||!*label)return;MenuItem*m=&menus[menu_count++];snprintf(m->label,sizeof(m->label),"%s",label);snprintf(m->target,sizeof(m->target),"%s",target);m->group=group;}
-static void add_ref(const char*owner,const char*ref,const char*label,int panelref){if(ref_count>=REF_CAP||!*owner||!*ref)return;DialogRef*d=&refs[ref_count++];snprintf(d->owner,sizeof(d->owner),"%s",owner);snprintf(d->ref,sizeof(d->ref),"%s",ref);snprintf(d->label,sizeof(d->label),"%s",label);d->panel=panelref;}
+static void add_ref(const char*owner,const char*ref,const char*label,int panelref){
+ if(ref_count>=REF_CAP||!*owner||!*ref)return;
+ DialogRef*d=&refs[ref_count++];memset(d,0,sizeof(*d));
+ copy_text(d->owner,sizeof(d->owner),owner);
+ copy_text(d->ref,sizeof(d->ref),ref);
+ copy_text(d->label,sizeof(d->label),label);
+ d->panel=panelref;
+}
 /* TunerStudio's #define macros supply board-specific labels for pin and ADC
  * enums. Keep their original indices, including INVALID entries. */
 static const char *macro_value(const char*name){
@@ -971,7 +994,7 @@ static int parse_ini_all(const char*body,int length){char*buf=(char*)malloc((siz
  if(compare_buffer)free(compare_buffer);
  ini_source=buf;
  macro_count=power_cycle_count=ini_readonly_count=0;rpm_limit_requested=rpm_limit_known=false;rpm_limit_retry_at=0;
- menu_count=cal_count=chan_count=table_count=ref_count=gauge_def_count=ini_graph_count=0;page_ids_count=0;ini_setting_help_count=0;dialog_caption_count=0;
+ menu_count=cal_count=chan_count=table_count=ref_count=gauge_def_count=ini_graph_count=0;page_ids_count=0;ini_setting_help_count=0;dialog_caption_count=0;ini_indicator_count=0;
  memset(&ini_flags,0,sizeof(ini_flags));ini_flags_requested=false;ini_flags_retry_at=0;ini_flags_signature[0]=0;
  memset(nav_bookmark,0,sizeof(nav_bookmark));memset(page_ids,-1,sizeof(page_ids));memset(page_sizes,-1,sizeof(page_sizes));memset(page_burnable,0,sizeof(page_burnable));memset(page_writeable,0,sizeof(page_writeable));ini_signature[0]=0;
  char*save=NULL;char*row=strtok_r(buf,"\r\n",&save);char section[32]="";int currentpage=1,lasttable=-1,lastcurve=-1;char dialog[64]="";int currentgraph=-1;bool onmain=false;
@@ -1043,10 +1066,41 @@ static int parse_ini_all(const char*body,int length){char*buf=(char*)malloc((siz
    IniGraphDef *g=&ini_graphs[currentgraph];
    if(g->count<INI_GRAPH_LINES)copy_text(g->channels[g->count++],sizeof(g->channels[0]),a[0]);
  }
- else if(!strcasecmp(key,"panel")&&n) add_ref(dialog,a[0],a[0],true);
+ else if(!strcasecmp(key,"indicatorPanel")&&n>=1){
+     copy_text(dialog,sizeof(dialog),a[0]);currentgraph=-1;
+  }
+  else if(!strcasecmp(key,"readoutPanel")&&n>=1){
+     copy_text(dialog,sizeof(dialog),a[0]);currentgraph=-1;
+  }
+  else if(!strcasecmp(key,"indicator")&&n>=3&&ini_indicator_count<BTS_INDICATOR_CAP){
+     int idx=ini_indicator_count++;
+     BtsIniIndicator *ind=&ini_indicators[idx];memset(ind,0,sizeof(*ind));
+     copy_text(ind->off,sizeof(ind->off),a[1]);
+     copy_text(ind->on,sizeof(ind->on),a[2]);
+     char channel[128];copy_text(channel,sizeof(channel),a[0]);
+     char *p=trim(channel);
+     if(*p=='{'){p++;char *end=strrchr(p,'}');if(end)*end=0;p=trim(p);}
+     /* Only bare ECU channel identifiers resolve to a live indicator;
+      * arbitrary expression text is preserved, never guessed as a value. */
+     copy_text(ind->channel,sizeof(ind->channel),p);
+     char refid[40];snprintf(refid,sizeof(refid),"btsIndicator%d",idx);
+     add_ref(dialog,refid,*ind->on?ind->on:refid,6);
+  }
+  else if(!strcasecmp(key,"readout")&&n>=1&&*a[0])
+      add_ref(dialog,a[0],a[0],5);
+  else if(!strcasecmp(key,"panel")&&n){
+     int previous=ref_count;
+     add_ref(dialog,a[0],a[0],1);
+     if(ref_count>previous && n>=2)
+        refs[ref_count-1].region=(unsigned char)bts_ini_region(a[1]);
+  }
  else if(!strcasecmp(key,"field")&&n>=2&&*a[1]&&*a[1]!='{'&&strchr(a[1],' ')==NULL)add_ref(dialog,a[1],a[0],0);
  else if(!strcasecmp(key,"field")&&n==1&&*a[0])add_ref(dialog,a[0],a[0],4);
- else if(!strcasecmp(key,"gauge")&&*dialog&&n>=1&&*a[0])add_ref(dialog,a[0],a[0],5);
+ else if(!strcasecmp(key,"gauge")&&*dialog&&n>=1&&*a[0]){
+      int previous=ref_count;add_ref(dialog,a[0],a[0],5);
+      if(ref_count>previous && n>=2)
+          refs[ref_count-1].region=(unsigned char)bts_ini_region(a[1]);
+  }
  else if(!strcasecmp(key,"commandButton")&&n>=2&&*a[1])
       add_ref(dialog,a[1],a[0],2);
  }
