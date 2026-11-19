@@ -3967,9 +3967,11 @@ static void enter_selected(void){
  }
  else if(ui_page==PAGE_DETAIL){if(selected>=0&&selected<result_count){
      if(results[selected].type==3){
-       unsigned hazard=hazardous_test_kind(&results[selected]);
-       if(hazard&&hazard!=BRICK_TEST_TRIGGER)warn_before_hazardous_test(hazard);
-       else preview_stim_action(&results[selected]);
+       /* Only supported, guarded commands can be dispatched. The bridge's
+        * /api/ts endpoint rejects all Z physical output test commands. */
+       if(is_stim_action(&results[selected]))
+           preview_stim_action(&results[selected]);
+       else note("ECU output test unavailable: BrickOS /api/ts rejects Z");
      }
      else if(results[selected].type==4){open_ini_graph(results[selected].field,PAGE_DETAIL,selected);}
       else if(results[selected].type==6){note("INI description: read only");}
@@ -4366,8 +4368,10 @@ static void draw_tune_dialog_top(void){
     text(179,114,.55f,white,name);
     if(r->type==3){
        round_panel(177,144,204,39,5,panel);
-       text(190,149,.46f,orange,"ECU TEST COMMAND");
-       text(190,168,.36f,secondary,"Unavailable / no actuation");
+       text(190,149,.46f,orange,"TUNERSTUDIO COMMAND");
+       text(179,168,.36f,secondary,
+          is_stim_action(r)?"Uses guarded trigger action":
+          "Bridge does not support this test");
     }else if(r->type==6){
        text(178,144,.44f,secondary,"INI INFORMATION / READ ONLY");
     }else if(r->type==7){
@@ -5076,9 +5080,14 @@ static void draw_config_dialog_bottom(void){
     char name[80];shorten(name,sizeof(name),item->label,button?24:25);
     text(17,y+4,.46f,focus?white:cream,name);
     if(button){
-       /* Clearly an action, unlike an ECU value. Unsupported tests stay inert. */
-       round_panel(227,y+2,76,19,4,outline);
-       text(237,y+5,.34f,orange,"LOCKED");
+       /* Actual button styling; explicit disabled state instead of an
+        * unusable test button pretending it can actuate the ECU. */
+       bool supported=is_stim_action(item)&&
+          (!strcmp(item->command,"cmd_disable_self_stim")?
+           stim_stop_supported:stim_start_supported);
+       round_panel(215,y+2,88,19,4,supported?muted_leaf:outline);
+       text(222,y+5,.34f,supported?bright:orange,
+            supported?"COMMAND":"NO BRIDGE");
     }else if(item->type==6){
        text(268,y+5,.32f,secondary,"INFO");
     }else if(item->type==7){
