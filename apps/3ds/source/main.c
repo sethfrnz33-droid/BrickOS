@@ -4017,7 +4017,9 @@ static void enter_selected(void){
            request_output_test_abort();
        else if(is_stim_action(&results[selected]))
            preview_stim_action(&results[selected]);
-       else begin_output_demo(&results[selected]);
+       else if(is_sensor_capture_command(results[selected].command))
+           begin_output_demo(&results[selected]);
+       else note("Physical output test unavailable in BrickOS");
      }
      else if(results[selected].type==4){open_ini_graph(results[selected].field,PAGE_DETAIL,selected);}
       else if(results[selected].type==6){note("INI description: read only");}
@@ -4421,7 +4423,7 @@ static void draw_tune_dialog_top(void){
           is_sensor_capture_command(r->command)?
            "A REAL SENSOR CAPTURE / L+R CONFIRM":
           is_stim_action(r)?"Uses guarded trigger action":
-           "A DEMO / 2-STEP CONFIRM / NO OUTPUT");
+           "Physical output command not available");
     }else if(r->type==6){
        text(178,144,.44f,secondary,"INI INFORMATION / READ ONLY");
     }else if(r->type==7){
@@ -5142,7 +5144,7 @@ static void draw_config_dialog_bottom(void){
             stim_stop_supported:stim_start_supported));
        round_panel(215,y+2,88,19,4,supported?muted_leaf:outline);
        text(222,y+5,.34f,supported?bright:orange,
-            abort?"ABORT":capture?"CAPTURE":supported?"COMMAND":"DEMO");
+            abort?"ABORT":capture?"CAPTURE":supported?"COMMAND":"NO BRIDGE");
     }else if(item->type==6){
        text(268,y+5,.32f,secondary,"INFO");
     }else if(item->type==7){
