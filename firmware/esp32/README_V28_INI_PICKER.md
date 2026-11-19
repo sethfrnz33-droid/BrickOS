@@ -1,0 +1,1 @@
+BrickOS v2.8: visible INI picker in Connection > ECU Definition Manager; no accept restrictions for iPhone Files. USB CDC, SD INI auto-import, AP-only Wi-Fi unchanged. Only files with valid generated rusEFI INI contents and matching ECU signature are activated. Open http://192.168.4.1/ then Connection and choose the file.

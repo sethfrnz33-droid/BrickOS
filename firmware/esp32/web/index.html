@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BrickOS | ECU Workspace</title><link rel="stylesheet" href="/app.css"></head>
+<body>
+<header class="topbar"><div class="brand"><span class="brand-symbol">B<span>·</span></span><div><strong>BRICK<span>OS</span></strong><small>TUNING CONSOLE</small></div></div><div class="head-right"><div class="chip" id="connection-led"><i></i><span>NO ECU</span></div><div class="ecu-name" id="signature">Waiting for rusEFI</div><button class="subtle" id="connect">Reconnect</button><button class="subtle global-find" data-action="open-command" aria-label="Find tuning screen" title="Search all tuning screens">⌕ <span>Find screen</span></button></div></header>
+<div class="layout app-shell">
+<aside class="sidebar app-rail" aria-label="Main navigation">
+<nav id="nav" aria-label="BrickOS sections">
+<button data-route="overview" class="active" title="Dashboard"><span class="app-icon">▦</span><span>Dashboard</span></button>
+<button data-route="tuning" title="ECU tuning"><span class="app-icon">☷</span><span>Tune</span></button>
+<button data-route="gauges" title="Gauge layouts"><span class="app-icon">◉</span><span>Gauges</span></button>
+<button data-route="logs" title="Logging"><span class="app-icon">⌁</span><span>Logs</span></button>
+<button data-route="system" title="ECU and diagnostics"><span class="app-icon">⚙</span><span>ECU</span></button>
+</nav><div class="app-rail-foot"><span>BRICK</span><small id="side-definition">ECU DEFINITION</small></div>
+</aside>
+<main id="page" tabindex="-1"></main></div>
+<input id="patch-upload" type="file" accept=".json,.btune,application/json" hidden>
+<input id="log-upload" type="file" accept=".blg,application/octet-stream" hidden>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="burn-flow" class="burn-overlay" hidden aria-live="polite"></div>
+<script type="module" src="/app.js"></script>
+</body></html>

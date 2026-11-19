@@ -1,0 +1,1 @@
+BrickOS v2.9 iPhone INI import: fixes dynamic INI file picker event binding (previous JS threw because input was not present until Connection view rendered); supports full INI text paste on iPhone as a second import path; preserves signature checks and SPIFFS cache. AP-only Wi-Fi, CDC tuning, and ECU SD INI import unchanged. Extract ZIP into one BrickOS_v29 folder.

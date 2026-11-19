@@ -1,0 +1,13 @@
+from pathlib import Path
+root = Path(__file__).resolve().parents[1]
+gw = (root / 'main/vcp_tcp_gateway.cpp').read_text()
+sd = (root / 'main/usb_sd_ini.c').read_text()
+cm = (root / 'main/CMakeLists.txt').read_text()
+assert 'brick_sd_ini_host_install();' not in gw
+assert 'msc_host_install(' not in sd
+assert 'xTaskCreatePinnedToCore' not in sd
+assert 'USB SD auto-import disabled' in sd
+assert 'espressif__usb_host_msc' not in cm
+assert 'cdc_acm_host_install(' in gw
+assert 'usb_host_install(' in gw
+print('PASS v3.2 SD disabled; native USB CDC still installed')

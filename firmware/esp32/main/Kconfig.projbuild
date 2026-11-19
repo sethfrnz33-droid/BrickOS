@@ -1,0 +1,23 @@
+menu "BrickOS USB tuning hardware and security"
+    # USB host uses the ESP32-S3 native USB controller.
+    # Open AP name is brick at 192.168.4.1.
+    config BRICK_SD_SPI
+        bool "Log to ESP32-attached SD card (otherwise internal flash SPIFFS)"
+        default n
+    config BRICK_SD_MOSI
+        int "SD SPI MOSI GPIO"
+        default 11
+        depends on BRICK_SD_SPI
+    config BRICK_SD_MISO
+        int "SD SPI MISO GPIO"
+        default 13
+        depends on BRICK_SD_SPI
+    config BRICK_SD_CLK
+        int "SD SPI SCLK GPIO"
+        default 12
+        depends on BRICK_SD_SPI
+    config BRICK_SD_CS
+        int "SD SPI CS GPIO"
+        default 10
+        depends on BRICK_SD_SPI
+endmenu
