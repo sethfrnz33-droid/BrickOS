@@ -1,0 +1,1 @@
+The 6x9 glyph raster in source/font.h was generated from the DejaVu Sans Mono font, based on the Bitstream Vera font family. This project does not include or redistribute a font file. DejaVu fonts are distributed under the Bitstream Vera and related permissive font terms; attribution retained here.

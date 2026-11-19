@@ -5,7 +5,8 @@
 | Location | Role | Current status |
 |---|---|---|
 | [`firmware/esp32/`](firmware/esp32/) | ESP32-S3 Wi-Fi/USB bridge and embedded browser tuner | **v4.8 source imported from the user's release ZIP**; build not yet verified on hardware |
-| [`apps/3ds/`](apps/3ds/) | Brick Tuner Suite source, assets, Makefile and CIA build scripts | **Reserved**; not present in the uploaded ESP ZIP |
+| [`apps/3ds/`](apps/3ds/) | Brick Tuner Suite native Nintendo 3DS edition | **Not imported**; currently documentation only |
+| [`apps/dsi/`](apps/dsi/) | Brick Tuner Suite Nintendo DSi v2.2 source, tests and SD sound assets | **Imported** from user's v2.2 ZIP; host tests pass, hardware not verified |
 | [`prototype/`](prototype/) | Standalone Guided Tuning Python reference implementation | Existing read-only simulation, not deployable ESP firmware |
 | [`docs/`](docs/) | Guided Tuning design + installation, connections and firmware architecture | Research, specifications and setup instructions |
 | [`ROADMAP.md`](ROADMAP.md) | Cross-project engineering roadmap | Planning only |

@@ -1,0 +1,10 @@
+AUDIO INSTALLATION ON REAL DSi SD CARD
+
+Copy all files from this project's DSi/SD_Files/BrickECU/sfx/
+to your physical DSi SD card: BrickECU/sfx/
+
+Expected 14 files: 00.pcm8, 01.pcm8, ... 13.pcm8.
+The .nds ROM does not contain these audio files.
+Restart the DSi app after copying so the cached audio readiness check runs again.
+
+Press A on a sound in SOUNDBOARD to trigger playback and see its diagnostic.

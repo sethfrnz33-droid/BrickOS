@@ -1,17 +1,19 @@
 # Brick Tuner Suite — DSi edition
 
-**Status: DSi v2.1 source bundle prepared, not yet imported into this GitHub directory.** The complete DSi source archive is the additive `Brick-Tuner-Suite-DSi-v21-30Hz-Idle-Gauges-Full-Tuning.zip` distributed with the current ChatGPT release. Do not use any older v62 3DS snapshot to populate or replace the actively developed `apps/3ds/` source.
+**Current release: [v2.2 — 3DS-style workspace, 2/3/4 gauges, bitfield tuning, audio diagnostics](README_V22.md).**
 
-## DSi v2.1 integration requirements
+This `DSi/` folder is a separate Nintendo DSi/DS build of Brick Tuner Suite. It coexists with the current **3DS** project: do **not** overwrite the root 3DS source, shared Makefile, or actively developed BrickOS ESP32 firmware.
 
-- Preserve the live ESP32 BrickOS implementation in `firmware/esp32/` and preserve all 3DS files in `apps/3ds/`; **no force pushes or tree replacements**.
-- Import the DSi archive's `BrickECU-3DS-Probe/DSi/` contents into this `apps/dsi/` directory additively. The archive contains `Makefile`, `source/` (including the new `dashboard.c/.h`), `tests/`, and 14 PCM8 sounds under `SD_Files/BrickECU/sfx/`.
-- Build the DSi source using devkitPro MSYS2 `nds-dev`, e.g. `cd apps/dsi && make clean && make` once the source is imported. The existing local command remains `cd /c/Users/Seth/Downloads/BrickECU-3DS-Probe/DSi && make clean && make`. **Do not modify the 3DS build scripts.**
-- User-observed DSi v2.0: Wi-Fi connects through Unlaunch, INI loads from SD without re-parsing every startup, and telemetry is working.
-- DSi v2.1 targets 30 **distinct** samples/sec (ESP supports `hz=50`), removes a duplicate VBlank wait, distinguishes repeated sample frames from failures, and provides six additional nonduplicate INI-driven lower-screen gauges after 10 seconds of inactivity. The actual hardware update rate remains unverified.
-- The DSi tuning interface supports INI-defined maps, curves, scalar/array fields, nested dialogs, live map tracing, touchscreen numeric entry with local staged values, and explicitly confirmed verified bench-only writes with ECU/session/RPM/page/backup/readback checks. DSi logs and log analysis remain excluded. Not all 3DS advanced INI widgets are ported.
-- Tests: existing HTTP/INI/sockets, HTTP 503, parser, axes, and protected-write regressions; new idle/duplicate-sequence, keypad/limits, nested dialogs, gauge-pref persistence. Native devkitARM compilation and real hardware behavior still require testing.
+### Build in devkitPro MSYS2
 
-For protocol details see [DSI_PORT_AND_3DS_INTEGRATION](../../docs/DSI_PORT_AND_3DS_INTEGRATION.md), [DSI_HTTP_503_ANALYSIS](../../docs/DSI_HTTP_503_ANALYSIS.md), and [DSI_V20_SD_HTTP_RELEASE_NOTES](../../docs/DSI_V20_SD_HTTP_RELEASE_NOTES.md).
+```bash
+cd /c/Users/Seth/Downloads/BrickECU-3DS-Probe/DSi && make clean && make
+```
 
-**This README does not claim the DSi source is present or compiled on GitHub yet.** Keep that distinction until an additive source import is committed and tested.
+The compiled DSi ROM is `DSi/Brick-Tuner-Suite-DSi.nds`.
+
+### Important: install audio on the physical SD card
+
+Copy `DSi/SD_Files/BrickECU/sfx/` to **`BrickECU/sfx/` on the DSi SD card**. All `00.pcm8` through `13.pcm8` files must be present. The `.nds` does not embed these sounds. The Soundboard now shows a specific failure message if audio assets are unavailable.
+
+For control mappings, changes, limitations, and full test notes see [README_V22.md](README_V22.md). Older changes are documented in [README_V21.md](README_V21.md), [README_V20.md](README_V20.md), and [HISTORY_V01_TO_V18.md](HISTORY_V01_TO_V18.md).
