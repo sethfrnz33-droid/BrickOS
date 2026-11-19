@@ -4458,7 +4458,146 @@ static void draw_tune_categories_top(void){
 
 /* Two-screen configuration editor: named INI subpanels on top, values and
  * visually distinct action buttons on the touchscreen below. */
+/* TunerStudio's explicit North, West, Center, East and South placements are
+ * real layout instructions, not extra folder names. Each screen stays a
+ * usable part of the same INI dialog. */
+static int bts_effective_region(int index){
+ if(index<0||index>=result_count)return BTS_REGION_CENTER;
+ return results[index].region?results[index].region:BTS_REGION_CENTER;
+}
+static bool bts_spatial_layout(void){
+ for(int i=0;i<result_count;i++)if(results[i].region)return true;
+ return false;
+}
+static const char *bts_region_label(int region){
+ switch(region){
+ case BTS_REGION_NORTH:return "NORTH";
+ case BTS_REGION_WEST:return "WEST";
+ case BTS_REGION_EAST:return "EAST";
+ case BTS_REGION_SOUTH:return "SOUTH";
+ default:return "CENTER";
+ }
+}
+static int bts_first_in_region(int region){
+ for(int i=0;i<result_count;i++)
+    if(bts_effective_region(i)==region)return i;
+ return -1;
+}
+static int bts_next_region_field(int direction){
+ if(selected<0||selected>=result_count)return 0;
+ int old=bts_effective_region(selected);
+ for(int step=1;step<=5;step++){
+    int region=(old-1+5+direction*step+25)%5+1;
+    int first=bts_first_in_region(region);
+    if(first>=0)return first;
+ }
+ return selected;
+}
+static bool bts_indicator_state(const Resolved *r,bool *on){
+ if(!r||r->type!=8||r->field<0||r->field>=ini_indicator_count||!on)return false;
+ const char *key=ini_indicators[r->field].channel;
+ if(!*key)return false;
+ /* A bare output channel is evaluated from real live ECU bytes. */
+ for(const char *p=key;*p;p++)
+     if(!isalnum((unsigned char)*p)&&*p!='_')return false;
+ Field *ch=lookup((char*)key,true);
+ if(!ch)return false;
+ double value=0;
+ if(!channel_live_value((int)(ch-channels),&value))return false;
+ *on=value>.5;
+ return true;
+}
+static bool bts_result_curve(const Resolved *r){
+ if(!r||r->field<0||r->field>=cal_count)return false;
+ const char *field=cal[r->field].name;
+ for(int i=0;i<table_count;i++)if(tables[i].curve&&
+      !strcasecmp(tables[i].z,field))return true;
+ return false;
+}
+static void draw_ini_spatial_zone(int region,float x,float y,float width,float height){
+ int first=bts_first_in_region(region);if(first<0)return;
+ bool active=bts_effective_region(selected)==region;
+ round_panel(x,y,width,height,5,active?panel2:panel);
+ if(active)rect(x,y+7,3,height-14,green);
+ char name[92];shorten(name,sizeof(name),config_group_label(first),width>175?24:15);
+ text(x+9,y+4,.46f,active?white:cream,name);
+ text(x+width-42,y+5,.30f,secondary,bts_region_label(region));
+ rect(x+8,y+25,width-16,1,outline);
+ int indicator=-1,gauge=-1,visual=-1,fields=0;
+ for(int i=0;i<result_count;i++)if(bts_effective_region(i)==region){
+    if(indicator<0&&results[i].type==8)indicator=i;
+    if(gauge<0&&results[i].type==7)gauge=i;
+    if(visual<0&&(results[i].type==1||results[i].type==5||
+                    results[i].type==4))visual=i;
+    if(results[i].type==0||results[i].type==3)fields++;
+ }
+ float cursor=y+31;
+ if(indicator>=0&&cursor+22<=y+height){
+    Resolved *r=&results[indicator];BtsIniIndicator *ind=&ini_indicators[r->field];
+    bool on=false,valid=bts_indicator_state(r,&on);
+    const char *label=valid?(on?ind->on:ind->off):"STATUS: NO LIVE DATA";
+    char shortened[80];shorten(shortened,sizeof(shortened),label,width>175?25:14);
+    round_panel(x+7,cursor,width-14,22,4,panel2);
+    rect(x+11,cursor+6,7,9,valid?(on?green:secondary):orange);
+    text(x+23,cursor+4,.38f,valid?white:secondary,shortened);
+    cursor+=26;
+ }
+ if(gauge>=0&&cursor+24<=y+height){
+    Resolved *r=&results[gauge];double live=0;char value[32]="--";
+    bool ok=channel_live_value(r->field,&live);
+    if(ok)snprintf(value,sizeof(value),fabs(live)>=1000?"%.0f":"%.2f",live);
+    char label[76];shorten(label,sizeof(label),r->label,width>175?20:12);
+    text(x+9,cursor,.35f,secondary,label);
+    text(x+width-67,cursor,.49f,ok?bright:orange,value);
+    cursor+=23;
+ }
+ if(visual>=0&&cursor+35<y+height){
+    Resolved *r=&results[visual];
+    bool curve=bts_result_curve(r),graph=r->type==4;
+    char title[85];shorten(title,sizeof(title),r->label,width>175?26:17);
+    text(x+8,cursor,.39f,white,title);
+    cursor+=20;
+    float bottom=y+height-8;
+    round_panel(x+7,cursor,width-14,bottom-cursor,4,panel2);
+    text(x+14,cursor+6,.39f,bright,graph?"LIVE GRAPH":curve?"BLEND CURVE":"ECU TABLE");
+    text(x+14,cursor+29,.36f,secondary,"Select then A to open");
+ }else if(fields){
+    int shown=0;
+    for(int i=0;i<result_count&&shown<3;i++){
+       const Resolved *r=&results[i];
+       if(bts_effective_region(i)!=region||(r->type!=0&&r->type!=3))continue;
+       char item[70];shorten(item,sizeof(item),r->label,width>175?26:16);
+       text(x+10,cursor+shown*19,.38f,i==selected?bright:secondary,item);
+       shown++;
+    }
+ }
+}
+static void draw_ini_spatial_top(void){
+ draw_depth_grid(400,240);
+ char title[82];shorten(title,sizeof(title),open_title,39);
+ text(8,5,.62f,white,title);
+ text(302,8,.33f,bright,"INI LAYOUT");
+ bool north=bts_first_in_region(BTS_REGION_NORTH)>=0;
+ bool south=bts_first_in_region(BTS_REGION_SOUTH)>=0;
+ float cy=north?79:31,cb=south?193:230;
+ if(north)draw_ini_spatial_zone(BTS_REGION_NORTH,7,30,386,46);
+ if(south)draw_ini_spatial_zone(BTS_REGION_SOUTH,7,195,386,36);
+ int column_regions[]={BTS_REGION_WEST,BTS_REGION_CENTER,BTS_REGION_EAST};
+ int n=0;for(int i=0;i<3;i++)if(bts_first_in_region(column_regions[i])>=0)n++;
+ if(n){
+   float gap=6,width=(386-(n-1)*gap)/(float)n;
+   int ordinal=0;
+   for(int i=0;i<3;i++){
+      if(bts_first_in_region(column_regions[i])<0)continue;
+      draw_ini_spatial_zone(column_regions[i],7+ordinal*(width+gap),
+                           cy,width,cb-cy-3);
+      ordinal++;
+   }
+ }
+ text(8,233,.32f,secondary,"TOP: ORIGINAL INI POSITIONS / BOTTOM: INTERACTIVE CONTROLS");
+}
 static void draw_tune_dialog_top(void){
+ if(bts_spatial_layout()){draw_ini_spatial_top();return;}
  draw_depth_grid(400,240);
  char label[82];shorten(label,sizeof(label),open_title,43);
  text(12,7,.56f,white,label);
@@ -5183,6 +5322,43 @@ static void bts_soundboard_play(int idx){
 /* Bottom touchscreen is the active configuration form. Even repeated
  * "Output" labels are unambiguous under the INI's named subdialog heading. */
 static void draw_config_dialog_bottom(void){
+ bool spatial=bts_spatial_layout();
+ if(spatial){
+    char title[84];shorten(title,sizeof(title),open_title,35);
+    text(10,32,.56f,white,title);
+    rect(9,54,302,1,outline);
+    const int visible=6,top_y=58,row_h=25;
+    if(selected<scroll_y)scroll_y=selected;
+    if(selected>=scroll_y+visible)scroll_y=selected-visible+1;
+    if(scroll_y<0)scroll_y=0;
+    for(int row=0;row<visible;row++){
+       int idx=scroll_y+row;if(idx>=result_count)break;
+       const Resolved *r=&results[idx];
+       int y=top_y+row*row_h;
+       round_panel(8,y,304,23,4,idx==selected?muted_leaf:panel);
+       if(idx==selected)rect(9,y+3,3,17,green);
+       text(16,y+4,.30f,secondary,bts_region_label(bts_effective_region(idx)));
+       char name[82];shorten(name,sizeof(name),r->label,22);
+       text(68,y+4,.43f,idx==selected?white:cream,name);
+       const char *action=r->type==3?
+            (!strcmp(r->command,"cmd_test_cancel")?"ABORT":
+             is_sensor_capture_command(r->command)?"CAPTURE":
+             is_stim_action(r)?"TEST":"N/A"):
+          r->type==8?"STATE":r->type==7?"GAUGE":
+          r->type==4?"GRAPH":r->type==1||r->type==5?"PLOT":
+          r->type==6?"INFO":"EDIT";
+       round_panel(255,y+2,48,19,4,r->type==3?outline:panel2);
+       text(262,y+5,.31f,r->type==3?orange:bright,action);
+    }
+    if(result_count>visible){
+       float thumb=fmaxf(10.f,150.f*visible/(float)result_count);
+       float offset=150.f-thumb;
+       if(result_count>visible)offset*=scroll_y/(float)(result_count-visible);
+       rect(315,58,3,150,outline);rect(315,58+offset,3,thumb,bright);
+    }
+    text(8,217,.34f,bright,"A OPEN   L/R PANELS   UP/DOWN CONTROLS   B BACK");
+    return;
+ }
  int group=config_group_of(selected);
  int at=config_group_start(group),until=config_group_end(at);
  if(at<0){text(11,100,.45f,orange,"No ECU controls in this panel");return;}
