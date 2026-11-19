@@ -1,6 +1,6 @@
 {
   "schema": "brickos.guide.dialog.v1",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "identity": "seth",
   "display_name": "Seth",
   "origin": "ESP-hosted guide catalogue; clients are renderers, not rule owners",
@@ -324,6 +324,10 @@
       "tone": "normal",
       "choices": [
         {
+          "label": "Walk through this chapter with me",
+          "go": "check.trigger.0"
+        },
+        {
           "label": "Inspect available sync evidence",
           "go": "evidence.trigger"
         },
@@ -352,6 +356,10 @@
       "text": "Step 5: Initial startup evidence. We distinguish crank, catch, after-start and settled behavior as separate events. A sync error, unknown injector configuration or invalid sensor cannot be diagnosed by simply changing VE. I'll show what's observable and what requires a qualified check.",
       "tone": "normal",
       "choices": [
+        {
+          "label": "Walk through this chapter with me",
+          "go": "check.starting.0"
+        },
         {
           "label": "Review available start evidence",
           "go": "evidence.starting"
@@ -382,6 +390,10 @@
       "text": "Step 6: Idle. We separate airflow, fueling, spark correction and feedback instead of treating every RPM fluctuation as bad PID. First we inspect the active idle strategy and measurements; then I can explain what's still unverified.",
       "tone": "normal",
       "choices": [
+        {
+          "label": "Walk through this chapter with me",
+          "go": "check.idle.0"
+        },
         {
           "label": "Review idle measurements",
           "go": "evidence.idle"
@@ -2664,6 +2676,10 @@
       "tag": "01 / ECU CONFIGURATION",
       "choices": [
         {
+          "label": "Walk through this chapter with me",
+          "go": "check.configuration.0"
+        },
+        {
           "label": "Check ECU identity and evidence",
           "go": "evidence.identity"
         },
@@ -2695,6 +2711,10 @@
       "tag": "03 / BASE TABLES",
       "choices": [
         {
+          "label": "Walk through this chapter with me",
+          "go": "check.baseline.0"
+        },
+        {
           "label": "Find original fuel table settings",
           "go": "manual.fuel"
         },
@@ -2724,6 +2744,10 @@
       ],
       "tag": "04 / PHYSICAL REFERENCES",
       "choices": [
+        {
+          "label": "Walk through this chapter with me",
+          "go": "check.references.0"
+        },
         {
           "label": "Review reported reference channels",
           "go": "evidence.reference"
@@ -2784,6 +2808,10 @@
       ],
       "tag": "07 / STEADY FUEL",
       "choices": [
+        {
+          "label": "Walk through this chapter with me",
+          "go": "check.steady_fuel.0"
+        },
         {
           "label": "Inspect current fuel evidence",
           "go": "evidence.fuel"
@@ -2848,6 +2876,10 @@
       "tag": "08 / STEADY IGNITION",
       "choices": [
         {
+          "label": "Walk through this chapter with me",
+          "go": "check.steady_spark.0"
+        },
+        {
           "label": "Inspect spark/knock evidence",
           "go": "evidence.spark"
         },
@@ -2879,6 +2911,10 @@
       "tag": "09 / INSTRUMENTED REVIEW",
       "choices": [
         {
+          "label": "Walk through this chapter with me",
+          "go": "check.power.0"
+        },
+        {
           "label": "Review available ECU evidence",
           "go": "evidence.validation"
         },
@@ -2909,6 +2945,10 @@
       ],
       "tag": "10 / FINAL CONFIRMATION",
       "choices": [
+        {
+          "label": "Walk through this chapter with me",
+          "go": "check.confirmation.0"
+        },
         {
           "label": "Review evidence and exclusions",
           "go": "workspace.evidence"
@@ -3055,5 +3095,368 @@
       ],
       "external_validation": true
     }
-  ]
+  ],
+  "chapter_checks": {
+    "configuration": [
+      {
+        "id": "matching_ini",
+        "prompt": "Do the ECU signature and generated INI match?",
+        "why": "Every live reading and setting depends on the correct definition.",
+        "roles": [
+          "rpm"
+        ],
+        "manual_stage": "identity",
+        "requires_external": false
+      },
+      {
+        "id": "engine_inputs",
+        "prompt": "Have the configured sensors and engine inputs been checked against the actual installation?",
+        "why": "Configured values cannot independently verify physical wiring.",
+        "roles": [
+          "rpm",
+          "clt",
+          "map",
+          "tps"
+        ],
+        "manual_stage": "sensors",
+        "requires_external": true
+      },
+      {
+        "id": "backup",
+        "prompt": "Is there a recoverable baseline calibration backup?",
+        "why": "A browser export is not automatically a validated ECU backup.",
+        "roles": [],
+        "manual_stage": "identity",
+        "requires_external": true
+      }
+    ],
+    "trigger": [
+      {
+        "id": "sync_reporting",
+        "prompt": "Can we establish whether trigger synchronization data is available?",
+        "why": "An unavailable channel is not evidence of a fault-free trigger.",
+        "roles": [
+          "rpm",
+          "sync"
+        ],
+        "manual_stage": "trigger",
+        "requires_external": false
+      },
+      {
+        "id": "trigger_configuration",
+        "prompt": "Does the configured trigger setup agree with the installed hardware?",
+        "why": "Plausible RPM alone does not establish correct crank or cam setup.",
+        "roles": [
+          "rpm",
+          "sync"
+        ],
+        "manual_stage": "trigger",
+        "requires_external": true
+      },
+      {
+        "id": "physical_reference",
+        "prompt": "Has the ignition reference been independently verified?",
+        "why": "Commanded spark readings do not prove physical reference alignment.",
+        "roles": [
+          "spark",
+          "sync"
+        ],
+        "manual_stage": "spark",
+        "requires_external": true
+      }
+    ],
+    "baseline": [
+      {
+        "id": "fuel_model",
+        "prompt": "Which fuel strategy and base table are actually active?",
+        "why": "INI table names alone do not establish which fuel strategy is used.",
+        "roles": [
+          "map",
+          "tps",
+          "lambda",
+          "target"
+        ],
+        "manual_stage": "fuel",
+        "requires_external": false
+      },
+      {
+        "id": "injectors",
+        "prompt": "Have injector and fuel-system assumptions been reviewed?",
+        "why": "Incorrect injector assumptions can be masked by other corrections.",
+        "roles": [
+          "fuelPressure"
+        ],
+        "manual_stage": "fuel",
+        "requires_external": true
+      },
+      {
+        "id": "spark_model",
+        "prompt": "Which base ignition strategy and correction sources are active?",
+        "why": "Reported actual timing can contain multiple corrections.",
+        "roles": [
+          "spark",
+          "knock"
+        ],
+        "manual_stage": "spark",
+        "requires_external": false
+      }
+    ],
+    "references": [
+      {
+        "id": "ignition_reference",
+        "prompt": "Is the physical timing reference independently confirmed?",
+        "why": "The ECU cannot verify its own external timing reference solely from reported data.",
+        "roles": [
+          "spark",
+          "rpm"
+        ],
+        "manual_stage": "spark",
+        "requires_external": true
+      },
+      {
+        "id": "fuel_pressure",
+        "prompt": "Is fuel pressure independently verified when required?",
+        "why": "Missing pressure instrumentation must remain unknown, not normal.",
+        "roles": [
+          "fuelPressure"
+        ],
+        "manual_stage": "fuel",
+        "requires_external": true
+      },
+      {
+        "id": "protection_review",
+        "prompt": "Have the applicable ECU protection and sensor-fault settings been reviewed?",
+        "why": "No warning currently displayed does not establish that protections were validated.",
+        "roles": [
+          "knock",
+          "oilPressure",
+          "fuelPressure"
+        ],
+        "manual_stage": "sensors",
+        "requires_external": true
+      }
+    ],
+    "starting": [
+      {
+        "id": "start_state",
+        "prompt": "Can the ECU distinguish cranking and after-start states?",
+        "why": "State recognition matters before interpreting an initial-start log.",
+        "roles": [
+          "rpm",
+          "sync",
+          "clt"
+        ],
+        "manual_stage": "starting",
+        "requires_external": false
+      },
+      {
+        "id": "start_history",
+        "prompt": "Have multiple comparable startup events been recorded?",
+        "why": "One event does not validate a temperature-dependent start strategy.",
+        "roles": [
+          "rpm",
+          "clt",
+          "battery"
+        ],
+        "manual_stage": "starting",
+        "requires_external": false
+      },
+      {
+        "id": "faults",
+        "prompt": "Have startup faults and hardware uncertainties been reviewed?",
+        "why": "A hardware issue cannot be safely diagnosed as a VE problem.",
+        "roles": [
+          "sync",
+          "battery"
+        ],
+        "manual_stage": "sensors",
+        "requires_external": true
+      }
+    ],
+    "idle": [
+      {
+        "id": "control_strategy",
+        "prompt": "Do we know the enabled idle-control strategy?",
+        "why": "An idle valve, throttle and other strategies have different controls.",
+        "roles": [
+          "idleTarget",
+          "idleCommand"
+        ],
+        "manual_stage": "idle",
+        "requires_external": false
+      },
+      {
+        "id": "baseline_response",
+        "prompt": "Does comparable idle evidence reveal how RPM relates to commanded control?",
+        "why": "Variation may involve air, fuel, spark, feedback, load or hardware.",
+        "roles": [
+          "rpm",
+          "idleTarget",
+          "idleCommand"
+        ],
+        "manual_stage": "idle",
+        "requires_external": false
+      },
+      {
+        "id": "fuel_and_corrections",
+        "prompt": "Can we distinguish idle fueling from active corrections?",
+        "why": "Target lambda under closed-loop correction does not prove correct idle VE.",
+        "roles": [
+          "lambda",
+          "target",
+          "gego",
+          "stft1",
+          "spark"
+        ],
+        "manual_stage": "fuel",
+        "requires_external": false
+      }
+    ],
+    "steady_fuel": [
+      {
+        "id": "lambda_ready",
+        "prompt": "Are target and measured lambda valid, fresh and scaled correctly?",
+        "why": "Unknown units or unready sensors invalidate an inferred VE error.",
+        "roles": [
+          "lambda",
+          "target",
+          "lambdaGood"
+        ],
+        "manual_stage": "fuel",
+        "requires_external": false
+      },
+      {
+        "id": "trims_interpretation",
+        "prompt": "Do we understand how active STFT, LTFT and Gego affect this observation?",
+        "why": "Fuel-feedback scaling and bank applicability must not be guessed.",
+        "roles": [
+          "gego",
+          "stft1",
+          "stft2",
+          "ltft1",
+          "ltft2"
+        ],
+        "manual_stage": "trims",
+        "requires_external": false
+      },
+      {
+        "id": "steady_evidence",
+        "prompt": "Do the actual fuel-table regions have independent stable observations?",
+        "why": "Transient or repeated samples do not automatically count as independent coverage.",
+        "roles": [
+          "rpm",
+          "map",
+          "tps",
+          "lambda"
+        ],
+        "manual_stage": "fuel",
+        "requires_external": false
+      }
+    ],
+    "steady_spark": [
+      {
+        "id": "active_spark",
+        "prompt": "Does the INI expose the active ignition table and related corrections?",
+        "why": "Actual spark is not necessarily the base table value.",
+        "roles": [
+          "spark",
+          "knock"
+        ],
+        "manual_stage": "spark",
+        "requires_external": false
+      },
+      {
+        "id": "fuel_conditions",
+        "prompt": "Are fueling and temperature conditions known for these observations?",
+        "why": "Different conditions can make two ignition observations incomparable.",
+        "roles": [
+          "lambda",
+          "target",
+          "clt",
+          "map"
+        ],
+        "manual_stage": "spark",
+        "requires_external": false
+      },
+      {
+        "id": "torque_evidence",
+        "prompt": "Is there appropriate independent torque evidence for any MBT claim?",
+        "why": "MAP, acceleration and knock absence alone cannot establish MBT.",
+        "roles": [
+          "spark",
+          "knock"
+        ],
+        "manual_stage": "spark",
+        "requires_external": true
+      }
+    ],
+    "power": [
+      {
+        "id": "instrumentation",
+        "prompt": "Are professional supervision and external measurements documented?",
+        "why": "This review organizes instrumented evidence; it never commands an engine test.",
+        "roles": [
+          "fuelPressure",
+          "knock"
+        ],
+        "manual_stage": "validation",
+        "requires_external": true
+      },
+      {
+        "id": "operating_envelope",
+        "prompt": "Which operating regions have actually been evaluated with qualifying evidence?",
+        "why": "Unmeasured operating areas remain unknown, not verified.",
+        "roles": [
+          "rpm",
+          "map",
+          "lambda"
+        ],
+        "manual_stage": "validation",
+        "requires_external": false
+      },
+      {
+        "id": "protective_events",
+        "prompt": "Are reported warnings and protective events included in the review?",
+        "why": "No logged warning is not proof that an operating condition is safe.",
+        "roles": [
+          "knock",
+          "oilPressure",
+          "fuelPressure"
+        ],
+        "manual_stage": "validation",
+        "requires_external": false
+      }
+    ],
+    "confirmation": [
+      {
+        "id": "open_findings",
+        "prompt": "Are unresolved faults and evidence gaps visible in the final summary?",
+        "why": "A final report must not hide unknowns or unverified hardware.",
+        "roles": [
+          "sync",
+          "lambda"
+        ],
+        "manual_stage": "validation",
+        "requires_external": false
+      },
+      {
+        "id": "revision_check",
+        "prompt": "Does the recorded ECU definition and calibration revision still match?",
+        "why": "Changes can invalidate earlier evidence and conclusions.",
+        "roles": [
+          "rpm"
+        ],
+        "manual_stage": "identity",
+        "requires_external": false
+      },
+      {
+        "id": "record_results",
+        "prompt": "Is the review record separate from ECU saving and flashing?",
+        "why": "Finishing the tour is not a flash burn or certification of the engine.",
+        "roles": [],
+        "manual_stage": "validation",
+        "requires_external": true
+      }
+    ]
+  }
 }
