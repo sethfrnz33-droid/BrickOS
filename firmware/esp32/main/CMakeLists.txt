@@ -18,6 +18,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_LIST_DIR}/../web/app.css"
   "${CMAKE_CURRENT_LIST_DIR}/../web/app.js"
   "${CMAKE_CURRENT_LIST_DIR}/../web/core.mjs"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/ini-fast-cache.mjs"
   "${CMAKE_CURRENT_LIST_DIR}/../web/guided.mjs"
   "${CMAKE_CURRENT_LIST_DIR}/../web/guided-ui.mjs"
   "${CMAKE_CURRENT_LIST_DIR}/../web/guide-story.mjs"
