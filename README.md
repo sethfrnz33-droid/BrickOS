@@ -4,9 +4,9 @@
 
 | Location | Role | Current status |
 |---|---|---|
-| [`firmware/esp32/`](firmware/esp32/) | ESP32-S3 Wi-Fi/USB bridge and embedded browser tuner | **v4.8 source imported from the user's release ZIP**; build not yet verified on hardware |
-| [`apps/3ds/`](apps/3ds/) | Brick Tuner Suite native Nintendo 3DS v6.3 source, assets, build scripts and tests | **Imported**; host tests 42/42 pass; native build/hardware not yet verified |
-| [`apps/dsi/`](apps/dsi/) | Brick Tuner Suite Nintendo DSi v2.2 source, tests and SD sound assets | **Imported** from user's v2.2 ZIP; host tests pass, hardware not verified |
+| [`firmware/esp32/`](firmware/esp32/) | ESP32-S3 Wi-Fi/USB bridge and embedded browser tuner | **v4.8 runtime string / imported firmware lineage**, with later browser and calibration-command changes; ESP-IDF and physical ECU validation not established |
+| [`apps/3ds/`](apps/3ds/) | Brick Tuner Suite native Nintendo 3DS source (app README identifies v6.5), assets, build scripts and tests | **Imported**; host tests 42/42 pass; native build/hardware not yet verified |
+| [`apps/dsi/`](apps/dsi/) | Brick Tuner Suite Nintendo DSi source (app README identifies v29), tests and SD sound assets | **Imported and subsequently updated in repo**; host tests exist, native hardware verification outstanding |
 | [`prototype/`](prototype/) | Standalone Guided Tuning Python reference implementation | Existing read-only simulation, not deployable ESP firmware |
 | [`docs/`](docs/) | Guided Tuning design + installation, connections and firmware architecture | Research, specifications and setup instructions |
 | [`ROADMAP.md`](ROADMAP.md) | Cross-project engineering roadmap | Planning only |
@@ -29,6 +29,7 @@ Use your verified ESP32 programming COM port in place of the **example** `COM7`.
 
 ## Guided Tuning
 
+- [Source-reviewed full-system gap audit, release blockers and implementation priorities](docs/35-full-system-gap-audit.md)
 - [Seth Full Tour — ten-stage sequence and DS-portable INI contract](docs/27-hpa-master-tour.md)
 
 - [HP Academy public 10-step workflow comparison and recommended Guide refinements](docs/26-hp-academy-process-comparison.md)
