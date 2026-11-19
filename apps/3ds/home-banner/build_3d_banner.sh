@@ -107,6 +107,10 @@ if [[ ! -f home-banner/tools/pycgfx/main.py ]]; then
   git clone -q https://github.com/skyfloogle/pycgfx.git home-banner/tools/pycgfx
   git -C home-banner/tools/pycgfx checkout -q 1f78850086f3a77c41e07162e842f97a5bf3c18a
 fi
+# The pinned pycgfx assumes every GLB mesh has a name. Older mascot
+# assets named the scene node only, causing a Bone + str TypeError.
+# Repair legacy GLBs without altering their texture, UV or geometry data.
+"$PY" tools/normalize_mascot_banner_glb.py home-banner/mascot_banner.glb
 # Mascot HOME Menu billboard only; never reintroduce an unrelated car.
 BANNER_READY=0
 for source in home-banner/mascot_banner.glb; do
