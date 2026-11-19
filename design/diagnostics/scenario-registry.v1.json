@@ -1,0 +1,1445 @@
+{
+  "schema": "brickos.guide.scenario.registry.v1",
+  "version": "1.0.0",
+  "status": "DESIGN_ONLY_NOT_LOADED_BY_FIRMWARE",
+  "format_notes": "Semantic roles are NOT raw INI names or hard-coded offsets. An ECU-specific verified resolver maps these to channels or returns unavailable. Cases are candidate differential diagnoses, not fault verdicts or operating instructions. Each next question is evidence-oriented and must be screened against risk before showing a user.",
+  "topics": {
+    "connection": "ECU identity, USB and INI",
+    "sensors": "Sensor health and configuration",
+    "starting": "Starting and transition events",
+    "trigger": "Trigger, sync and phase",
+    "idle": "Idle and load response",
+    "warmup": "Thermal and warmup",
+    "thermal": "Temperature sensor and model",
+    "fuel": "Fuel, lambda, trims and strategy",
+    "transient": "Transient and fuel cut",
+    "ignition": "Ignition and reported knock",
+    "advanced": "Optional systems",
+    "diagnostics": "Recorder and fault health",
+    "validation": "External validation and final review"
+  },
+  "cases": [
+    {
+      "id": "ecu_power_missing",
+      "category": "connection",
+      "symptoms": [
+        "ECU appears off",
+        "No communication"
+      ],
+      "semantic_roles": [
+        "ecuReady",
+        "battery",
+        "usbState"
+      ],
+      "hypotheses": [
+        "No ECU power",
+        "Communication or interface fault",
+        "Incorrect connection"
+      ],
+      "next_discriminating_question": "Is there an independently verified ECU power/ground state?",
+      "suggested_capture_kind": "communication_event",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "usb_session_drops",
+      "category": "connection",
+      "symptoms": [
+        "USB disconnects intermittently"
+      ],
+      "semantic_roles": [
+        "usbState",
+        "ecuReady",
+        "battery",
+        "usbErrors"
+      ],
+      "hypotheses": [
+        "Power interruption",
+        "USB transport issue",
+        "ECU reset"
+      ],
+      "next_discriminating_question": "Do ECU reset flags change during the disconnect?",
+      "suggested_capture_kind": "communication_event",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "ini_mismatch",
+      "category": "connection",
+      "symptoms": [
+        "Settings look wrong",
+        "Definition mismatch"
+      ],
+      "semantic_roles": [
+        "ecuSignature",
+        "iniHash",
+        "calRevision"
+      ],
+      "hypotheses": [
+        "Wrong INI",
+        "Changed firmware layout",
+        "Stale cached definition"
+      ],
+      "next_discriminating_question": "Does the live ECU signature match the selected INI fingerprint?",
+      "suggested_capture_kind": "communication_event",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "calibration_revision_conflict",
+      "category": "connection",
+      "symptoms": [
+        "Changes don't match",
+        "TunerStudio conflict"
+      ],
+      "semantic_roles": [
+        "calRevision",
+        "ecuSignature",
+        "writerState"
+      ],
+      "hypotheses": [
+        "External editor active",
+        "Stale browser state",
+        "Incomplete prior operation"
+      ],
+      "next_discriminating_question": "Does the current ECU calibration revision still match the stored snapshot?",
+      "suggested_capture_kind": "communication_event",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "sensor_no_signal",
+      "category": "sensors",
+      "symptoms": [
+        "Sensor has no reading"
+      ],
+      "semantic_roles": [
+        "sensorValue",
+        "sensorHealth",
+        "battery"
+      ],
+      "hypotheses": [
+        "Missing sensor/unsupported channel",
+        "Electrical or wiring issue",
+        "Configuration scaling issue"
+      ],
+      "next_discriminating_question": "Is this channel actually defined and enabled in the matched INI?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "sensor_stuck",
+      "category": "sensors",
+      "symptoms": [
+        "Sensor reading never changes"
+      ],
+      "semantic_roles": [
+        "sensorValue",
+        "sensorHealth",
+        "operatingState"
+      ],
+      "hypotheses": [
+        "Normal constant condition",
+        "Faulty sensor",
+        "Stale ECU or transport value"
+      ],
+      "next_discriminating_question": "Does the source timestamp change while the reading stays constant?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "sensor_jump",
+      "category": "sensors",
+      "symptoms": [
+        "Sensor reading jumps"
+      ],
+      "semantic_roles": [
+        "sensorValue",
+        "battery",
+        "sourceLatency"
+      ],
+      "hypotheses": [
+        "Real condition change",
+        "Electrical noise",
+        "Scaling/transport issue"
+      ],
+      "next_discriminating_question": "Do other independent channels change at the same instant?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "sensor_implausible",
+      "category": "sensors",
+      "symptoms": [
+        "Sensor value makes little sense"
+      ],
+      "semantic_roles": [
+        "sensorValue",
+        "sensorConfig",
+        "otherSensors"
+      ],
+      "hypotheses": [
+        "Wrong calibration",
+        "Mechanical/environmental context missing",
+        "Physical sensor problem"
+      ],
+      "next_discriminating_question": "Is the measurement plausible for the independently known conditions?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "wideband_not_ready",
+      "category": "sensors",
+      "symptoms": [
+        "Lambda reading absent at start"
+      ],
+      "semantic_roles": [
+        "lambdaGood",
+        "lambda",
+        "lambdaFault",
+        "engineState"
+      ],
+      "hypotheses": [
+        "Normal sensor readiness delay",
+        "Controller fault",
+        "Configuration/connection issue"
+      ],
+      "next_discriminating_question": "Does the ECU explicitly report the wideband ready and fault-free?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "map_barometric_conflict",
+      "category": "sensors",
+      "symptoms": [
+        "MAP seems wrong at rest"
+      ],
+      "semantic_roles": [
+        "map",
+        "baro",
+        "engineState",
+        "mapConfig"
+      ],
+      "hypotheses": [
+        "Different reference conditions",
+        "MAP calibration error",
+        "Sensor/wiring issue"
+      ],
+      "next_discriminating_question": "Is the engine-off pressure comparison made using two verified sensors?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "tps_pedal_disagreement",
+      "category": "sensors",
+      "symptoms": [
+        "Throttle/pedal readings disagree"
+      ],
+      "semantic_roles": [
+        "tps",
+        "pedal",
+        "dbwState"
+      ],
+      "hypotheses": [
+        "Different units or sensor tracks",
+        "DBW strategy behavior",
+        "Sensor configuration issue"
+      ],
+      "next_discriminating_question": "Are both sensors configured and physically verified for this ECU?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "coolant_sensor_spike",
+      "category": "thermal",
+      "symptoms": [
+        "Coolant temperature spikes"
+      ],
+      "semantic_roles": [
+        "clt",
+        "iat",
+        "battery",
+        "sourceLatency"
+      ],
+      "hypotheses": [
+        "Electrical noise",
+        "Actual temperature change",
+        "Sensor scaling fault"
+      ],
+      "next_discriminating_question": "Is the change physically plausible over the measured time interval?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "thermal_not_comparable",
+      "category": "thermal",
+      "symptoms": [
+        "Cold and warm behavior differs"
+      ],
+      "semantic_roles": [
+        "clt",
+        "iat",
+        "engineState",
+        "warmupCorrection"
+      ],
+      "hypotheses": [
+        "Expected temperature-dependent strategy",
+        "Sensor/model uncertainty",
+        "Mechanical variation"
+      ],
+      "next_discriminating_question": "Were the two events recorded with comparable configurations and sensor readiness?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "crank_no_rpm",
+      "category": "starting",
+      "symptoms": [
+        "Cranks but RPM shows zero"
+      ],
+      "semantic_roles": [
+        "rpm",
+        "engineState",
+        "triggerErrors",
+        "ecuReady"
+      ],
+      "hypotheses": [
+        "Trigger/sync signal not reaching ECU",
+        "Output channel/status unavailable",
+        "Power/interruption"
+      ],
+      "next_discriminating_question": "Did the ECU report any crank speed and trigger synchronization data?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "crank_sync_unstable",
+      "category": "starting",
+      "symptoms": [
+        "Starting reports sync errors"
+      ],
+      "semantic_roles": [
+        "rpm",
+        "triggerErrors",
+        "syncState",
+        "battery"
+      ],
+      "hypotheses": [
+        "Trigger setup mismatch",
+        "Signal integrity issue",
+        "Voltage-related interruption"
+      ],
+      "next_discriminating_question": "Does the specialized trigger record agree with the ECU-reported sync state?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "crank_cough_sputter",
+      "category": "starting",
+      "symptoms": [
+        "Coughs or sputters while trying to run"
+      ],
+      "semantic_roles": [
+        "engineState",
+        "rpm",
+        "triggerErrors",
+        "syncState",
+        "battery",
+        "fuelRequest",
+        "sparkRequest",
+        "lambdaGood"
+      ],
+      "hypotheses": [
+        "Intermittent synchronization",
+        "Fuel delivery mismatch",
+        "Ignition reference/hardware uncertainty",
+        "Mechanical issue"
+      ],
+      "next_discriminating_question": "Are crank speed/synchronization stable and the physical timing/fuel system independently verified?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "crank_without_catch",
+      "category": "starting",
+      "symptoms": [
+        "Cranks but does not catch"
+      ],
+      "semantic_roles": [
+        "engineState",
+        "rpm",
+        "syncState",
+        "fuelRequest",
+        "sparkRequest",
+        "battery"
+      ],
+      "hypotheses": [
+        "No verified sync",
+        "Fuel/ignition delivery uncertainty",
+        "Mechanical/air path issue"
+      ],
+      "next_discriminating_question": "Which available signals separate ECU requests from actual physical delivery?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "catch_then_stall",
+      "category": "starting",
+      "symptoms": [
+        "Catches briefly then stalls"
+      ],
+      "semantic_roles": [
+        "rpm",
+        "engineState",
+        "afterStartCorrection",
+        "idleCommand",
+        "battery"
+      ],
+      "hypotheses": [
+        "After-start strategy transition",
+        "Insufficient idle control authority",
+        "Combustion/fuel issue"
+      ],
+      "next_discriminating_question": "What changed first as the ECU transitioned from catch to running?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "warm_restart_difference",
+      "category": "starting",
+      "symptoms": [
+        "Warm restart differs from cold"
+      ],
+      "semantic_roles": [
+        "clt",
+        "iat",
+        "battery",
+        "engineState",
+        "afterStartCorrection"
+      ],
+      "hypotheses": [
+        "Thermal correction variation",
+        "Sensor readiness differences",
+        "Fuel/hardware issue"
+      ],
+      "next_discriminating_question": "Are comparable start-event traces available at both temperatures?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "starter_voltage_dip",
+      "category": "starting",
+      "symptoms": [
+        "ECU seems to reset during start"
+      ],
+      "semantic_roles": [
+        "battery",
+        "ecuReady",
+        "usbState",
+        "resetReason"
+      ],
+      "hypotheses": [
+        "ECU supply disruption",
+        "Reset/USB issue",
+        "Reported battery sensor error"
+      ],
+      "next_discriminating_question": "Are reset and supply measurements independently available?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "trigger_error_increments",
+      "category": "trigger",
+      "symptoms": [
+        "Trigger errors increasing"
+      ],
+      "semantic_roles": [
+        "triggerErrors",
+        "syncState",
+        "rpm",
+        "faultBits"
+      ],
+      "hypotheses": [
+        "Pattern/config mismatch",
+        "Sensor signal quality",
+        "Power/ground issue"
+      ],
+      "next_discriminating_question": "Is an ECU-supported tooth/edge capture available to distinguish the patterns?",
+      "suggested_capture_kind": "ecu_trigger_if_supported",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "cam_phase_missing",
+      "category": "trigger",
+      "symptoms": [
+        "No cam phase or phase errors"
+      ],
+      "semantic_roles": [
+        "camState",
+        "syncState",
+        "triggerErrors",
+        "engineMode"
+      ],
+      "hypotheses": [
+        "Cam input not present",
+        "Phase strategy/configuration issue",
+        "Signal integrity issue"
+      ],
+      "next_discriminating_question": "Is full phase synchronization actually required and enabled?",
+      "suggested_capture_kind": "ecu_trigger_if_supported",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "rpm_drop_glitch",
+      "category": "trigger",
+      "symptoms": [
+        "Sudden RPM zero or spike"
+      ],
+      "semantic_roles": [
+        "rpm",
+        "syncState",
+        "triggerErrors",
+        "usbErrors"
+      ],
+      "hypotheses": [
+        "True engine speed change",
+        "Trigger sync interruption",
+        "Telemetry/decoding glitch"
+      ],
+      "next_discriminating_question": "Do trigger diagnostics and source timestamps corroborate the RPM anomaly?",
+      "suggested_capture_kind": "ecu_trigger_if_supported",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "idle_hunts",
+      "category": "idle",
+      "symptoms": [
+        "Idle goes up and down"
+      ],
+      "semantic_roles": [
+        "rpm",
+        "idleTarget",
+        "idleCommand",
+        "idleActive",
+        "map",
+        "spark",
+        "lambda"
+      ],
+      "hypotheses": [
+        "Idle feedback oscillation",
+        "Airflow/load changes",
+        "Fuel or ignition variation"
+      ],
+      "next_discriminating_question": "Does actuator/spark command lead or follow the RPM variation in qualified data?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "idle_target_miss",
+      "category": "idle",
+      "symptoms": [
+        "Idle doesn't reach target"
+      ],
+      "semantic_roles": [
+        "rpm",
+        "idleTarget",
+        "idleCommand",
+        "idleActive"
+      ],
+      "hypotheses": [
+        "Insufficient control authority",
+        "Different active idle strategy",
+        "External load or mechanical issue"
+      ],
+      "next_discriminating_question": "Does the ECU report idle mode active and command saturation?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "idle_high",
+      "category": "idle",
+      "symptoms": [
+        "Idle RPM unusually high"
+      ],
+      "semantic_roles": [
+        "rpm",
+        "idleTarget",
+        "idleActive",
+        "tps",
+        "idleCommand"
+      ],
+      "hypotheses": [
+        "Idle-entry not active",
+        "Airflow control issue",
+        "External load/controller strategy"
+      ],
+      "next_discriminating_question": "Is the configured idle target actually the active target at this temperature?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "idle_dip_recovery",
+      "category": "idle",
+      "symptoms": [
+        "Idle dips on load change"
+      ],
+      "semantic_roles": [
+        "rpm",
+        "idleTarget",
+        "idleCommand",
+        "battery",
+        "loadRequest"
+      ],
+      "hypotheses": [
+        "Normal compensating behavior",
+        "Insufficient idle reserve",
+        "External load/transient"
+      ],
+      "next_discriminating_question": "Does command response follow the observed load change in time?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "idle_lambda_incorrect",
+      "category": "idle",
+      "symptoms": [
+        "Idle AFR looks wrong"
+      ],
+      "semantic_roles": [
+        "lambda",
+        "target",
+        "lambdaGood",
+        "gego",
+        "stft1",
+        "ltft1",
+        "engineState"
+      ],
+      "hypotheses": [
+        "Wideband not ready",
+        "Closed-loop correction masking base fuel",
+        "Different active lambda target"
+      ],
+      "next_discriminating_question": "Is measured lambda comparable to the ECU's active idle target with verified trim semantics?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "idle_stalls",
+      "category": "idle",
+      "symptoms": [
+        "Idle stalls unexpectedly"
+      ],
+      "semantic_roles": [
+        "rpm",
+        "idleActive",
+        "idleCommand",
+        "map",
+        "spark",
+        "lambda",
+        "faultBits"
+      ],
+      "hypotheses": [
+        "Air/idle control limitation",
+        "Combustion or fuel issue",
+        "Unexpected load or fault"
+      ],
+      "next_discriminating_question": "Which variable changed first, and was an ECU fault reported?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "wue_after_start_variation",
+      "category": "warmup",
+      "symptoms": [
+        "Runs poorly during warmup"
+      ],
+      "semantic_roles": [
+        "clt",
+        "iat",
+        "warmupCorrection",
+        "afterStartCorrection",
+        "lambdaGood",
+        "rpm"
+      ],
+      "hypotheses": [
+        "Active warmup correction",
+        "After-start transition",
+        "Sensor/hardware issue"
+      ],
+      "next_discriminating_question": "Were lambda and corrections valid during the observed temperature phase?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "cold_idle_only_problem",
+      "category": "warmup",
+      "symptoms": [
+        "Idle unstable only when cold"
+      ],
+      "semantic_roles": [
+        "clt",
+        "rpm",
+        "idleTarget",
+        "idleCommand",
+        "warmupCorrection"
+      ],
+      "hypotheses": [
+        "Temperature-dependent control",
+        "Combustion/fuel variation",
+        "Sensor bias"
+      ],
+      "next_discriminating_question": "Are repeated cold events comparable and independently recorded?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "hot_idle_only_problem",
+      "category": "warmup",
+      "symptoms": [
+        "Idle unstable only when hot"
+      ],
+      "semantic_roles": [
+        "clt",
+        "iat",
+        "rpm",
+        "idleTarget",
+        "lambda",
+        "fuelPressure"
+      ],
+      "hypotheses": [
+        "Thermal system variation",
+        "Fuel pressure/sensor effect",
+        "Control strategy change"
+      ],
+      "next_discriminating_question": "Which temperature-conditioned inputs changed between verified stable and unstable cases?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "fuel_lambda_deviation",
+      "category": "fuel",
+      "symptoms": [
+        "AFR differs from target"
+      ],
+      "semantic_roles": [
+        "lambda",
+        "target",
+        "lambdaGood",
+        "gego",
+        "stft1",
+        "ltft1",
+        "engineState"
+      ],
+      "hypotheses": [
+        "Base fuel model mismatch",
+        "Sensor delay or fault",
+        "Active correction or transient"
+      ],
+      "next_discriminating_question": "Are target and measured values aligned in time with all active fuel corrections accounted for?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "fuel_trim_masking",
+      "category": "fuel",
+      "symptoms": [
+        "AFR looks right but trims are active"
+      ],
+      "semantic_roles": [
+        "lambda",
+        "target",
+        "gego",
+        "stft1",
+        "ltft1",
+        "fuelTrimState"
+      ],
+      "hypotheses": [
+        "Closed-loop correction compensating",
+        "Trim scaling misunderstood",
+        "Transient state"
+      ],
+      "next_discriminating_question": "Are Gego and per-bank STFT/LTFT each decoded using their actual firmware semantics?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "bank_trim_disagreement",
+      "category": "fuel",
+      "symptoms": [
+        "Banks have different trims"
+      ],
+      "semantic_roles": [
+        "stft1",
+        "stft2",
+        "ltft1",
+        "ltft2",
+        "lambda1",
+        "lambda2"
+      ],
+      "hypotheses": [
+        "Real bank difference",
+        "Bank sensor/configuration mismatch",
+        "Unsupported bank mapping"
+      ],
+      "next_discriminating_question": "Are both banks enabled and are their lambda sensors and correction units verified?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "fuel_pressure_unverified",
+      "category": "fuel",
+      "symptoms": [
+        "Fuel supply may be inconsistent"
+      ],
+      "semantic_roles": [
+        "fuelPressure",
+        "map",
+        "injectorPulse",
+        "faultBits"
+      ],
+      "hypotheses": [
+        "Pressure sensor not installed",
+        "Supply/hardware issue",
+        "Reference model mismatch"
+      ],
+      "next_discriminating_question": "Is independent fuel-pressure evidence available and correctly referenced?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "ve_table_wrong_strategy",
+      "category": "fuel",
+      "symptoms": [
+        "VE edits seem ineffective"
+      ],
+      "semantic_roles": [
+        "fuelAlgorithm",
+        "veSource",
+        "engineMode",
+        "rpm",
+        "load"
+      ],
+      "hypotheses": [
+        "Inactive or overridden table",
+        "Wrong load source",
+        "Revision not applied"
+      ],
+      "next_discriminating_question": "Which fuel algorithm and lookup surface are actually active in the current ECU configuration?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "lambda_reading_fluctuates",
+      "category": "fuel",
+      "symptoms": [
+        "Lambda jumps unexpectedly"
+      ],
+      "semantic_roles": [
+        "lambda",
+        "lambdaGood",
+        "engineState",
+        "tps",
+        "map",
+        "sensorFault"
+      ],
+      "hypotheses": [
+        "Real mixture transition",
+        "Sensor/controller issue",
+        "Transport/measurement delay"
+      ],
+      "next_discriminating_question": "Do other independent signals confirm the event at a consistent time offset?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "cruise_lambda_uncertain",
+      "category": "fuel",
+      "symptoms": [
+        "Cruise appears rich or lean"
+      ],
+      "semantic_roles": [
+        "lambda",
+        "target",
+        "gego",
+        "stft1",
+        "ltft1",
+        "rpm",
+        "map",
+        "fuelCut"
+      ],
+      "hypotheses": [
+        "Active target different from assumption",
+        "Trim compensation",
+        "Invalid steady-state classification"
+      ],
+      "next_discriminating_question": "Was this a verified steady period with correct fuel state and current target?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "fuel_correction_regression",
+      "category": "fuel",
+      "symptoms": [
+        "Fuel changed after a tune edit"
+      ],
+      "semantic_roles": [
+        "calRevision",
+        "lambda",
+        "target",
+        "gego",
+        "rpm",
+        "map"
+      ],
+      "hypotheses": [
+        "Calibration change impact",
+        "Environmental/state difference",
+        "Measurement uncertainty"
+      ],
+      "next_discriminating_question": "Do two comparable windows exist at known different calibration revisions?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "accel_response_anomaly",
+      "category": "transient",
+      "symptoms": [
+        "Brief hesitation during change"
+      ],
+      "semantic_roles": [
+        "tps",
+        "map",
+        "rpm",
+        "engineState",
+        "lambda",
+        "accelEnrich"
+      ],
+      "hypotheses": [
+        "Transient model behavior",
+        "Lambda transport delay",
+        "Mechanical or sensor issue"
+      ],
+      "next_discriminating_question": "Do timestamp-aligned ECU state flags distinguish transient fueling from steady VE?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "dfco_return_anomaly",
+      "category": "transient",
+      "symptoms": [
+        "Rough recovery after fuel cut"
+      ],
+      "semantic_roles": [
+        "engineState",
+        "fuelCut",
+        "rpm",
+        "tps",
+        "lambda"
+      ],
+      "hypotheses": [
+        "Fuel cut recovery transition",
+        "Controller state change",
+        "Sensor delay"
+      ],
+      "next_discriminating_question": "Is fuel-cut state directly available for this firmware and capture?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "decel_airfuel_unreliable",
+      "category": "transient",
+      "symptoms": [
+        "AFR looks strange on decel"
+      ],
+      "semantic_roles": [
+        "engineState",
+        "fuelCut",
+        "lambda",
+        "lambdaGood",
+        "tps"
+      ],
+      "hypotheses": [
+        "Expected fuel-cut behavior",
+        "Sensor delay",
+        "Sensor validity issue"
+      ],
+      "next_discriminating_question": "Was fuel cut or overrun active at that instant?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "spark_actual_differs_base",
+      "category": "ignition",
+      "symptoms": [
+        "Actual spark differs from table"
+      ],
+      "semantic_roles": [
+        "spark",
+        "baseSpark",
+        "sparkCorrection",
+        "clt",
+        "knock"
+      ],
+      "hypotheses": [
+        "Normal correction/strategy",
+        "Unexpected intervention",
+        "Wrong table attribution"
+      ],
+      "next_discriminating_question": "Which individual spark corrections does the ECU expose as active?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "spark_knock_reported",
+      "category": "ignition",
+      "symptoms": [
+        "Knock detected or retard applied"
+      ],
+      "semantic_roles": [
+        "knock",
+        "knockCount",
+        "spark",
+        "rpm",
+        "load",
+        "clt"
+      ],
+      "hypotheses": [
+        "Actual knock intervention",
+        "Noise/false-positive issue",
+        "Signal/strategy uncertainty"
+      ],
+      "next_discriminating_question": "What did the ECU report and is independent knock validation available?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "spark_optimality_unknown",
+      "category": "ignition",
+      "symptoms": [
+        "Is ignition optimal?"
+      ],
+      "semantic_roles": [
+        "spark",
+        "rpm",
+        "map",
+        "knock",
+        "lambda"
+      ],
+      "hypotheses": [
+        "No torque-quality evidence",
+        "Temperature/load confounding",
+        "Unknown active corrections"
+      ],
+      "next_discriminating_question": "Is qualified instrumented torque evidence available for comparable operating conditions?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "misfire_like_signal",
+      "category": "ignition",
+      "symptoms": [
+        "Misfire-like symptom"
+      ],
+      "semantic_roles": [
+        "rpm",
+        "syncState",
+        "triggerErrors",
+        "lambda",
+        "spark",
+        "faultBits"
+      ],
+      "hypotheses": [
+        "Trigger error",
+        "Ignition/fuel delivery",
+        "Mechanical combustion issue"
+      ],
+      "next_discriminating_question": "Do sync diagnostics or physical checks distinguish ignition delivery from trigger information?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "dbw_inconsistent",
+      "category": "advanced",
+      "symptoms": [
+        "Throttle request and actual differ"
+      ],
+      "semantic_roles": [
+        "pedal",
+        "tps",
+        "dbwState",
+        "limpState"
+      ],
+      "hypotheses": [
+        "Active torque limiting",
+        "Sensor configuration mismatch",
+        "Throttle actuator fault"
+      ],
+      "next_discriminating_question": "Is DBW enabled and what specific ECU state or protection does it report?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "vvt_target_tracking",
+      "category": "advanced",
+      "symptoms": [
+        "Cam target not tracking"
+      ],
+      "semantic_roles": [
+        "vvtTarget",
+        "vvtActual",
+        "rpm",
+        "oilPressure",
+        "faultBits"
+      ],
+      "hypotheses": [
+        "VVT state limitation",
+        "Sensor/control error",
+        "Mechanical actuation issue"
+      ],
+      "next_discriminating_question": "Are actual and target cam channels available and physically verified?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "boost_target_tracking",
+      "category": "advanced",
+      "symptoms": [
+        "Reported boost differs from target"
+      ],
+      "semantic_roles": [
+        "map",
+        "boostTarget",
+        "boostState",
+        "protection"
+      ],
+      "hypotheses": [
+        "Intentional protection",
+        "Controller uncertainty",
+        "Sensor/model issue"
+      ],
+      "next_discriminating_question": "Which protective limits or open/closed-loop states were active?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "flex_sensor_missing",
+      "category": "advanced",
+      "symptoms": [
+        "Fuel composition uncertain"
+      ],
+      "semantic_roles": [
+        "ethanolContent",
+        "flexHealth",
+        "fuelAlgorithm"
+      ],
+      "hypotheses": [
+        "Unsupported sensor",
+        "Sensor/data fault",
+        "Wrong active fuel strategy"
+      ],
+      "next_discriminating_question": "Does the matched INI and physical configuration confirm an enabled composition sensor?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "can_device_missing",
+      "category": "advanced",
+      "symptoms": [
+        "CAN instrument not responding"
+      ],
+      "semantic_roles": [
+        "canStatus",
+        "deviceStatus",
+        "faultBits"
+      ],
+      "hypotheses": [
+        "CAN configuration mismatch",
+        "Physical connection issue",
+        "Unsupported data mapping"
+      ],
+      "next_discriminating_question": "Is the expected device and CAN input actually configured?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "external_motion_disagrees",
+      "category": "advanced",
+      "symptoms": [
+        "IMU and ECU speed disagree"
+      ],
+      "semantic_roles": [
+        "vehicleSpeed",
+        "imuAccel",
+        "imuValidity",
+        "clockSkew"
+      ],
+      "hypotheses": [
+        "Clock alignment issue",
+        "Uncalibrated mounting/grade",
+        "Wheel/vehicle model difference"
+      ],
+      "next_discriminating_question": "Are timestamps, mounting and independent speed references calibrated?",
+      "suggested_capture_kind": "bounded_passive_output_window",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "eculog_partial",
+      "category": "diagnostics",
+      "symptoms": [
+        "High-rate log has gaps"
+      ],
+      "semantic_roles": [
+        "usbErrors",
+        "actualHz",
+        "requestedHz",
+        "sampleDuration",
+        "bufferOverrun"
+      ],
+      "hypotheses": [
+        "Transport saturation",
+        "Storage backpressure",
+        "Wrong timing assumption"
+      ],
+      "next_discriminating_question": "What were the measured delivered rate, sample duration and missing-block counts?",
+      "suggested_capture_kind": "eculog_and_status",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "fault_new_warning",
+      "category": "diagnostics",
+      "symptoms": [
+        "ECU reports new fault"
+      ],
+      "semantic_roles": [
+        "faultBits",
+        "warningCounter",
+        "lastErrorCode",
+        "ecuSignature"
+      ],
+      "hypotheses": [
+        "ECU-detected fault with specific meaning",
+        "Unsupported code mapping",
+        "Transient diagnostic report"
+      ],
+      "next_discriminating_question": "Is the fault code resolved against this firmware's own definition?",
+      "suggested_capture_kind": "eculog_and_status",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "after_edit_behavior_changed",
+      "category": "diagnostics",
+      "symptoms": [
+        "Behavior changed after editing"
+      ],
+      "semantic_roles": [
+        "calRevision",
+        "events",
+        "engineState",
+        "observedFaults"
+      ],
+      "hypotheses": [
+        "Calibration dependency invalidated",
+        "Different conditions",
+        "Hardware/sensor issue"
+      ],
+      "next_discriminating_question": "Are before/after traces and revisions comparable, and which fields changed?",
+      "suggested_capture_kind": "eculog_and_status",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    },
+    {
+      "id": "final_validation_unknown",
+      "category": "validation",
+      "symptoms": [
+        "Is engine finished or optimal?"
+      ],
+      "semantic_roles": [
+        "auditStatus",
+        "sensorStatus",
+        "calRevision",
+        "externalEvidence"
+      ],
+      "hypotheses": [
+        "Some regions unobserved",
+        "Unresolved verification",
+        "Instrumentation unavailable"
+      ],
+      "next_discriminating_question": "Which exact conditions are validated, and which still need qualified external checks?",
+      "suggested_capture_kind": "qualified_external_record",
+      "expected_reference": "active_ini_strategy_or_verified_comparable_baseline",
+      "policy": "read_only",
+      "may_claim_cause": false,
+      "missing_data_action": "state_unknown_and_ask_for_evidence"
+    }
+  ],
+  "unknown_fallback": {
+    "id": "unclassified_symptom",
+    "policy": "read_only",
+    "route": "ask_one_clarifying_question_or_offer_topics",
+    "explanation": "Seth cannot recognize this scenario with current rules; preserve the prompt and request verified evidence.",
+    "do_not": "invent cause, target, sensor channel, or physical test"
+  },
+  "future_actions": "A server-side expert and intent parser may use these only after formal schema validation and replay tests. This file is a design artifact; adding it must not change existing ESP or DS runtime."
+}
