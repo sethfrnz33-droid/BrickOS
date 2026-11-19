@@ -80,10 +80,10 @@ export class GuidedAnalyzer {
    if(values.map!==null&&(values.map<cfg.loadMin||values.map>cfg.loadMax))reasons.push('load outside selected region');
    if(values.clt!==null&&(values.clt<cfg.cltMin||values.clt>cfg.cltMax))reasons.push('coolant outside selected region');
    if(values.gego!==null&&Math.abs(values.gego-100)>1)reasons.push('closed-loop Gego compensation');
-   if((values.stft1!==null&&Math.abs(values.stft1)>1)||(values.stft2!==null&&Math.abs(values.stft2)>1))reasons.push('STFT compensation');
-   if((values.ltft1!==null&&Math.abs(values.ltft1)>1)||(values.ltft2!==null&&Math.abs(values.ltft2)>1))reasons.push('LTFT compensation');
-   // Even absent trim channels must not be silently interpreted as neutral.
-   if(values.gego===null&&values.stft1===null)reasons.push('fuel trim feedback unknown');
+   // STFT/LTFT per-bank channels can have firmware-specific display transforms.
+   // Preserve their INI-decoded readings, but do not apply a guessed neutral
+   // convention or fold them into a VE correction estimate.
+   if(values.gego===null)reasons.push('Gego correction unavailable');
    if(this.last){const deltaMs=ms-this.last.ms;if(deltaMs<=0||deltaMs>1500)reasons.push('telemetry gap');
     else for(const [k,max,desc] of [['rpm',cfg.maxRpmChange,'RPM transient'],['tps',cfg.maxTpsChange,'TPS transient'],['map',cfg.maxLoadChange,'load transient']]){
       if(values[k]!==null&&this.last.values[k]!==null&&Math.abs(values[k]-this.last.values[k])*1000/deltaMs>max)reasons.push(desc);
