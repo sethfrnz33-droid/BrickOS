@@ -22,6 +22,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.path=='/api/status':
             if self.mode=='status_stall':
                 time.sleep(3);return
+            if self.mode=='status_trickle':
+                self.send_response(200)
+                self.send_header('Content-Length','200')
+                self.end_headers()
+                try:
+                    for _ in range(6):
+                        self.wfile.write(b' ');self.wfile.flush();time.sleep(.35)
+                except (BrokenPipeError,ConnectionResetError):pass
+                return
             self.sendb(dict(ecu_signature='test-ecu-v1',ecu_session_connected=True,
                 write_compiled=True,write_access_ready=True,backup_storage_ready=True))
         else:self.send_error(404)
@@ -70,7 +79,7 @@ subprocess.run(['gcc','-std=c11','-D_DEFAULT_SOURCE','-Wall','-Wextra','-Werror'
     '-lm','-o',exe],cwd=ROOT,check=True)
 with Server(('127.0.0.1',PORT),Handler) as server:
     threading.Thread(target=server.serve_forever,daemon=True).start()
-    for mode in ('success','cancel_prearm','cancel_after_arm','wifi_lost_prearm','wifi_lost_after_arm','running','backup_fail','arm_fail','mismatch','status_stall','burn_stall'):
+    for mode in ('success','cancel_prearm','cancel_after_arm','wifi_lost_prearm','wifi_lost_after_arm','running','backup_fail','arm_fail','mismatch','status_stall','status_trickle','burn_stall'):
         Handler.mode=mode
         Handler.page[32:36]=bytes((100,0,200,0));Handler.armed=False
         Handler.writes=Handler.burns=Handler.backups=Handler.arms=Handler.disarms=0
@@ -79,7 +88,7 @@ with Server(('127.0.0.1',PORT),Handler) as server:
         assert run.returncode==0,(mode,run.stdout,run.stderr)
         if mode in ('success','cancel_after_arm'):
             assert (Handler.writes,Handler.burns,Handler.backups,Handler.arms,Handler.disarms)==(1,1,1,1,1)
-        if mode in ('running','backup_fail','arm_fail','mismatch','status_stall','cancel_prearm','wifi_lost_prearm','wifi_lost_after_arm'):
+        if mode in ('running','backup_fail','arm_fail','mismatch','status_stall','status_trickle','cancel_prearm','wifi_lost_prearm','wifi_lost_after_arm'):
             assert Handler.writes==0 and Handler.burns==0
         if mode=='burn_stall':
             assert Handler.writes==1 and Handler.burns==1 and Handler.disarms==1

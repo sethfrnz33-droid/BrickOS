@@ -1268,7 +1268,8 @@ static void bottom_write_progress(void){
     char buf[36];snprintf(buf,sizeof(buf),"%d%%",pct);
     tiny_fit(bottom,105,113,buf,HIGHLIGHT,46);
     tiny_fit(bottom,16,139,"NO RETRY IF RESPONSE IS UNCERTAIN",MUTED,225);
-    tiny_fit(bottom,8,180,"B: CANCEL BEFORE ARM ONLY",MUTED,245);
+    tiny_fit(bottom,8,180,bt_write_can_cancel()?"B: CANCEL BEFORE ECU ARM":
+             "ARM ATTEMPTED / DO NOT INTERRUPT",MUTED,245);
 }
 static void bottom_burn_confirm(void){
     /* Modal confirmation: START merely opens this panel; no ECU write
@@ -1563,8 +1564,15 @@ static void update_wifi(void){
         network_failure_count=0;network_resume_frame=0;last_socket_begin_frame=-1000;
         live_failure_streak=0;live_resume_frame=0;
         loading_ini=false;
-        if(bt_write_busy())bt_write_link_lost();
-        else{bt_async_cancel();bt_async_forget_connection();}
+        if(bt_write_busy()){
+            bt_write_link_lost();
+            /* Pre-arm link loss ends the transaction immediately; do not
+             * leave the user looking at a stale "BURN IN PROGRESS" notice. */
+            if(!bt_write_busy()){
+                snprintf(note,sizeof(note),"%s",bt_write_message());
+                write_baseline=write_edited=NULL;write_length=0;
+            }
+        }else{bt_async_cancel();bt_async_forget_connection();}
         set_compat();invalidate();
         snprintf(client_ip,sizeof(client_ip),"-");snprintf(gateway_ip,sizeof(gateway_ip),"-");
         snprintf(status_msg,sizeof(status_msg),"WIFI CONNECTION LOST");

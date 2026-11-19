@@ -41,6 +41,7 @@ bool bt_write_begin(const BtDefinition *d,const BtField *f,
 /* 0 = in progress, +1 = verified success, -1 = failed/uncertain. */
 int bt_write_poll(int frame);
 bool bt_write_busy(void);
+bool bt_write_can_cancel(void);
 const char *bt_write_phase(void);
 const char *bt_write_message(void);
 int bt_write_percent(void);

@@ -897,6 +897,7 @@ static char burn_body[800];
 static uint8_t burn_check[256];
 
 bool bt_write_busy(void){return burn.active;}
+bool bt_write_can_cancel(void){return burn.active&&!burn.armed_request;}
 const char *bt_write_message(void){return burn.message;}
 const char *bt_write_phase(void){
     switch(burn.step){
@@ -1109,7 +1110,7 @@ bool bt_write_begin(const BtDefinition *d,const BtField *f,
     return true;
 }
 bool bt_write_cancel(void){
-    if(!burn.active||burn.armed_request)return false;
+    if(!bt_write_can_cancel())return false;
     bt_async_cancel();burn.requested=false;
     burn_finish(false,"BURN CANCELLED / ECU NOT ARMED");return true;
 }
@@ -1142,6 +1143,13 @@ int bt_write_poll(int frame){
     }
     if(bt_async_job()!=BT_NET_STATUS&&bt_async_job()!=BT_NET_WRITE)
         return burn_fail("WRITE TRANSPORT CANCELLED / ECU STATE UNKNOWN");
+    /* A trickling peer must not keep the modal open forever by sending
+     * one byte just before the underlying idle timeout. */
+    if(frame-burn.frame_started>900){
+        if(burn.step==W_DISARM||burn.step==W_DISARM_FAILURE)
+            return burn_finish(false,"WRITE UNCERTAIN / DISARM TIMED OUT");
+        return burn_fail("ECU RESPONSE TIMED OUT / INSPECT ECU");
+    }
     int result=0;
     for(int i=0;i<4&&result==0;i++)result=bt_async_poll(frame);
     if(result==0)return 0;
