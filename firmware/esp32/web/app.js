@@ -62,7 +62,7 @@ S.dashboardLayout=['split','gauges','scope'].includes(PREF.layout)?PREF.layout:'
 S.scopeNames=Array.isArray(PREF.scope)?PREF.scope.filter(x=>typeof x==='string').slice(0,3):[];
 S.tuneFavorites=Array.isArray(PREF.favorites)?PREF.favorites.filter(x=>typeof x==='string').slice(0,24):[];
 S.tuneRecent=Array.isArray(PREF.recent)?PREF.recent.filter(x=>typeof x==='string').slice(0,12):[];
-S.guideTab='next';S.guideSearch='';S.guideLastRender=0;S.guideMenuLinks={};S.guideScreen='story';S.guidePacket=null;
+S.guideTab='next';S.guideSearch='';S.guideLastRender=0;S.guideMenuLinks={};S.guideScreen='story';S.guidePacket=null;S.guideDefinitionHash='';
 S.tuneCategory='';S.tuneSearch='';S.tuneBrowserOpen=true;S.gaugeEdit=null;S.commandOpen=false;S.commandSearch='';
 function savePrefs(){try{localStorage.setItem(PREF_KEY,JSON.stringify({gauges:S.gaugeSlots,layout:S.dashboardLayout,scope:S.scopeNames,favorites:S.tuneFavorites,recent:S.tuneRecent}))}catch{toast('Device preference storage unavailable; layout may not persist',true)}}
 function navHighlight(){document.querySelectorAll('#nav [data-route]').forEach(b=>b.classList.toggle('active',b.dataset.route===(['tables','settings','tuner'].includes(S.route)?'tuning':S.route)))}
@@ -78,7 +78,7 @@ function hasDef(){return !!S.definition}
 function safeSignature(){return S.ecuSignature && S.definition && S.definition.signature && S.ecuSignature===S.definition.signature}
 function connected(){return S.connected && !!S.ecuSignature}
 
-function rebuildTs(){S.tsStructure=S.rawIni?tunerStructure(S.rawIni):null;refreshGuideLinks();drawTsTree()}
+function rebuildTs(){S.tsStructure=S.rawIni?tunerStructure(S.rawIni):null;S.guideDefinitionHash=S.rawIni?crc32(new TextEncoder().encode(S.rawIni)).toString(16):'';refreshGuideLinks();drawTsTree()}
 function menuItems(cat){return cat.entries.flatMap(e=>e.kind==='item'?[e.value]:e.value.items)}
 function tuneCategoryDefault(){const cats=S.tsStructure?.categories||[];return cats.find(c=>/fuel/i.test(c.name))?.name||cats[0]?.name||''}
 function tuneItemRow(item,section){return `<div class="tune-result ${S.tsSelected===item.id?'selected':''}"><button class="tune-result-main" data-ts-item="${escapeHTML(item.id)}"><span class="result-icon">${/table|map|ve|spark|ignit|lambda/i.test(item.label)?'▦':'◫'}</span><span class="result-text"><strong>${escapeHTML(item.label)}</strong><small>${escapeHTML(item.group||section)}</small></span><span class="result-arrow">›</span></button><button class="tune-star ${S.tuneFavorites.includes(item.id)?'on':''}" data-tune-star="${escapeHTML(item.id)}" aria-label="${S.tuneFavorites.includes(item.id)?'Remove favorite':'Add favorite'}">${S.tuneFavorites.includes(item.id)?'★':'☆'}</button></div>`}
@@ -333,7 +333,7 @@ function system(){const z=S.status;return pageHeader('06','Connection & diagnost
  <div class="section-label">USB CONNECTION</div><div class="panel"><h2>Connect Big Brick over USB</h2><div class="steps spaced"><div>Connect the STM32 USB device interface to the ESP32-S3 USB host interface using the same USB wiring as your proven working3wayhub firmware. USB host VBUS must be powered appropriately.</div><div>BrickOS speaks the rusEFI TunerStudio protocol directly to STM32 over USB; no TCP bridge or desktop TunerStudio connection is required.</div><div>Join the open <code>brick</code> Wi-Fi network and open <code>http://192.168.4.1/</code>.</div><div>BrickOS now attempts read-only ECU SD access over the STM32 USB Mass Storage interface (LUN1), if exposed by the installed firmware. Place a plain generated <code>rusefi.ini</code> on the card; it imports only when its signature matches the connected ECU. The ESP32 SPIFFS stores the verified copy. Existing USB CDC tuning remains active.</div></div></div>`;
 }
 function storyPacket(){
- const key=safeSignature()?S.definition.signature:'';
+ const key=safeSignature()?S.definition.signature+':'+S.guideDefinitionHash:'';
  // Story is bound to the *current matching definition*, never to a stale INI.
  const packet=STORY.packet({engine:GUIDE,menuTree:S.tsStructure,menuLinks:S.guideMenuLinks,ecuKey:key});
  S.guidePacket=packet;return packet;
@@ -348,7 +348,7 @@ function storySpeak(playVoice){
 }
 async function fetchStoryCatalog(){
  try{const res=await fetch('/api/guide/v1/catalog',{cache:'no-store'});if(!res.ok)throw Error('HTTP '+res.status);
- STORY.load(await res.json());if(S.route==='guided'){render();storySpeak(false);}
+ STORY.load(await res.json());GUIDE.setRoleAliases(STORY.catalog.field_role_aliases);if(S.route==='guided'){render();storySpeak(false);}
  }catch(e){console.warn('Seth guide catalogue not available',e);}
 }
 

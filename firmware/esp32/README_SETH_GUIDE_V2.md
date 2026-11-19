@@ -9,7 +9,7 @@ Build and flash the ESP32-S3 using the existing documented ESP-IDF procedure. Co
 ## Runtime and source files
 
 - `web/guide-catalog.json`: versioned complete authored dialogue, target categories and role aliases.
-- `web/guide-story.mjs`: branching dialogue evaluator, stale data handling, no-eval template bindings and INI-derived generic field pages.
+- `web/guide-story.mjs`: branching dialogue evaluator, stale data handling, catalogue-supplied channel aliases, no-eval template bindings and INI-derived generic field pages.
 - `web/guide-story-ui.mjs`: separate responsive phone UI.
 - `web/guide-voice.mjs`: user-provided nonverbal recording with optional waveform-synchronized mouth animation, typewriter text, mute and skip.
 - `web/guide-assets/*`: transparent head/jaw/mouth sprite images and transcoded MP3 from supplied assets.

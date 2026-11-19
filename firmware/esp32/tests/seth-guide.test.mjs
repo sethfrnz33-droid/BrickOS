@@ -59,3 +59,9 @@ test('generic field-by-field tour includes unknown INI fields without inventing 
  s.go('field.1');const q=s.packet({engine:e,menuTree,menuLinks:{veTable:'fuel:ve'},ecuKey:'ECU-A'});
  assert.equal(q.manual_target.id,'fuel:ve');assert.equal(q.field_id,'1:3:veTable');
 });
+
+test('catalogue role mappings can be replaced with a new INI variant without new client code',async()=>{
+ const {GuidedAnalyzer}=await import('../web/guided.mjs');const g=new GuidedAnalyzer();
+ g.setRoleAliases({rpm:['newFirmwareRpmName']});assert.equal(g.roleAliases.rpm[0],'newFirmwareRpmName');
+ assert.throws(()=>g.setRoleAliases({rpm:[null]}),/Invalid role alias/);
+});

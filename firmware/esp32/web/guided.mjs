@@ -46,19 +46,23 @@ export function validateGuideFilters(next){const cfg={...DEFAULT_FILTERS};for(co
  if(cfg.maxRpmChange<0||cfg.maxTpsChange<0||cfg.maxLoadChange<0||cfg.settleMs<0||cfg.settleMs>60000||!Number.isInteger(cfg.minVisits)||cfg.minVisits<1||cfg.minVisits>1000)throw Error('Invalid stability or evidence requirement');
  return cfg;
 }
-export function guideFields(def){return Object.fromEntries(Object.entries(ALIASES).map(([role,names])=>[role,inferField(def,names)]))}
+export function guideFields(def,aliases=ALIASES){return Object.fromEntries(Object.entries(aliases).map(([role,names])=>[role,inferField(def,names)]))}
 export function guideRequiredBytes(def){return Math.max(4,...Object.values(guideFields(def)).filter(Boolean).map(f=>f.offset+TYPES[f.type]));}
 function displayLabel(name){return String(name||'').replace(/([a-z])([A-Z])/g,'$1 $2').replace(/_/g,' ')}
 export function fieldInventory(def){return (def?.cal||[]).map(f=>({id:`${f.page}:${f.offset}:${f.name}`,name:f.name,label:displayLabel(f.name),page:f.page,
  kind:f.kind,type:f.type,units:f.units||'',editable:!!f.editable,scope:'cal',status:'Needs review'}));}
 
 export class GuidedAnalyzer {
- constructor(){this.filters={...DEFAULT_FILTERS};this.reset(true)}
+ constructor(){this.filters={...DEFAULT_FILTERS};this.roleAliases=ALIASES;this.reset(true)}
+ setRoleAliases(aliases){if(!aliases||typeof aliases!=='object')throw Error('Invalid field role registry');
+  const filtered={...ALIASES};for(const [role,names] of Object.entries(aliases)){if(!Array.isArray(names)||names.length>30||!names.every(n=>typeof n==='string'&&n.length>0&&n.length<=100))throw Error('Invalid role alias mapping');filtered[role]=names.slice();}
+  this.roleAliases=filtered;if(this.def){this.fields=guideFields(this.def,this.roleAliases);this.reset(false);this.record('definition','Semantic role registry updated; previous observations cleared');}
+ }
  reset(forgetDefinition=false){if(forgetDefinition){this.def=null;this.signature='';this.fields={};this.inventory=[];}
   this.mode='observe';this.lastSeq=-1;this.last=null;this.values={};this.validMs=0;this.total=0;this.accepted=0;
   this.rejections={};this.tiles=Array.from({length:64},()=>({hits:0,ratioSum:0,ratioSq:0}));this.events=[];this.settledSince=0;this.lastReason='Waiting for telemetry';}
  attach(def,signature){if(!def||!signature||def.signature!==signature){this.reset(true);return false;}
-  if(this.signature!==signature||this.def!==def){this.reset(true);this.def=def;this.signature=signature;this.fields=guideFields(def);this.inventory=fieldInventory(def);this.record('definition','Matched ECU definition: '+signature)}
+  if(this.signature!==signature||this.def!==def){this.reset(true);this.def=def;this.signature=signature;this.fields=guideFields(def,this.roleAliases);this.inventory=fieldInventory(def);this.record('definition','Matched ECU definition: '+signature)}
   return true;
  }
  record(type,message,time=Date.now()){this.events.unshift({type,message,time,signature:this.signature});if(this.events.length>100)this.events.pop()}
