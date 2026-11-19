@@ -18,18 +18,16 @@ if [[ ! -f project.rsf ]]; then
 fi
 # Keep the original Title ID for seamless home-menu upgrades.
 if [[ -f project.rsf ]]; then sed -i 's/Brick ECU Field Guide/Brick Tuner Suite/g' project.rsf; fi
-# The HOME Menu banner is a real 3D E46 with a rigid rotating model node.
-# Regenerate when its model or banner converter has changed.
-# Existing v4.8 banner.cgfx cannot be reused after the v4.9 model update.
-# A successful v4.9 build records the exact accepted source for caching.
-MODEL_CHANGED=0
-for source in home-banner/e46_diorama_full.glb home-banner/e46_diorama_tiny.glb home-banner/e46_diorama_lean.glb home-banner/e46_diorama_safe.glb; do
-  if [[ "$source" -nt home-banner/banner.cgfx ]]; then MODEL_CHANGED=1; fi
-done
+# Both 3DS HOME assets are the mascot: icon.png (SMDH tile) and
+# home-banner/mascot_banner.glb (separate CGFX banner). Do not silently
+# fall back to the unrelated E46 banner if conversion fails.
+if [[ ! -s home-banner/mascot_banner.glb || ! -s icon.png ]]; then
+  python3 tools/generate_mascot.py
+fi
 if [[ ! -s home-banner/banner.cgfx || ! -f home-banner/banner_source.txt ]] ||
-   ! grep -q '^home-banner/e46_diorama_' home-banner/banner_source.txt ||
-   [[ "$MODEL_CHANGED" == 1 ]]; then
-  echo 'Preparing rotating E46 + 3DS HOME Menu banner...'
+   ! grep -qx 'home-banner/mascot_banner.glb' home-banner/banner_source.txt ||
+   [[ home-banner/mascot_banner.glb -nt home-banner/banner.cgfx ]]; then
+  echo 'Building mascot 3DS HOME Menu banner...'
   bash home-banner/build_3d_banner.sh
 fi
 ./bannertool.exe makebanner -ci home-banner/banner.cgfx -a banner.wav -o banner.bnr
