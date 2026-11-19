@@ -470,6 +470,11 @@ async function getStatus(){if(S.working)return;try{
  if(!wasIniCached && S.status.ini_cached && S.ecuSignature && !S.definition && !S.working){
   resolveLiveIni().then(()=>render()).catch(()=>{});
  }
+ // Hash is stable across boots, but changes after an SD import or upload.
+ if(S.ecuSignature&&S.status.ini_cached&&S.status.ini_sha256&&
+     S.iniRevision!==S.status.ini_sha256&&!S.working){
+   resolveLiveIni().then(()=>render()).catch(()=>{});
+ }
  const nowReady=S.status.usb_device_ready===true;
  const confirmedSignature=S.status.ecu_session_connected?S.status.ecu_signature:'';
  if(confirmedSignature && confirmedSignature!==S.ecuSignature && !S.working){
@@ -1111,10 +1116,16 @@ async function saveCurrentIni(){
  const saved=await resp.text();
  if(saved!==S.rawIni)throw Error('Cached INI differs from uploaded file');
  setIniImportProgress(`Complete — ${new TextEncoder().encode(saved).length} bytes saved and verified on ESP32`);
+ const metadata=await api('/api/ini/status');
+ const hash=/^[a-f0-9]{64}$/i.test(metadata.sha256||'')?metadata.sha256:'';
+ S.iniRevision=hash;
+ if(hash)writeLocalIni(hash,S.rawIni,S.definition,Number(metadata.size)||0).catch(()=>{});
  toast('Definition saved and verified on ESP32');await getStatus();
 }
 async function deleteCachedIni(){
- try{await api('/api/ini/file',{},'DELETE');toast('Saved INI deleted');await getStatus();}
+ try{await api('/api/ini/file',{},'DELETE');await clearLocalIni();
+    S.iniRevision='';S.rawIni='';S.definition=null;S.tsStructure=null;
+    GUIDE.reset(true);clearCalibrationSession();toast('Saved INI deleted');await getStatus();}
  catch(e){toast('Delete failed: '+e.message,true)}
 }
 // INI picker belongs to the dynamically rendered Connection screen.
