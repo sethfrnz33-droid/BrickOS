@@ -50,3 +50,7 @@
 5. Host tests exercise the ten-chapter sequence; hardware operation and ESP-IDF compilation need separate validation.
 
 **Explicit limitation:** Educational navigation and evidence reviews do not prove that an ECU calibration is safe or complete.
+
+## Chapter-by-chapter question dialogue (catalogue 1.2.0)
+
+Every HPA-ordered chapter contains three authored, INI-aware review questions with short technical explanations. The phone remembers answers as user-reported notes scoped to the matching ECU definition; neither a user response nor finishing a chapter verifies the engine or triggers an ECU write. See [all thirty prompts](28-seth-chapter-questions.md). The original manual interface and Nintendo DS connection protocols remain untouched.
