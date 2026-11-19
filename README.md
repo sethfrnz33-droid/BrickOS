@@ -77,3 +77,15 @@ Seth can now [investigate matched ECU telemetry and distinguish observations fro
 - [Machine-readable 57-case design registry — **not loaded by current firmware**](design/diagnostics/scenario-registry.v1.json)
 
 The proposed scenario registry and fallback policy have host-side validation under `firmware/esp32/tests/seth-scenario-registry.test.mjs`; **unit tests do not validate a physical ECU diagnosis**. All future sensor-role bindings must derive from the active verified INI, ECU configuration and verified expert rules. The guide must never replace a qualified external check with a guessed value or treat a momentary "on target" lambda as proof an entire engine is optimal.
+
+## Unified Seth + Autotune architecture and engine archive
+
+**Planned, not deployed:** Seth coordinates HP Academy-inspired chapters, local engine-build facts, matched rusEFI INI capabilities, diagnostic cases and review-only autotune evidence; real ESP-owned profile persistence and an authorized live autotuning controller remain unimplemented. **GDI and mixed PFI/GDI are explicitly unsupported** in BrickOS Guided Fuel Tuning, regardless of upstream rusEFI features. PWM pump control never implies the presence or absence of a regulator, and does not independently establish correct rail pressure.
+
+- [Unified ten-stage tuning coordinator: manual vs analysis vs future automation](docs/33-unified-tuning-coordinator.md)
+- [Progressive engine-build archive questions, phone layout, and Seth dialogue](docs/34-engine-build-archive-and-seth-intake.md)
+- [Versioned local engine archive data contract and PFI-only capability policy](design/engine-build/profile-contract.v1.json)
+- [Offline read-only engine profile policy prototype](prototype/engine-profile-policy.mjs)
+- [Profile policy regression tests](firmware/esp32/tests/engine-profile-policy.test.mjs)
+
+Engine hardware facts are keyed to a local engine profile, **not** to a volatile INI fingerprint; ECU layout changes require revalidation of dependent data without deleting reported build information. The prototype is purely explanatory and cannot write ECU RAM/flash or control a pump/engine. The open Wi-Fi AP is not an authenticated archive service; an ESP-owned persistent store would require a separately validated security and consent design.
