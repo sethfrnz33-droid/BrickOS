@@ -69,7 +69,7 @@ static void copy_text(char *dest, size_t cap, const char *src){
 
 /* Field indices are looked up by INI name; never infer ECU offsets. */
 typedef struct {char label[68],target[64];int group;} MenuItem;
-typedef struct {char name[60],unit[26];int page,offset,width,height,kind,type,bytes,bitlo,bithi;double scale,translate,low,high;bool validScale,limitsKnown,powerCycle;int dyn_axis_kind;const char *choice_spec,*source_spec;} Field;
+typedef struct {char name[60],unit[26];int page,offset,width,height,kind,type,bytes,bitlo,bithi;double scale,translate,low,high;bool validScale,limitsKnown,powerCycle,readOnly;int dyn_axis_kind;const char *choice_spec,*source_spec;} Field;
 typedef struct {char name[64];const char *value;} MacroDef;
 typedef struct {int value;char label[56];} Choice;
 typedef struct {char id[64],alt[64],label[76],x[60],y[60],z[60],xchan[60],ychan[60];bool curve,xro,yro;} TableDef;
@@ -115,6 +115,9 @@ static char *ini_source=NULL;
 static MacroDef macro_defs[160];static int macro_count=0;
 #define CYCLE_CAP 128
 static char power_cycle_names[CYCLE_CAP][64];static int power_cycle_count=0;
+#define INI_READONLY_CAP 192
+static char ini_readonly_names[INI_READONLY_CAP][64];
+static int ini_readonly_count=0;
 static Choice choices[512];static int choice_count=0;
 static int group_item=-1,group_parent_selected=0;
 /* One continuous whole-map editor: no split overview/zoom interaction. */
@@ -941,7 +944,7 @@ static int parse_ini_all(const char*body,int length){char*buf=(char*)malloc((siz
  if(ini_source)free(ini_source);
  if(compare_buffer)free(compare_buffer);
  ini_source=buf;
- macro_count=power_cycle_count=0;rpm_limit_requested=rpm_limit_known=false;rpm_limit_retry_at=0;
+ macro_count=power_cycle_count=ini_readonly_count=0;rpm_limit_requested=rpm_limit_known=false;rpm_limit_retry_at=0;
  menu_count=cal_count=chan_count=table_count=ref_count=gauge_def_count=ini_graph_count=0;page_ids_count=0;ini_setting_help_count=0;
  memset(&ini_flags,0,sizeof(ini_flags));ini_flags_requested=false;ini_flags_retry_at=0;ini_flags_signature[0]=0;
  memset(nav_bookmark,0,sizeof(nav_bookmark));memset(page_ids,-1,sizeof(page_ids));memset(page_sizes,-1,sizeof(page_sizes));memset(page_burnable,0,sizeof(page_burnable));memset(page_writeable,0,sizeof(page_writeable));ini_signature[0]=0;
@@ -953,6 +956,9 @@ static int parse_ini_all(const char*body,int length){char*buf=(char*)malloc((siz
  if(!strcasecmp(section,"TunerStudio")&&!strcasecmp(key,"signature"))snprintf(ini_signature,sizeof(ini_signature),"%s",a[0]);
  if(!strcasecmp(section,"ConstantsExtensions")&&!strcasecmp(key,"requiresPowerCycle")&&n>0&&power_cycle_count<CYCLE_CAP){
    copy_text(power_cycle_names[power_cycle_count++],sizeof(power_cycle_names[0]),a[0]);
+ }
+ if(!strcasecmp(section,"ConstantsExtensions")&&!strcasecmp(key,"readOnly")&&n>0&&ini_readonly_count<INI_READONLY_CAP){
+   copy_text(ini_readonly_names[ini_readonly_count++],sizeof(ini_readonly_names[0]),a[0]);
  }
  if(!strcasecmp(section,"Constants")){if(!strcasecmp(key,"page"))currentpage=int_number(a[0],1);else if(!strcasecmp(key,"pageIdentifier"))parse_page_ids(val);else if(!strcasecmp(key,"pageSize")){int dummy;parse_int_list(val,page_sizes,64,&dummy);}else if(!strcasecmp(key,"burnCommand"))parse_page_capability(val,page_burnable,"B%2i");else if(!strcasecmp(key,"pageChunkWrite"))parse_page_capability(val,page_writeable,"C%2i%2o%2c%v");else if(!strcasecmp(key,"endianness"))ini_big_endian=strncasecmp(val,"big",3)==0;else parse_field(key,val,currentpage,false);}
  if(!strcasecmp(section,"OutputChannels"))parse_field(key,val,0,true);
@@ -1015,6 +1021,10 @@ static int parse_ini_all(const char*body,int length){char*buf=(char*)malloc((siz
  for(int i=0;i<power_cycle_count;i++){
    Field *f=lookup(power_cycle_names[i],false);
    if(f)f->powerCycle=true;
+ }
+ for(int i=0;i<ini_readonly_count;i++){
+   Field *f=lookup(ini_readonly_names[i],false);
+   if(f)f->readOnly=true;
  }
  ini_resolve_all_numeric_fields();
  stim_preview=false;
@@ -1684,7 +1694,7 @@ static double field_value(const uint8_t*bytes,int length,const Field*f,int index
  double raw=get_number(bytes,length,index*dsize(f->type),f->type);if(!isfinite(raw))return NAN;
  if(f->kind==K_BITS){uint64_t mask=(1ULL<<(f->bithi-f->bitlo+1))-1;return (double)(((uint64_t)(int64_t)raw>>f->bitlo)&mask);}
  return raw*f->scale+f->translate;}
-static bool set_number(uint8_t*bytes,int length,const Field*f,int index,double value){if(!f||!f->validScale||!isfinite(value)||index<0||index>=f->width*f->height)return false;
+static bool set_number(uint8_t*bytes,int length,const Field*f,int index,double value){if(!f||f->readOnly||!f->validScale||!isfinite(value)||index<0||index>=f->width*f->height)return false;
  int sz=dsize(f->type),off=index*sz;
  if(off+sz>length)return false;
  if(f->kind!=K_BITS&&f->limitsKnown&&(value<f->low-1e-9||value>f->high+1e-9))return false;
@@ -3167,7 +3177,7 @@ static bool changed(void){
 static bool focus_axis_ready(int a){
  if(a<0||a>1||axis_field[a]<0||!axis_ready[a]||axis_readonly[a])return false;
  const Field *f=&cal[axis_field[a]];
- return f->validScale && f->kind==K_ARRAY && axis_len[a]>=f->bytes;
+ return !f->readOnly && f->validScale && f->kind==K_ARRAY && axis_len[a]>=f->bytes;
 }
 static int focused_index(void){return map_focus==0?cell:axis_cursor[map_focus-1];}
 static bool active_focus_data(Field **out_field,uint8_t **out_data,int *out_len,int *out_index){
@@ -3251,6 +3261,7 @@ static void adjust_cell(double dir){
  if(!active_focus_data(&f,&buf,&len,&index)){
    note(map_focus?"INI axis unavailable or readOnly":"ECU data not loaded");return;}
  if(f->kind==K_BITS&&choice_count>0){note("Use A for the INI option list");return;}
+ if(f->readOnly){note("INI marks this field read-only");return;}
  if(!f->validScale){note("Unsupported numeric encoding; edit blocked");return;}
  double val=field_value(buf,len,f,index);
  if(!isfinite(val)){note("Invalid ECU numeric value");return;}
@@ -3275,7 +3286,7 @@ static void adjust_cell(double dir){
 static void numeric_edit_prompt(void){
  if(!editor_loaded||!staged){note("SELECT first to stage local calibration edits");return;}
  Field *f=NULL;uint8_t *buf=NULL;int len=0,index=0;
- if(!active_focus_data(&f,&buf,&len,&index)||f->kind==K_BITS){
+ if(!active_focus_data(&f,&buf,&len,&index)||f->kind==K_BITS||f->readOnly){
     note("Select a writable numeric cell / use A options for enums");return;
  }
  double old=field_value(buf,len,f,index);
@@ -3389,6 +3400,7 @@ static void map_tools_apply(void){
  if(action==12 && (map_clip_w<1||map_clip_h<1||cell%w+map_clip_w>w||cell/w+map_clip_h>h)){
     note("Clipboard absent or destination exceeds map bounds");return;
  }
+ if(f->readOnly){note("INI marks this map read-only");return;}
  if(!staged){note("SELECT enables local EDIT for modifying map values");return;}
  for(int i=0;i<n;i++){
     map_values_before[i]=field_value(editor,editor_length,f,i);
@@ -3637,6 +3649,7 @@ static void request_burn(void){
  if(open_field<0||!editor_loaded||!staged||!changed()){
     note("No changed ECU data to write");return;
  }
+ if(cal[open_field].readOnly){note("ECU INI marks this calibration read-only");return;}
  /* Queued writes take the next worker slot; never fail due to a live poll. */
  write_queued=true;
  bts_audio_start_burn_loop(event_audio_enabled);
@@ -3918,6 +3931,7 @@ static void enter_selected(void){
  else if(ui_page==PAGE_CHOICES){
     if(open_field>=0&&editor_loaded&&selected>=0&&selected<choice_count){
        Field *f=&cal[open_field];
+       if(f->readOnly){note("INI option is read-only");return;}
        edit_history_capture(&edit_undo_before);
        double old_choice=field_value(editor,editor_length,f,0);
        int chosen=choices[selected].value;
@@ -4087,7 +4101,8 @@ static void draw_scalar_top(void){
      text(17,182,.40f,cream,line);
    }else text(17,182,.40f,secondary,"INI does not specify numeric limits");
  }
- if(f->powerCycle)text(17,205,.42f,orange,"POWER CYCLE REQUIRED AFTER BURN");
+ if(f->readOnly)text(17,205,.42f,orange,"INI READ ONLY - VIEW WITHOUT EDITING");
+ else if(f->powerCycle)text(17,205,.42f,orange,"POWER CYCLE REQUIRED AFTER BURN");
  else text(17,205,.38f,secondary,"CHANGES ARE LOCAL UNTIL VERIFIED BURN");
  text(17,224,.32f,bright,"BOTTOM SCREEN: CHANGE VALUE / REVIEW BURN");
 }
@@ -6611,7 +6626,8 @@ static void touch_input(void){touchPosition tp;hidTouchRead(&tp);
           if(first+5>n)first=n-5;if(first<0)first=0;
           int hit=first+(tp.py-82)/18;if(hit>=0&&hit<n)cell=hit;
        }else if(tp.py>=176&&tp.py<205){
-          if(tp.px<107){if(editor_loaded){if(staged)numeric_edit_prompt();else {staged=true;note("Local editing enabled");}}}
+          if(tp.px<107){if(editor_loaded){if(staged)numeric_edit_prompt();else if(cal[open_field].readOnly)note("Read-only INI curve; view only");
+                      else {staged=true;note("Local editing enabled");}}}
           else if(tp.px<212)edit_history_move(-1);else edit_history_move(1);
        }return;
     }
@@ -6632,6 +6648,7 @@ static void touch_input(void){touchPosition tp;hidTouchRead(&tp);
     }
     if(tp.py>=140&&tp.py<172){
       if(tp.px<107){if(editor_loaded){if(staged)numeric_edit_prompt();
+         else if(cal[open_field].readOnly)note("Read-only INI map; view only");
          else {staged=true;confirm_write=false;note("Edit enabled locally; tap ENTER again");}}}
       else if(tp.px<212)adjust_cell(-1.0);
       else adjust_cell(1.0);
@@ -7036,7 +7053,11 @@ static void handle_keys(u32 k){
  if((k&KEY_CSTICK_DOWN)&&cal[open_field].width*cal[open_field].height>1)
     move_cell(current_table>=0&&tables[current_table].curve?5:0,
               current_table>=0&&tables[current_table].curve?0:5);
- if((k&KEY_SELECT)&&editor_loaded){staged=!staged;confirm_write=false;note(staged?"Edit staged locally; ECU unchanged":"Edit mode off; staged bytes retained");}
+ if((k&KEY_SELECT)&&editor_loaded){
+    if(cal[open_field].readOnly){note("Read-only INI field; view only");}
+    else {staged=!staged;confirm_write=false;
+       note(staged?"Edit staged locally; ECU unchanged":"Edit mode off; staged bytes retained");}
+ }
  if(k&(KEY_DUP|KEY_CPAD_UP))move_cell(0,-1);
  if(k&(KEY_DDOWN|KEY_CPAD_DOWN))move_cell(0,1);
  if(k&(KEY_DLEFT|KEY_CPAD_LEFT))move_cell(-1,0);
