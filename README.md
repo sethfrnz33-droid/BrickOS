@@ -104,3 +104,16 @@ Engine hardware facts are keyed to a local engine profile, **not** to a volatile
 - [Bounded, heap-free pure-C teaching-state prototype](prototype/esp_education_core.c) and [host regression test](firmware/esp32/tests/test_education_core_host.c)
 
 The learner's `understanding`, the **engine's physical-hardware verification**, and the **calibration's evidence/validation** always remain independent states; a correct educational answer cannot authorize an ECU write or certify a vehicle as safe. Lessons and semantic roles are authored once for the ESP-owned packet architecture; a future DS client would render them without ECU-specific hardcoded settings. **No full language model is assumed to run on the 4 MB target**; the intended design is a deterministic rule engine and indexed flash-backed educational library with measured resource limits. A qualified, independent inspection/validation may still be necessary before engine/vehicle operation.
+
+## Verified pre-implementation research (November 19, 2026)
+
+**No runtime implementation in this research pass.** The latest documents identify the actual public firmware/INI rules, current browser alias candidates, unresolved board/ECU evidence, and release gates before Seth's ESP-resident guide is integrated.
+
+- [Verified rusEFI/TunerStudio/HPA/ESP-IDF research ledger](docs/40-verified-external-source-ledger-and-rusefi-constraints.md) — upstream facts versus what requires the matching generated INI or external proof
+- [Implementation readiness, 10-stage task ownership, semantics and unresolved hardware decisions](docs/41-implementation-readiness-decisions-and-traceability.md)
+- [46 unverified semantic-source candidates](design/research/source-role-candidates.v1.json) — 25 from the current browser code, plus 21 research hints; **none certified against a live Brick ECU**
+- [Source-ledger regression test](firmware/esp32/tests/seth-role-ledger.test.mjs) — catches accidental divergence from the current browser alias list
+
+**Key findings:** The real rusEFI `engine` channel is a bitmask; generated INI page ordinals and optional pages can vary; display aliases may share one stored calibration value; specialized trigger capture is not ordinary 100 Hz output telemetry; PWM pump control does not imply a missing regulator or verified rail pressure; and the current 4 MB ESP partition plan has no dedicated profile/content storage or OTA slot. The exact live ECU INI, hardware flash/PSRAM, bus throughput and physical build facts remain **unverified** and must be checked before production claims.
+
+**Behavioral constraint:** the full educational guide is separate from hardware/vehicle verification, and the current Bridge/Manual Tuning/3DS connection paths remain untouched. GDI and mixed GDI/PFI Guided Fuel Tuning are unsupported.
