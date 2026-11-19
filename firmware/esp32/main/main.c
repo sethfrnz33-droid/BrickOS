@@ -287,6 +287,8 @@ static esp_err_t status_get(httpd_req_t *r){
     cJSON_AddStringToObject(j,"storage_error",storage_error());
     cJSON_AddBoolToObject(j,"ini_cached",ini_cache_present());
     cJSON_AddNumberToObject(j,"ini_size",ini_cache_size());
+    char ini_hash[65] = "";
+    if(ini_cache_sha256(ini_hash))cJSON_AddStringToObject(j,"ini_sha256",ini_hash);
     cJSON_AddBoolToObject(j,"ts_command_inspection_available",true);
     cJSON_AddBoolToObject(j,"ts_physical_output_tests_enabled",false);
     cJSON_AddStringToObject(j,"ecu_sd_ini_state",brick_sd_ini_state());
@@ -923,6 +925,8 @@ static esp_err_t ini_status_get(httpd_req_t *r){
     cJSON *j=cJSON_CreateObject();cJSON_AddBoolToObject(j,"ok",true);
     cJSON_AddBoolToObject(j,"cached",ini_cache_present());
     cJSON_AddNumberToObject(j,"size",ini_cache_size());
+    char ini_hash[65] = "";
+    if(ini_cache_sha256(ini_hash))cJSON_AddStringToObject(j,"sha256",ini_hash);
     char *s=cJSON_PrintUnformatted(j);cJSON_Delete(j);
     esp_err_t e=json_string(r,s?s:"{}",200);free(s);return e;
 }
