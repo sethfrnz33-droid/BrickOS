@@ -1,4 +1,4 @@
-/* Brick Tuner Suite DSi v3.1
+/* Brick Tuner Suite DSi v3.3
  * Native two-screen UI, sourced from the original 3DS v62 INI/BrickOS contract.
  * A DSi cannot use v62's Citro3D GPU API, but v28 adds a software 3D
  * shaded surface renderer for actual INI Z tables and retains a recognizable
@@ -28,6 +28,7 @@
 #include "ui_font.h"
 #include "sfx.h"
 #include "bts_audio_rules.h"
+#include "clutch_lego_rules.h"
 
 #define W 256
 #define H 192
@@ -168,6 +169,20 @@ static bool is_favorite(const char *target);
 /* 2/3/4 top gauges; default remains 2 AFR/VBAT. L/R only on HOME. */
 static int gauge_layout=2;
 static int sound_pick=0;
+static BtClutchLego clutch_lego={0};
+static const char *clutch_state_channel="clutchDownState";
+static bool clutch_source_loaded=false;
+/* Kevin Jonas high-RPM alert: full-screen flash on both displays and a custom
+ * SD-resident PCM cue. The effect is purely client-side UI/audio and never
+ * writes to the ECU. */
+static uint16_t *kevin_framebuffer=NULL;
+static size_t kevin_framebuffer_words=0;
+static signed char *kevin_pcm=NULL;
+static size_t kevin_pcm_length=0;
+static int kevin_audio_channel=-1;
+static int kevin_image_state=-1,kevin_audio_state=-1;
+static bool kevin_flash_visible=false,kevin_flash_previous=false;
+static double kevin_flash_rpm=0,kevin_flash_hz=0;
 static int map_indices[BTS_MAX_MAPS],map_count=0,chosen_map=-1;
 static int cx=0,cy=0,active_slot=0;
 static int map_focus=0; /* 0=Z calibration, 1=X axis, 2=Y axis */
@@ -509,6 +524,112 @@ static bool get_value(const char*name,double*value){
             return bt_numeric_eval(trace_formula[i],computed_value_lookup,NULL,value);
     }
     return false;
+}
+/* Select the real rusEFI output channel, never the calibration pin field.
+ * Adding it to live_length() below makes the ESP32 return this bit even while
+ * the user is browsing a different menu. */
+static void clutch_lego_service(void){
+    /* An optional one-line SD setting may select the alternative clutch-up
+     * switch on cars without a clutch-down switch. Default is clutchDownState.
+     * Never infer which physical pin is wired from INI availability alone. */
+    if(sd_ready && !clutch_source_loaded){
+        clutch_source_loaded=true;
+        char path[160],value[32]={0};
+        snprintf(path,sizeof(path),"%s/clutch-source.cfg",bt_sd_asset_root());
+        FILE *f=fopen(path,"rb");
+        if(f){
+            if(fgets(value,sizeof(value),f)){
+                value[strcspn(value,"\r\n \t")]=0;
+                if(!strcasecmp(value,"up")||!strcasecmp(value,"clutchUpState"))
+                    clutch_state_channel="clutchUpState";
+            }
+            fclose(f);
+        }
+    }
+    double raw=0;
+    bool valid=get_value(clutch_state_channel,&raw)&&isfinite(raw)&&
+               (raw==0.0 || raw==1.0);
+    int cue=bt_clutch_lego_step(&clutch_lego,valid,valid?(int)raw:0,
+                               live.sequence);
+    if(cue>=0 && !bts_sfx_play_clutch(cue,sd_ready))
+        snprintf(note,sizeof(note),"CLUTCH SOUND %02d MISSING ON SD",cue);
+}
+static void kevin_stop_audio(void){
+    if(kevin_audio_channel>=0)soundKill(kevin_audio_channel);
+    kevin_audio_channel=-1;
+}
+static bool kevin_load_image(void){
+    if(!sd_ready)return false;
+    if(kevin_image_state>=0)return kevin_image_state==1;
+    char path[160];snprintf(path,sizeof(path),"%s/kevinjonas.rgb565",bt_sd_asset_root());
+    FILE *f=fopen(path,"rb");
+    if(!f){kevin_image_state=0;return false;}
+    size_t words=(size_t)W*H;
+    uint16_t *pixels=(uint16_t*)malloc(words*sizeof(uint16_t));
+    if(!pixels){fclose(f);kevin_image_state=0;return false;}
+    size_t n=fread(pixels,sizeof(uint16_t),words,f);
+    fclose(f);
+    if(n!=words){free(pixels);kevin_image_state=0;return false;}
+    kevin_framebuffer=pixels;kevin_framebuffer_words=words;kevin_image_state=1;return true;
+}
+static bool kevin_load_audio(void){
+    if(!sd_ready)return false;
+    if(kevin_audio_state>=0)return kevin_audio_state==1;
+    char path[160];snprintf(path,sizeof(path),"%s/nierniernier.pcm8",bt_sd_asset_root());
+    FILE *f=fopen(path,"rb");
+    if(!f){kevin_audio_state=0;return false;}
+    if(fseek(f,0,SEEK_END)!=0){fclose(f);kevin_audio_state=0;return false;}
+    long len=ftell(f);
+    if(len<32||len>500000||fseek(f,0,SEEK_SET)!=0){fclose(f);kevin_audio_state=0;return false;}
+    signed char *pcm=(signed char*)malloc((size_t)len);
+    if(!pcm){fclose(f);kevin_audio_state=0;return false;}
+    size_t n=fread(pcm,1,(size_t)len,f);
+    fclose(f);
+    if(n!=(size_t)len){free(pcm);kevin_audio_state=0;return false;}
+    kevin_pcm=pcm;kevin_pcm_length=(size_t)len;kevin_audio_state=1;return true;
+}
+static bool kevin_rpm(double *out){
+    static const char *const names[]={"RPMValue","rpm","RPM","engineRpm","EngineSpeed"};
+    if(!out)return false;
+    for(unsigned i=0;i<sizeof(names)/sizeof(names[0]);i++)
+        if(get_value(names[i],out)&&isfinite(*out))return true;
+    return false;
+}
+static void kevin_update(void){
+    double rpm=0;
+    if(!kevin_rpm(&rpm)||rpm<5000.0){
+        kevin_flash_rpm=0;kevin_flash_hz=0;kevin_flash_visible=false;kevin_flash_previous=false;
+        kevin_stop_audio();
+        return;
+    }
+    if(rpm>6000.0)rpm=6000.0;
+    kevin_flash_rpm=rpm;
+    double t=(rpm-5000.0)/1000.0;
+    if(t<0)t=0;
+    if(t>1)t=1;
+    kevin_flash_hz=1.0+t*9.0;
+    int period=(int)lround(60.0/kevin_flash_hz);
+    if(period<2)period=2;
+    bool visible=(frame%period)<(period/2);
+    kevin_flash_previous=kevin_flash_visible;
+    kevin_flash_visible=visible;
+    if(kevin_flash_visible&&!kevin_flash_previous&&kevin_load_audio()){
+        kevin_stop_audio();
+        DC_FlushAll();
+        kevin_audio_channel=soundPlaySample(kevin_pcm,SoundFormat_8Bit,(u32)kevin_pcm_length,11025,105,64,false,0);
+    }
+}
+static void kevin_overlay(void){
+    if(!kevin_flash_visible)return;
+    if(!kevin_load_image())return;
+    memcpy(top,kevin_framebuffer,kevin_framebuffer_words*sizeof(uint16_t));
+    memcpy(bottom,kevin_framebuffer,kevin_framebuffer_words*sizeof(uint16_t));
+}
+static void kevin_shutdown(void){
+    kevin_stop_audio();
+    free(kevin_framebuffer);kevin_framebuffer=NULL;kevin_framebuffer_words=0;
+    free(kevin_pcm);kevin_pcm=NULL;kevin_pcm_length=0;
+    kevin_image_state=kevin_audio_state=-1;
 }
 /* UI-only status evaluation. TunerStudio indicator expressions are read-only
  * display rules; do not treat them as ECU calibration fields or commands. */
@@ -1929,6 +2050,7 @@ static void render(void){
         fill(bottom,3,151,250,14,PANEL);
         text(bottom,9,153,b,HIGHLIGHT,34);
     }
+    kevin_overlay();
     /* Drawing always targets the off-screen RAM framebuffer.
      * Present once at VBlank from the main loop to avoid double waits. */
 }
@@ -2147,6 +2269,13 @@ static int live_length(void){
             }else if(i<64&&dialog_gauge_expr_valid[i])
                 length=expression_live_length(dialog_gauge_expr[i],length);
         }
+    }
+    /* The clutch transition detector must keep receiving the actual ECU bit
+     * regardless of the current tuning page (including Favorites and View). */
+    const BtField *clutch=bt_field(&def,clutch_state_channel,true);
+    if(clutch && clutch->scaled){
+        int end=clutch->offset+bt_type_size(clutch->type);
+        if(end>length && end<=BTS_LIVE_CAP)length=end;
     }
     /* Preserve a small 30Hz response while navigating; request the larger
      * six-channel capture only when the lower idle dashboard is visible. */
@@ -3227,6 +3356,8 @@ int main(void){
         update_idle();
         /* One-inflight HTTP; process small nonblocking steps after input. */
         service_network();
+        clutch_lego_service();
+        kevin_update();
         if(frame%60==0){measured_hz=live_count;live_count=0;}
         bool draw_now=frame%2==0||down;
         if(draw_now)render();
@@ -3237,5 +3368,6 @@ int main(void){
     }
     bt_async_cancel();bt_async_forget_connection();
     bts_sfx_shutdown();
+    kevin_shutdown();
     return 0;
 }

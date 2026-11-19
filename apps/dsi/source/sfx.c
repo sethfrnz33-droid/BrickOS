@@ -5,11 +5,14 @@
 #include "sfx.h"
 #include "storage.h"
 #include "bts_audio_rules.h"
+#include "clutch_lego_rules.h"
 /* DSi: PCM8 @ 11025Hz files on SD, converted from the v62 PCM16 assets.
  * No audio is loaded during boot or network requests. Replaces a previous cue
  * only on a navigation event, not while hovering or rendering a frame. */
 static signed char *active_pcm;
 static int active_channel=-1;
+static signed char *clutch_pcm=NULL;
+static int clutch_channel=-1;
 static char audio_status[96]="AUDIO NOT TESTED";
 static int audio_assets_state=-1;
 static void sfx_message(const char *value){snprintf(audio_status,sizeof(audio_status),"%s",value);}
@@ -58,4 +61,33 @@ bool bts_sfx_play(int cue,bool sd_ready){
     sfx_message("AUDIO: PLAYBACK REQUESTED");
     return true;
 }
-void bts_sfx_shutdown(void){stop_active();}
+/* Clutch sounds are separate from ordinary navigation audio, so their
+ * playback is not accidentally cut off by an unrelated UI cue. */
+static void stop_clutch(void){
+    if(clutch_channel>=0)soundKill(clutch_channel);
+    clutch_channel=-1;
+    free(clutch_pcm);clutch_pcm=NULL;
+}
+bool bts_sfx_play_clutch(int cue,bool sd_ready){
+    if(!sd_ready || cue<0 || cue>=BTS_CLUTCH_LEGO_SOUNDS)return false;
+    char path[160];
+    snprintf(path,sizeof(path),"%s/clutch/%02d.pcm8",bt_sd_asset_root(),cue);
+    FILE *f=fopen(path,"rb");
+    if(!f){sfx_message("MISSING /BrickECU/clutch/ PCM8");return false;}
+    if(fseek(f,0,SEEK_END)!=0){fclose(f);return false;}
+    long len=ftell(f);
+    if(len<32 || len>500000 || fseek(f,0,SEEK_SET)!=0){fclose(f);return false;}
+    signed char *data=(signed char*)malloc((size_t)len);
+    if(!data){fclose(f);return false;}
+    size_t got=fread(data,1,(size_t)len,f);fclose(f);
+    if(got!=(size_t)len){free(data);return false;}
+    stop_clutch();
+    /* Audio hardware reads DMA from RAM; flush newly loaded bytes first. */
+    DC_FlushAll();
+    int channel=soundPlaySample(data,SoundFormat_8Bit,(u32)got,11025,105,64,false,0);
+    if(channel<0){free(data);return false;}
+    clutch_pcm=data;clutch_channel=channel;
+    sfx_message("CLUTCH LEGO SOUND PLAYING");
+    return true;
+}
+void bts_sfx_shutdown(void){stop_clutch();stop_active();}

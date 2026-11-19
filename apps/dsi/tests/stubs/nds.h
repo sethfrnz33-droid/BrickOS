@@ -39,6 +39,7 @@ static inline unsigned keysHeld(void){return 0;}
 static inline void touchRead(touchPosition *t){t->px=0;t->py=0;}
 #define SoundFormat_8Bit 1
 static inline void soundEnable(void){}
+static inline void DC_FlushAll(void){}
 static inline void soundKill(int soundId){(void)soundId;}
 static inline int soundPlaySample(const void *data,int format,uint32_t size,unsigned short hz,unsigned char vol,unsigned char pan,int loop,unsigned short point){
     (void)data;(void)format;(void)size;(void)hz;(void)vol;(void)pan;(void)loop;(void)point;return 0;

@@ -32,3 +32,9 @@ For v29 table link, Favorites, live indicator and noninteractive label/button UI
 For v30 strict flat 2D curve plots, default top-down table views, and explicit 3D toggling, see [README_V30.md](README_V30.md).
 
 For v31 combined live View panels, grouping, trends, and status indicators, see [README_V31.md](README_V31.md).
+
+
+For the Kevin Jonas high-RPM alert addition, see README_V32.md.
+
+
+For the clutch-switch LEGO audio cycle, see README_V33.md.

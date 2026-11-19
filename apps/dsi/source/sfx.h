@@ -5,5 +5,6 @@
 bool bts_sfx_play(int cue,bool sd_ready);
 bool bts_sfx_files_ready(bool sd_ready);
 const char *bts_sfx_status(bool sd_ready);
+bool bts_sfx_play_clutch(int cue,bool sd_ready);
 void bts_sfx_shutdown(void);
 #endif
