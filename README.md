@@ -43,3 +43,14 @@ Guided Tuning is a **separate, opt-in mode** designed to discover the active ECU
 ## Source provenance
 
 The `firmware/esp32/` source is copied from `BrickOS-v48-TRIGGER-INI-FIX(2).zip` as supplied 2026-11-19; runtime source and embedded assets are unchanged. Its historical `README.md` (which referenced v4.2) is preserved as `README_LEGACY_V42.md` and replaced with the current setup README. The actual 3DS v6.3 and DSi v2.2 sources are now imported under `apps/`; integrating the proposed Guided Tuning controller into ESP firmware and client apps remains future work.
+
+
+## Seth's Guide — phone-first, INI-dependent
+
+**One guide data source, multiple future displays.** The phone now has a separately navigable **Ask Seth** experience (full ECU tour, targeted troubleshooting, field-by-field INI walkthrough), using the user's mascot portrait and gibberish audio. The story content lives in `firmware/esp32/web/guide-catalog.json` and is served by the ESP at **`GET /api/guide/v1/catalog`**. Seth is the lightly exasperated ECU-bound clone of the creator; he explains settings and diagnostics without interrupting Manual Tune.
+
+- [Full authored Seth dialogue and branching choice script](docs/24-seth-complete-dialogue.md)
+- [INI-bound, portable phone/DS dialogue contract and explicit limitations](docs/25-portable-ini-guide-contract.md)
+- [Phone implementation, build, routes, media, and tests](firmware/esp32/README_SETH_GUIDE_V2.md)
+
+**Compatibility:** No 3DS or DSi source or connection protocol was changed for this guide. A later ESP-hosted role/state service must produce resolved view packets for the DS, so changing the INI or Seth's lines does not require updating console code. The current phone resolves roles in the browser from the verified INI; this is a **read-only tutorial**, not ECU-resident automatic calibration or ignition tuning.
