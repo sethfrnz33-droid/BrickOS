@@ -151,6 +151,7 @@ static esp_err_t guideduipage(httpd_req_t *r){return asset(r,"application/javasc
 static esp_err_t guide_story_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_story,brick_asset_guide_story_len);}
 static esp_err_t guide_reasoning_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_reasoning,brick_asset_guide_reasoning_len);}
 static esp_err_t guide_story_ui_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_story_ui,brick_asset_guide_story_ui_len);}
+static esp_err_t ini_fast_cache_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_ini_fast_cache,brick_asset_ini_fast_cache_len);}
 static esp_err_t guide_voice_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_voice,brick_asset_guide_voice_len);}
 static esp_err_t guide_catalog_get(httpd_req_t *r){return asset(r,"application/json; charset=utf-8",brick_asset_guide_catalog,brick_asset_guide_catalog_len);}
 static esp_err_t guide_head_get(httpd_req_t *r){return asset(r,"image/png",brick_asset_seth_head,brick_asset_seth_head_len);}
@@ -977,6 +978,7 @@ static void http_start(void){
       {.uri="/app.css",.method=HTTP_GET,.handler=csspage},
       {.uri="/app.js",.method=HTTP_GET,.handler=jspage},
       {.uri="/core.mjs",.method=HTTP_GET,.handler=corepage},
+      {.uri="/ini-fast-cache.mjs",.method=HTTP_GET,.handler=ini_fast_cache_js},
       {.uri="/guided.mjs",.method=HTTP_GET,.handler=guidedpage},
       {.uri="/guided-ui.mjs",.method=HTTP_GET,.handler=guideduipage},
       {.uri="/guide-story.mjs",.method=HTTP_GET,.handler=guide_story_js},
