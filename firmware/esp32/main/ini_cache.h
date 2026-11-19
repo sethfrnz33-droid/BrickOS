@@ -7,6 +7,8 @@
 void ini_cache_init(void);
 bool ini_cache_present(void);
 size_t ini_cache_size(void);
+/* Stable SHA-256 of saved INI, regenerated at boot and after successful changes. */
+bool ini_cache_sha256(char out[65]);
 esp_err_t ini_cache_upload(httpd_req_t *req);
 esp_err_t ini_cache_download(const char *url, const char *ssid, const char *password, char *error, size_t error_size);
 esp_err_t ini_cache_serve(httpd_req_t *req);
