@@ -90,3 +90,17 @@ The proposed scenario registry and fallback policy have host-side validation und
 - [Profile policy regression tests](firmware/esp32/tests/engine-profile-policy.test.mjs)
 
 Engine hardware facts are keyed to a local engine profile, **not** to a volatile INI fingerprint; ECU layout changes require revalidation of dependent data without deleting reported build information. The prototype is purely explanatory and cannot write ECU RAM/flash or control a pump/engine. The open Wi-Fi AP is not an authenticated archive service; an ESP-owned persistent store would require a separately validated security and consent design.
+
+## Seth's ESP-resident educational master plan
+
+**Scope and status:** Planning, authored starter content and **host-tested pure-C state prototype**, not yet linked into the ESP-IDF firmware. The current browser dialogue remains phone-side; we have **not** shipped an ESP-side adaptive instructor, full engine archive, high-rate case recorder, authorized autotuner or DS guide.
+
+- [Complete product specification: adaptive teaching, HPA-ordered calibration guide and evidence separation](docs/36-seth-complete-teaching-and-tuning-master-spec.md)
+- [Full dialogue behavior, educational checks, onboarding, and phone/DS screen workflows](docs/37-seth-education-screen-and-dialogue-flows.md)
+- [ESP32-S3 resource budgets, task scheduling, storage, API design and portability](docs/38-esp-resident-education-runtime-architecture.md)
+- [28 end-to-end acceptance cases, release gates and beginner-to-advanced experience criteria](docs/39-seth-end-to-end-acceptance-and-coverage-gates.md)
+- [130-topic curriculum coverage audit](design/education/curriculum-coverage.v1.json): **22 authored seed lessons, 108 planned** (not yet written)
+- [22 original versioned lesson definitions, four explanation depths and optional conceptual checks](design/education/lesson-catalog.v1.json)
+- [Bounded, heap-free pure-C teaching-state prototype](prototype/esp_education_core.c) and [host regression test](firmware/esp32/tests/test_education_core_host.c)
+
+The learner's `understanding`, the **engine's physical-hardware verification**, and the **calibration's evidence/validation** always remain independent states; a correct educational answer cannot authorize an ECU write or certify a vehicle as safe. Lessons and semantic roles are authored once for the ESP-owned packet architecture; a future DS client would render them without ECU-specific hardcoded settings. **No full language model is assumed to run on the 4 MB target**; the intended design is a deterministic rule engine and indexed flash-backed educational library with measured resource limits. A qualified, independent inspection/validation may still be necessary before engine/vehicle operation.
