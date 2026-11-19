@@ -1,4 +1,4 @@
-> **Current release: v6.4 — animated speaking mascot, dual 3DS HOME assets and INI/favourites fixes.** See [RELEASE_V64_MASCOT_AND_INI.md](RELEASE_V64_MASCOT_AND_INI.md). Original 3DS hardware and CIA conversion are not verified.
+> **Current release: v6.5 — TunerStudio INI numeric conversion modes, limits, and read-only metadata.** See [RELEASE_V65_TUNERSTUDIO_EXPRESSIONS.md](RELEASE_V65_TUNERSTUDIO_EXPRESSIONS.md) and the previous [v6.4 mascot release](RELEASE_V64_MASCOT_AND_INI.md). Original 3DS hardware and CIA conversion are not verified.
 
 > **Current release: v3.7.** See [RELEASE_V37_TUNERSTUDIO_TWO_SCREEN_TREE.md](RELEASE_V37_TUNERSTUDIO_TWO_SCREEN_TREE.md) for the ten-icon TunerStudio upper-screen tree, lower-screen live preview and DS settings cleanup.
 
