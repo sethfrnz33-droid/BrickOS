@@ -2747,7 +2747,7 @@ static void add_action_result(const char*label,const char*command){
  memset(r,0,sizeof(*r));
  snprintf(r->label,sizeof(r->label),"%s",label);
  snprintf(r->command,sizeof(r->command),"%s",command);
- r->field=-1;r->type=3; /* No physical ECU commands can be sent. */
+ r->field=-1;r->type=3; /* Per-command dispatch gates apply in enter_selected(). */
 }
 static void warn_before_hazardous_test(unsigned kind){
  brick_test_confirm_begin(&hazardous_test,kind);
@@ -5134,7 +5134,9 @@ static void draw_config_dialog_bottom(void){
         * unusable test button pretending it can actuate the ECU. */
        bool abort=!strcmp(item->command,"cmd_test_cancel");
        bool capture=is_sensor_capture_command(item->command);
-       bool supported=abort ||
+       bool capture_ready=capture&&net_ok&&ecu_session&&ecu_signature[0]&&
+                            menu_loaded&&!strcmp(ini_signature,ecu_signature);
+       bool supported=abort || capture_ready ||
           (is_stim_action(item)&&
            (!strcmp(item->command,"cmd_disable_self_stim")?
             stim_stop_supported:stim_start_supported));
