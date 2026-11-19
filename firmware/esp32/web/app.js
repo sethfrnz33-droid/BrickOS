@@ -4,6 +4,7 @@ import {renderGuide} from './guided-ui.mjs';
 import {GuideStory,findManualTarget} from './guide-story.mjs';
 import {renderSethStory} from './guide-story-ui.mjs';
 import {SethSpeech} from './guide-voice.mjs';
+import {readLocalIni,writeLocalIni,clearLocalIni} from './ini-fast-cache.mjs';
 
 const $=x=>document.querySelector(x);
 const escapeHTML=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -18,7 +19,7 @@ const S={route:'overview',status:null,ecuSignature:'',connected:false,definition
         latest:null,latestMs:0,liveBusy:false,liveHz:20,liveMode:'fast',selectedChannel:'rpm',liveSeq:0,liveRttMs:0,liveFallback:false,liveFailureCount:0,liveRxCount:0,liveWindowMs:0,liveDisplayHz:0,liveThroughput:0,liveDurationMs:0,scopeChannels:['rpm','map','tps'],
         search:'',tableSearch:'',tsSelected:'',tsOpen:{},tsStructure:null,settingsCategory:'All',tableCategory:'All',editor:null,field:null,selectStart:0,selection:[0],
         undo:[],redo:[],backups:new Set(),logs:[],viewer:null,viewChannel:'rpm',trace:[],
-        signatureMismatch:false,iniResolveState:'Not connected',iniExpectedUrl:'',iniBusy:false,iniImportProgress:'Ready — select any plain-text INI file, regardless of its filename.',working:false,firmwareVersion:'',ecuErrorMessage:'',lastWriteError:'',lastWritePhase:'',statusTransportError:''};
+        signatureMismatch:false,iniRevision:'',iniResolveState:'Not connected',iniExpectedUrl:'',iniBusy:false,iniImportProgress:'Ready — select any plain-text INI file, regardless of its filename.',working:false,firmwareVersion:'',ecuErrorMessage:'',lastWriteError:'',lastWritePhase:'',statusTransportError:''};
 
 // Edits are device-local and transient until the user explicitly verifies/burns.
 S.edits=new Map();S.savedBackups=new Map();S.editorAxes=null;S.editorTable=null;S.axisSelection=null;
