@@ -7,6 +7,11 @@ on:
       - 'firmware/esp32/tests/**'
       - 'design/diagnostics/**'
       - 'design/engine-build/**'
+      - 'design/education/**'
+      - 'prototype/esp_education_core.*'
+      - 'docs/36-seth-complete-teaching-and-tuning-master-spec.md'
+      - 'docs/37-seth-education-screen-and-dialogue-flows.md'
+      - 'docs/38-esp-resident-education-runtime-architecture.md'
       - 'prototype/engine-profile-policy.mjs'
       - 'docs/33-unified-tuning-coordinator.md'
       - 'docs/34-engine-build-archive-and-seth-intake.md'
@@ -23,6 +28,11 @@ on:
       - 'firmware/esp32/tests/**'
       - 'design/diagnostics/**'
       - 'design/engine-build/**'
+      - 'design/education/**'
+      - 'prototype/esp_education_core.*'
+      - 'docs/36-seth-complete-teaching-and-tuning-master-spec.md'
+      - 'docs/37-seth-education-screen-and-dialogue-flows.md'
+      - 'docs/38-esp-resident-education-runtime-architecture.md'
       - 'prototype/engine-profile-policy.mjs'
       - 'docs/33-unified-tuning-coordinator.md'
       - 'docs/34-engine-build-archive-and-seth-intake.md'
@@ -53,3 +63,5 @@ jobs:
         run: bash tests/run_host_syntax.sh
       - name: Validate embedded static assets
         run: bash tests/run_assets_host.sh
+      - name: Compile and test bounded ESP-compatible C education state
+        run: bash tests/run_education_host.sh
