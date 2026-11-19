@@ -21,6 +21,16 @@ export const STORY_STAGE_HINTS=Object.freeze({
 const has=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 export function validateStoryCatalog(c){
  if(!c||c.schema!==STORY_SCHEMA||typeof c.version!=='string'||!c.nodes||!has(c.nodes,c.entry))throw Error('Invalid or unsupported guide catalogue');
+ if(c.chapter_checks){
+  if(!c.tour_steps||typeof c.chapter_checks!=='object'||Array.isArray(c.chapter_checks))throw Error('Chapter checks require a tour');
+  for(const step of c.tour_steps){
+   const qs=c.chapter_checks[step.id];if(!Array.isArray(qs)||qs.length===0||qs.length>25)throw Error('Missing questions for '+step.id);
+   const seen=new Set();for(const q of qs){
+    if(!/^[a-z0-9_]+$/.test(q.id||'')||seen.has(q.id)||typeof q.prompt!=='string'||!q.prompt||typeof q.why!=='string'||!q.why||!Array.isArray(q.roles)||!q.roles.every(x=>typeof x==='string')||typeof q.manual_stage!=='string'||typeof q.requires_external!=='boolean')throw Error('Bad question '+step.id);
+    seen.add(q.id);
+   }
+  }
+ }
  if(c.tour_steps){
   if(!Array.isArray(c.tour_steps)||c.tour_steps.length!==10)throw Error('Guide tour requires ten steps');
   const seen=new Set();
@@ -32,7 +42,7 @@ export function validateStoryCatalog(c){
  for(const [id,n] of Object.entries(c.nodes)){
   if(n.id!==id||n.speaker!=='seth'||typeof n.text!=='string'||!Array.isArray(n.choices))throw Error('Bad dialogue node '+id);
   for(const ch of n.choices){if(!ch.label||typeof ch.go!=='string')throw Error('Bad choice '+id);
-   if(!has(c.nodes,ch.go)&&ch.go!=='back'&&ch.go!=='resume.last'&&!ch.go.startsWith('workspace.')&&!ch.go.startsWith('action.manual.')&&!/^field\.\d+$/.test(ch.go)&&!ch.go.startsWith('action.field.'))throw Error('Broken dialogue link '+id+' -> '+ch.go);
+   if(!has(c.nodes,ch.go)&&ch.go!=='back'&&ch.go!=='resume.last'&&!ch.go.startsWith('workspace.')&&!ch.go.startsWith('action.manual.')&&!/^field\.\d+$/.test(ch.go)&&!ch.go.startsWith('action.field.')&&!/^check\.[a-z_]+\.\d+$/.test(ch.go))throw Error('Broken dialogue link '+id+' -> '+ch.go);
   }
  }
  return c;
@@ -46,24 +56,32 @@ export function findManualTarget(stage,menuTree){
  return null;
 }
 export class GuideStory {
- constructor(catalog=null){this.catalog=null;this.nodeId='welcome';this.stack=[];this.definitionKey='';this.lastVisited='';this.history=[];if(catalog)this.load(catalog)}
- load(c){this.catalog=validateStoryCatalog(c);this.nodeId=c.entry;this.stack=[];this.lastVisited='';this.history=[];}
- bindDefinition(key){const k=key||'';if(k!==this.definitionKey){this.definitionKey=k;this.nodeId=this.catalog?.entry||'welcome';this.stack=[];this.lastVisited='';this.history=[];
-   if(k&&typeof localStorage!=='undefined')try{const raw=JSON.parse(localStorage.getItem('brickos.guide.state.'+k)||'null');if(raw?.version===this.catalog?.version&&has(this.catalog.nodes,raw.lastVisited))this.lastVisited=raw.lastVisited;}catch{}
+ constructor(catalog=null){this.catalog=null;this.nodeId='welcome';this.stack=[];this.definitionKey='';this.lastVisited='';this.history=[];this.checkAnswers={};if(catalog)this.load(catalog)}
+ load(c){this.catalog=validateStoryCatalog(c);this.nodeId=c.entry;this.stack=[];this.lastVisited='';this.history=[];this.checkAnswers={};this.definitionKey='';}
+ isCheckNode(id){const m=/^check\.([a-z_]+)\.(\d+)$/.exec(id||'');return !!(m&&this.catalog?.chapter_checks?.[m[1]]?.[Number(m[2])]);}
+ save(){if(!this.definitionKey||typeof localStorage==='undefined')return;try{localStorage.setItem('brickos.guide.state.'+this.definitionKey,JSON.stringify({version:this.catalog.version,lastVisited:this.lastVisited,answers:this.checkAnswers}));}catch{}}
+ bindDefinition(key){const k=key||'';if(k!==this.definitionKey){this.definitionKey=k;this.nodeId=this.catalog?.entry||'welcome';this.stack=[];this.lastVisited='';this.history=[];this.checkAnswers={};
+   if(k&&typeof localStorage!=='undefined')try{const raw=JSON.parse(localStorage.getItem('brickos.guide.state.'+k)||'null');if(raw?.version===this.catalog?.version){if(has(this.catalog.nodes,raw.lastVisited)||this.isCheckNode(raw.lastVisited))this.lastVisited=raw.lastVisited;for(const [id,v] of Object.entries(raw.answers||{})){const m=/^([a-z_]+)\.([a-z0-9_]+)$/.exec(id);const q=this.catalog.chapter_checks?.[m?.[1]]?.find(x=>x.id===m?.[2]);if(q&&['reported','unknown'].includes(v))this.checkAnswers[id]=v;}}}catch{}
   }return k;}
  canResume(){return !!this.lastVisited&&this.lastVisited!==this.catalog?.entry&&!!this.definitionKey;}
  go(id){if(!this.catalog)throw Error('Guide catalogue unavailable');
   if(id==='back'){this.nodeId=this.stack.pop()||this.catalog.entry;return {type:'node',node:this.nodeId};}
   if(id==='resume.last'){this.nodeId=this.canResume()?this.lastVisited:'tour.start';return {type:'node',node:this.nodeId};}
+  if(id.startsWith('answer.')){
+   const m=/^answer\.([a-z_]+)\.(\d+)\.(reported|unknown)$/.exec(id);
+   if(!m||!this.isCheckNode('check.'+m[1]+'.'+m[2]))throw Error('Unknown question response');
+   const q=this.catalog.chapter_checks[m[1]][Number(m[2])];this.checkAnswers[m[1]+'.'+q.id]=m[3];
+   this.save();return {type:'node',node:this.nodeId,answer:m[3]};
+  }
   if(id.startsWith('workspace.'))return {type:'workspace',tab:id.slice(10)};
   if(id.startsWith('action.field.'))return {type:'manual_field',index:Number(id.slice(13))};
   if(id.startsWith('action.manual.'))return {type:'manual',stage:id.slice(14)};
-  if(!has(this.catalog.nodes,id)&&!/^field\.\d+$/.test(id))throw Error('Unknown dialogue step');
+  if(!has(this.catalog.nodes,id)&&!/^field\.\d+$/.test(id)&&!this.isCheckNode(id)&&!/^why\.[a-z_]+\.\d+$/.test(id))throw Error('Unknown dialogue step');
   if(id!==this.nodeId&&this.stack.length<90)this.stack.push(this.nodeId);
   this.nodeId=id;
   if(id!=='welcome'&&id!=='resume'&&id!=='targeted'&&id!=='tour.start'&&id!=='tour.map')this.lastVisited=id;
   this.history.push(id);if(this.history.length>200)this.history.shift();
-  if(this.definitionKey&&this.canResume()&&typeof localStorage!=='undefined')try{localStorage.setItem('brickos.guide.state.'+this.definitionKey,JSON.stringify({version:this.catalog.version,lastVisited:this.lastVisited}));}catch{}
+  if(this.definitionKey&&this.canResume())this.save();
   return {type:'node',node:id};
  }
  packet({engine=null,menuTree=null,menuLinks={},ecuKey=''}={}){
@@ -83,6 +101,32 @@ export class GuideStory {
       {label:'Back to guide home',go:'welcome'}],_field:f,_menu:explicit||null};}
    else n={id:this.nodeId,speaker:'seth',text:'No further decoded calibration fields are available. This is not a claim that all INI conditions or control strategies are fully understood.',choices:[{label:'Open full INI Atlas',go:'workspace.atlas'},{label:'Guide home',go:'welcome'}]};
   }
+  // Chapter checks are catalogued with INI role names; clients render data packets.
+  const match=/^(check|why)\.([a-z_]+)\.(\d+)$/.exec(this.nodeId);
+  let activeCheck=null,activeStep=null,answer=null;
+  if(match){
+   const [_,kind,stage,indexText]=match;const index=Number(indexText);
+   activeStep=this.catalog.tour_steps?.find(x=>x.id===stage);
+   activeCheck=this.catalog.chapter_checks?.[stage]?.[index];
+   if(!activeStep||!activeCheck)throw Error('Unknown chapter question');
+   answer=this.checkAnswers[stage+'.'+activeCheck.id]||'unreviewed';
+   const next=this.catalog.chapter_checks[stage][index+1];
+   const finish=next?'check.'+stage+'.'+(index+1):activeStep.node;
+   const why=kind==='why';
+   n={id:this.nodeId,speaker:'seth',tone:why?'thoughtful':'normal',
+    tag:`${String(activeStep.step).padStart(2,'0')} / ${activeStep.title} · QUESTION ${index+1} / ${this.catalog.chapter_checks[stage].length}`,
+    stage:activeStep.expert,manual:activeCheck.manual_stage,
+    text:why?`${activeCheck.why} This is a review question, not an automatic test or permission to change calibration values.`:
+      `${activeCheck.prompt} ${activeCheck.why} ${activeCheck.roles.length?'ECU evidence: {{available:'+activeCheck.roles.join('|')+'}}.':''}`,
+    choices:[
+     {label:activeCheck.requires_external?'I checked it independently':'I reviewed the available evidence',go:'answer.'+stage+'.'+index+'.reported'},
+     {label:'I don’t know / not checked',go:'answer.'+stage+'.'+index+'.unknown'},
+     {label:why?'Return to question':'Why does this matter?',go:why?'check.'+stage+'.'+index:'why.'+stage+'.'+index},
+     {label:'Show measured evidence',go:'workspace.evidence'},
+     {label:'Open related original setting',go:'action.manual.'+activeCheck.manual_stage},
+     {label:next?'Next question':'Back to this chapter',go:finish}
+    ]};
+  }
   const r=engine?.report?.()||{};const fields=engine?.fields||{};const values=r.values||{};
   const available=roles=>roles.map(role=>{
    const field=fields[role];if(!field)return role+': not exposed by matched INI';
@@ -91,13 +135,17 @@ export class GuideStory {
   }).join('; ');
   const text=n.text.replace(/\{\{available:([^{}]+)\}\}/g,(_,keys)=>available(keys.split('|').filter(Boolean)));
   const target=n._field?(n._menu?{id:n._menu,label:n._field.label}:null):findManualTarget(n.manual||n.stage,menuTree);
-  const chapter=this.catalog.tour_steps?.find(step=>step.node===n.id)||null;
+  const chapter=activeStep||this.catalog.tour_steps?.find(step=>step.node===n.id)||null;
+  const progress=activeStep?{index:Number(match[3])+1,total:this.catalog.chapter_checks[activeStep.id].length,status:answer,status_meaning:answer==='reported'?'User-reported review only; not independently verified by BrickOS':answer==='unknown'?'Needs review; no correctness claim':'Not yet reviewed',requires_external:activeCheck.requires_external}:null;
+  const questions=chapter?this.catalog.chapter_checks?.[chapter.id]||[]:[];
+  const counts={total:questions.length,reported:0,unknown:0,unreviewed:0};
+  for(const q of questions){const st=this.checkAnswers[chapter.id+'.'+q.id];if(st==='reported')counts.reported++;else if(st==='unknown')counts.unknown++;else counts.unreviewed++;}
   return {schema:this.catalog.schema,catalog_version:this.catalog.version,node_id:n.id,speaker:n.speaker,tone:n.tone,
    title:n.tag||'Guided Tuning',text,stage:n.stage||null,tour_step:chapter?.step||null,tour_total:this.catalog.tour_steps?.length||null,tour_title:chapter?.title||null,definition_key:ecuKey||null,
    freshness:r.fresh===true?'live':r.fresh===false?'stale':'unavailable',
    choices:n.choices.map((ch,i)=>({id:n.id+':'+i,label:ch.label,go:ch.go,enabled:(!ch.go.startsWith('action.manual.')&&!ch.go.startsWith('action.field.'))||!!target,
     blocked_reason:(ch.go.startsWith('action.manual.')||ch.go.startsWith('action.field.'))&&!target?'No matching menu entry in the active INI':null})),
-   manual_target:target,field_id:n._field?.id||null,can_back:this.stack.length>0,can_resume:this.canResume(),
+   manual_target:target,field_id:n._field?.id||null,check:progress,chapter_progress:chapter?counts:null,can_back:this.stack.length>0,can_resume:this.canResume(),
    voice:this.catalog.character?.voice_asset||null,
    assets:{head:this.catalog.character?.sprite_head,jaw:this.catalog.character?.sprite_jaw,mouth:this.catalog.character?.sprite_mouth},
    read_only:true};
