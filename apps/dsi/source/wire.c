@@ -415,9 +415,10 @@ bool bt_commit_field(const BtDefinition*d,const BtField*f,const uint8_t*old_data
     return true;
 }
 
-/* A single cooperative HTTP GET state machine for status, streamed INI,
- * and live data. It uses nonblocking sockets and a STRICT per-frame budget.
- * The old synchronous bt_http remains for explicit map read/write actions. */
+/* A cooperative HTTP state machine for status, streamed INI, live data,
+ * calibration reads, and v27 protected writes. All foreground burn traffic
+ * now uses nonblocking sockets and a strict per-frame budget. Legacy blocking
+ * APIs remain only for compatibility with existing host regression tests. */
 /* DSWiFi sockets are not ordinary newlib file descriptors.  DSWiFi
  * exposes FIONBIO through <sys/ioctl.h>; fcntl(F_GETFL) fails with
  * ENOTSOCK (88) on the DSi, before any TCP/HTTP request can start. */
@@ -432,7 +433,7 @@ typedef struct {
     BtLive *live;
     FILE *reader;
     char ini_sig[160];
-    char request[240], header[4096], error[96];
+    char request[1024], header[4096], error[96];
     char path[80], status_line[96], reject_body[96];
     size_t reject_body_len;
     size_t request_len,request_sent,header_len,received,expected,body_count,parsed_bytes;
@@ -505,7 +506,8 @@ const char *bt_async_phase(void){
         case NET_HEADER:return "WAITING HTTP HEADERS";
         case NET_BODY:return async_net.job==BT_NET_INI?"RECEIVING INI FROM ESP":
                               async_net.job==BT_NET_LIVE?"RECEIVING LIVE DATA":
-                              async_net.job==BT_NET_READ?"READING ECU CALIBRATION":"RECEIVING ECU STATUS";
+                              async_net.job==BT_NET_READ?"READING ECU CALIBRATION":
+                              async_net.job==BT_NET_WRITE?"ECU WRITE RESPONSE":"RECEIVING ECU STATUS";
         case NET_DRAIN:return "FINISHING SD INI FILE";
         case NET_PARSE:return "PARSING INI FROM SD";
         case NET_DONE:return "TRANSFER COMPLETE";
@@ -553,7 +555,7 @@ bool bt_async_begin(BtNetJob job,BtDefinition*d,BtLive*live,int live_length,int 
         if(!live||live_length<4||live_length>BTS_LIVE_CAP)return false;
         snprintf(live_path,sizeof(live_path),"/api/live?length=%d&hz=50",live_length);
         path=live_path;async_net.max_body=BTS_LIVE_CAP+32;
-    }else if(job==BT_NET_READ){
+    }else if(job==BT_NET_READ||job==BT_NET_WRITE){
         path="/api/ts";
         async_net.max_body=sizeof(async_net.store)-1;
     }else async_net.max_body=sizeof(async_net.store)-1;
@@ -698,7 +700,7 @@ static int async_done(void){
         return 0;
     }
     while(async_net.block_len)if(async_flush_block()<0)return -1;
-    if(async_net.job==BT_NET_STATUS||async_net.job==BT_NET_READ){
+    if(async_net.job==BT_NET_STATUS||async_net.job==BT_NET_READ||async_net.job==BT_NET_WRITE){
         async_net.store[async_net.stored]=0;
         if(async_net.stored<2)return async_fail("EMPTY JSON RESPONSE");
     }
@@ -869,6 +871,350 @@ int bt_async_poll(int frame){
         if(r)return r;
     }
     /* Data is queued; the next frame writes it to SD or the small reply buffer. */
+    return 0;
+}
+
+/* DSi v27: protected burn transaction advanced only by the frame loop.
+ * No socket operation waits for a reply or a connect on the UI thread.
+ * Preserve the v62 BrickOS safety contract and fail closed on ambiguity. */
+typedef enum {
+    W_IDLE, W_STATUS, W_BASELINE, W_RPM_INITIAL, W_BACKUP,
+    W_RPM_BEFORE_ARM, W_ARM, W_RPM_BEFORE_PATCH,
+    W_FIND_PATCH, W_RPM_AT_PATCH, W_PATCH, W_VERIFY_PATCH,
+    W_RPM_BEFORE_BURN, W_BURN, W_VERIFY_ALL, W_DISARM,
+    W_DISARM_FAILURE, W_DONE, W_FAILED
+} BurnStep;
+typedef struct {
+    const BtDefinition *def;
+    const BtField *field;
+    const uint8_t *before,*after;
+    int length,offset,chunk_start,chunk_len,frame_started,page_id,step;
+    bool active,requested,armed_request,armed,commit_sent,verified;
+    char signature[160],failure[96],message[100];
+} BtBurn;
+static BtBurn burn;
+static char burn_body[800];
+static uint8_t burn_check[256];
+
+bool bt_write_busy(void){return burn.active;}
+const char *bt_write_message(void){return burn.message;}
+const char *bt_write_phase(void){
+    switch(burn.step){
+    case W_STATUS:return "VERIFYING ECU SESSION";
+    case W_BASELINE:return "CHECKING ECU ORIGINAL DATA";
+    case W_RPM_INITIAL:case W_RPM_BEFORE_ARM:case W_RPM_BEFORE_PATCH:
+    case W_RPM_AT_PATCH:case W_RPM_BEFORE_BURN:return "CHECKING ENGINE STOPPED";
+    case W_BACKUP:return "VERIFYING ESP32 BACKUP";
+    case W_ARM:return "ARMING PROTECTED WRITE";
+    case W_FIND_PATCH:case W_PATCH:return "WRITING ECU CHANGE";
+    case W_VERIFY_PATCH:return "READING BACK ECU CHANGE";
+    case W_BURN:return "BURNING ECU FLASH";
+    case W_VERIFY_ALL:return "VERIFYING FLASH READBACK";
+    case W_DISARM:case W_DISARM_FAILURE:return "DISARMING ECU";
+    case W_DONE:return "ECU BURN VERIFIED";
+    case W_FAILED:return "ECU BURN FAILED";
+    default:return "ECU WRITE IDLE";
+    }
+}
+int bt_write_percent(void){
+    if(!burn.length)return 0;
+    switch(burn.step){
+    case W_STATUS:return 2;
+    case W_BASELINE:return 5+15*burn.offset/burn.length;
+    case W_RPM_INITIAL:case W_BACKUP:return 25;
+    case W_RPM_BEFORE_ARM:case W_ARM:return 35;
+    case W_RPM_BEFORE_PATCH:case W_FIND_PATCH:case W_RPM_AT_PATCH:
+    case W_PATCH:case W_VERIFY_PATCH:return 40+35*burn.offset/burn.length;
+    case W_RPM_BEFORE_BURN:case W_BURN:return 78;
+    case W_VERIFY_ALL:return 80+18*burn.offset/burn.length;
+    case W_DISARM:case W_DISARM_FAILURE:return 99;
+    case W_DONE:return 100;
+    default:return 0;
+    }
+}
+static int burn_finish(bool success,const char *message){
+    burn.active=false;burn.step=success?W_DONE:W_FAILED;
+    if(message&&*message)snprintf(burn.message,sizeof(burn.message),"%s",message);
+    return success?1:-1;
+}
+static int burn_fail(const char*message){
+    if(message&&*message)snprintf(burn.failure,sizeof(burn.failure),"%s",message);
+    bt_async_cancel();burn.requested=false;
+    if(burn.armed_request){
+        /* Once ARM was sent, any broken response may hide an applied write.
+         * Never retry that write. Attempt disarm even after an HTTP error. */
+        burn.step=W_DISARM_FAILURE;
+        return 0;
+    }
+    return burn_finish(false,burn.failure);
+}
+static const char *burn_reject_reason(BurnStep step){
+    switch(step){
+    case W_STATUS:return "SESSION / SIGNATURE / WRITE GATE FAILED";
+    case W_BASELINE:return "ECU BASELINE CHANGED / RELOAD MAP";
+    case W_RPM_INITIAL:case W_RPM_BEFORE_ARM:case W_RPM_BEFORE_PATCH:
+    case W_RPM_AT_PATCH:case W_RPM_BEFORE_BURN:
+        return "ENGINE MUST BE STOPPED / RPM CHECK FAILED";
+    case W_BACKUP:return "VERIFIED ESP32 BACKUP FAILED";
+    case W_ARM:return "ECU ARM REJECTED";
+    case W_PATCH:case W_VERIFY_PATCH:return "WRITE / READBACK UNCERTAIN / INSPECT ECU";
+    case W_BURN:return "FLASH BURN UNCERTAIN / INSPECT ECU";
+    case W_VERIFY_ALL:return "FLASH READBACK FAILED / INSPECT ECU";
+    default:return "ECU WRITE RESPONSE INVALID";
+    }
+}
+static bool burn_request(const char *path,const char *payload,int frame){
+    if(!payload){
+        if(!bt_async_begin(BT_NET_STATUS,NULL,NULL,0,frame))return false;
+    }else{
+        if(!bt_async_begin(BT_NET_WRITE,NULL,NULL,0,frame))return false;
+        int n=snprintf(async_net.request,sizeof(async_net.request),
+            "POST %s HTTP/1.1\r\nHost: %s\r\nAccept: application/json\r\n"
+            "Connection: keep-alive\r\nContent-Type: application/json\r\n"
+            "Content-Length: %lu\r\n\r\n%s",path,BTS_ESP_HOST,
+            (unsigned long)strlen(payload),payload);
+        if(n<1||(size_t)n>=sizeof(async_net.request)){
+            bt_async_cancel();return false;
+        }
+        async_net.request_len=(size_t)n;
+        snprintf(async_net.path,sizeof(async_net.path),"%s",path);
+    }
+    burn.requested=true;burn.frame_started=frame;
+    return true;
+}
+static bool burn_post_ts(char command,const uint8_t *args,int count,int frame){
+    if(count<0||count>134)return false;
+    char hex[269];hex_encode(args,count,hex);
+    char esc[320]="";
+    bool signed_write=command=='C'||command=='B';
+    if(signed_write&&!json_escape(burn.signature,esc,sizeof(esc)))return false;
+    int n=signed_write?
+        snprintf(burn_body,sizeof(burn_body),
+          "{\"cmd\":\"%c\",\"args\":\"%s\",\"timeout_ms\":9000,\"signature\":\"%s\"}",command,hex,esc):
+        snprintf(burn_body,sizeof(burn_body),
+          "{\"cmd\":\"%c\",\"args\":\"%s\",\"timeout_ms\":6000}",command,hex);
+    return n>0&&(size_t)n<sizeof(burn_body)&&burn_request("/api/ts",burn_body,frame);
+}
+static bool burn_post_read(int offset,int length,int frame){
+    if(length<1||length>256||offset<0||offset+length>65536)return false;
+    uint8_t args[6]={(uint8_t)burn.page_id,(uint8_t)(burn.page_id>>8),
+       (uint8_t)offset,(uint8_t)(offset>>8),(uint8_t)length,(uint8_t)(length>>8)};
+    return burn_post_ts('R',args,6,frame);
+}
+static bool burn_post_rpm(int frame){
+    const BtField *f=bt_field(burn.def,"RPMValue",true);
+    if(!f||f->kind!=0||!f->scaled||f->offset<0||f->offset>65527)return false;
+    int len=bt_type_size(f->type);
+    if(len<1||len>8)return false;
+    uint8_t args[4]={(uint8_t)f->offset,(uint8_t)(f->offset>>8),
+      (uint8_t)len,(uint8_t)(len>>8)};
+    return burn_post_ts('O',args,4,frame);
+}
+static bool burn_post_backup(int frame){
+    char esc[320];if(!json_escape(burn.signature,esc,sizeof(esc)))return false;
+    int n=snprintf(burn_body,sizeof(burn_body),
+      "{\"page\":%d,\"page_id\":%d,\"size\":%d,\"signature\":\"%s\"}",
+      burn.field->page,burn.page_id,burn.def->page_sizes[burn.field->page-1],esc);
+    return n>0&&(size_t)n<sizeof(burn_body)&&burn_request("/api/backup",burn_body,frame);
+}
+static bool burn_post_arm(int frame){
+    char esc[320];if(!json_escape(burn.signature,esc,sizeof(esc)))return false;
+    int n=snprintf(burn_body,sizeof(burn_body),
+      "{\"confirm\":\"BENCH_ONLY_ENGINE_STOPPED_BACKUP_SAVED\",\"signature\":\"%s\"}",esc);
+    /* Once this POST begins, a lost ACK must be treated as uncertain. */
+    burn.armed_request=true;
+    return n>0&&(size_t)n<sizeof(burn_body)&&burn_request("/api/arm",burn_body,frame);
+}
+static bool burn_post_patch(int frame){
+    uint8_t args[134];int off=burn.field->offset+burn.chunk_start;
+    int count=burn.chunk_len;
+    if(count<1||count>128||off<0||off+count>65536)return false;
+    args[0]=(uint8_t)burn.page_id;args[1]=(uint8_t)(burn.page_id>>8);
+    args[2]=(uint8_t)off;args[3]=(uint8_t)(off>>8);
+    args[4]=(uint8_t)count;args[5]=(uint8_t)(count>>8);
+    memcpy(args+6,burn.after+burn.chunk_start,(size_t)count);
+    return burn_post_ts('C',args,count+6,frame);
+}
+static bool burn_read_response(const char*json,int count,const uint8_t*expected){
+    if(count<1||count>256||!hex_reply(json,burn_check,count))return false;
+    const char *l=key_at(json,"length");
+    if(l){char *end=NULL;long n=strtol(l,&end,10);
+       if(end==l||n!=count)return false;}
+    return memcmp(burn_check,expected,(size_t)count)==0;
+}
+static bool burn_status_response(const char*json,bool allow_burn_status){
+    const char*p=key_at(json,"status");if(!p)return false;
+    char*end=NULL;long status=strtol(p,&end,10);
+    if(end==p)return false;
+    while(*end==' '||*end=='\t')end++;
+    return (*end==','||*end=='}')&&(status==0||(allow_burn_status&&status==4));
+}
+static bool burn_rpm_response(const char*json){
+    const BtField*f=bt_field(burn.def,"RPMValue",true);
+    if(!f||!f->scaled)return false;
+    int len=bt_type_size(f->type);double rpm=0;
+    BtField local=*f;local.offset=0;
+    return len>=1&&len<=8&&hex_reply(json,burn_check,len)&&
+       bt_field_value(burn.def,&local,burn_check,len,0,&rpm)&&fabs(rpm)<=0.1;
+}
+static bool burn_backup_response(const char*json){
+    char stored[40]="";double page=-1,length=-1,crc=-1;
+    return ok_reply(json)&&bt_num(json,"page",&page)&&
+      bt_num(json,"length",&length)&&bt_num(json,"crc32",&crc)&&
+      bt_json_string(json,"stored",stored,sizeof(stored))&&
+      page==burn.field->page&&length==burn.def->page_sizes[burn.field->page-1]&&
+      crc>=0&&crc<=4294967295.0&&!strcmp(stored,"ESP32_STORAGE");
+}
+static bool burn_issue(int frame){
+    int n;
+    switch(burn.step){
+    case W_STATUS:return burn_request("/api/status",NULL,frame);
+    case W_BASELINE:case W_VERIFY_ALL:
+        n=burn.length-burn.offset;if(n>256)n=256;
+        return burn_post_read(burn.field->offset+burn.offset,n,frame);
+    case W_RPM_INITIAL:case W_RPM_BEFORE_ARM:case W_RPM_BEFORE_PATCH:
+    case W_RPM_AT_PATCH:case W_RPM_BEFORE_BURN:return burn_post_rpm(frame);
+    case W_BACKUP:return burn_post_backup(frame);
+    case W_ARM:return burn_post_arm(frame);
+    case W_PATCH:return burn_post_patch(frame);
+    case W_VERIFY_PATCH:return burn_post_read(burn.field->offset+burn.chunk_start,burn.chunk_len,frame);
+    case W_BURN:{uint8_t id[2]={(uint8_t)burn.page_id,(uint8_t)(burn.page_id>>8)};
+        /* ACK loss here is a potentially applied burn. Never automatically retry. */
+        burn.commit_sent=true;return burn_post_ts('B',id,2,frame);}
+    case W_DISARM:case W_DISARM_FAILURE:return burn_request("/api/disarm","{}",frame);
+    default:return false;
+    }
+}
+bool bt_write_begin(const BtDefinition *d,const BtField *f,
+                    const uint8_t *before,const uint8_t *after,int length,int frame){
+    if(burn.active||bt_async_busy()||!d||!d->valid||!f||!before||!after||
+       length<1||length>8192||f->page<1||f->page>64||
+       !memcmp(before,after,(size_t)length))return false;
+    int pg=f->page,sz=bt_type_size(f->type)*f->width*f->height;
+    if(sz!=length||f->offset<0||f->offset+length>d->page_sizes[pg-1]||
+       !d->page_writeable[pg-1]||!d->page_burnable[pg-1])return false;
+    int id=pg<=d->page_count?d->page_ids[pg-1]:(pg-1)<<8;
+    if(id<0||id>65535)return false;
+    BtField local=*f;local.offset=0;
+    for(int i=0;i<f->width*f->height;i++){
+        double v=0;
+        if(!bt_field_value(d,&local,after,length,i,&v)||
+          (f->limits_known&&(v<f->low-1e-8||v>f->high+1e-8)))return false;
+    }
+    memset(&burn,0,sizeof(burn));
+    burn.def=d;burn.field=f;burn.before=before;burn.after=after;
+    burn.length=length;burn.page_id=id;burn.active=true;burn.step=W_STATUS;
+    burn.frame_started=frame;
+    snprintf(burn.message,sizeof(burn.message),"CHECKING WRITE SAFETY GATES");
+    return true;
+}
+bool bt_write_cancel(void){
+    if(!burn.active||burn.armed_request)return false;
+    bt_async_cancel();burn.requested=false;
+    burn_finish(false,"BURN CANCELLED / ECU NOT ARMED");return true;
+}
+void bt_write_link_lost(void){
+    if(burn.active && burn.step!=W_DISARM_FAILURE)
+        (void)burn_fail("WIFI LOST / INSPECT ECU BEFORE RETRY");
+    bt_async_forget_connection();
+}
+int bt_write_poll(int frame){
+    if(!burn.active)return burn.step==W_DONE?1:-1;
+    /* A transfer never performs blocking network I/O; 600 frames without
+     * response triggers an error while all screens and buttons still render. */
+    if(!burn.requested){
+        if(burn.step==W_FIND_PATCH){
+            int start=burn.offset;
+            while(start<burn.length&&burn.before[start]==burn.after[start])start++;
+            if(start>=burn.length){burn.step=W_RPM_BEFORE_BURN;burn.offset=0;}
+            else{
+                int end=start;
+                while(end<burn.length&&end-start<128&&burn.before[end]!=burn.after[end])end++;
+                burn.chunk_start=start;burn.chunk_len=end-start;burn.step=W_RPM_AT_PATCH;
+            }
+        }
+        if(!burn_issue(frame)){
+            if(burn.step==W_DISARM_FAILURE||burn.step==W_DISARM)
+                return burn_finish(false,"WRITE UNCERTAIN / DISARM NOT CONFIRMED");
+            return burn_fail("ECU WRITE REQUEST COULD NOT START");
+        }
+        return 0;
+    }
+    if(bt_async_job()!=BT_NET_STATUS&&bt_async_job()!=BT_NET_WRITE)
+        return burn_fail("WRITE TRANSPORT CANCELLED / ECU STATE UNKNOWN");
+    int result=0;
+    for(int i=0;i<4&&result==0;i++)result=bt_async_poll(frame);
+    if(result==0)return 0;
+    if(result<0){
+        if(burn.step==W_DISARM_FAILURE)
+            return burn_finish(false,"WRITE UNCERTAIN / DISARM NOT CONFIRMED");
+        if(burn.step==W_DISARM)
+            return burn_finish(false,"BURN VERIFIED / DISARM NOT CONFIRMED");
+        return burn_fail(burn.armed_request?"WRITE UNCERTAIN / INSPECT ECU":
+            "ECU NO RESPONSE / WRITE NOT STARTED");
+    }
+    const char *json=(const char*)async_net.store;
+    BurnStep step=(BurnStep)burn.step;
+    bool ok=false;
+    switch(step){
+    case W_STATUS:{
+        bool connected=false,compiled=false,ready=false,backup_ready=false;
+        ok=bt_json_bool(json,"ecu_session_connected",&connected)&&connected&&
+            bt_json_bool(json,"write_compiled",&compiled)&&compiled&&
+            bt_json_bool(json,"write_access_ready",&ready)&&ready&&
+            bt_json_bool(json,"backup_storage_ready",&backup_ready)&&backup_ready&&
+            bt_json_string(json,"ecu_signature",burn.signature,sizeof(burn.signature))&&
+            burn.signature[0]&&bt_signature_matches(burn.signature,burn.def->signature);
+        burn.step=W_BASELINE;burn.offset=0;
+        break;}
+    case W_BASELINE:{
+        int n=burn.length-burn.offset;if(n>256)n=256;
+        ok=burn_status_response(json,false)&&
+            burn_read_response(json,n,burn.before+burn.offset);
+        burn.offset+=n;
+        if(burn.offset>=burn.length){burn.step=W_RPM_INITIAL;burn.offset=0;}
+        break;}
+    case W_RPM_INITIAL:case W_RPM_BEFORE_ARM:
+    case W_RPM_BEFORE_PATCH:case W_RPM_AT_PATCH:case W_RPM_BEFORE_BURN:
+        ok=burn_status_response(json,false)&&burn_rpm_response(json);
+        burn.step=step==W_RPM_INITIAL?W_BACKUP:
+                  step==W_RPM_BEFORE_ARM?W_ARM:
+                  step==W_RPM_BEFORE_PATCH?W_FIND_PATCH:
+                  step==W_RPM_AT_PATCH?W_PATCH:W_BURN;
+        break;
+    case W_BACKUP:ok=burn_backup_response(json);burn.step=W_RPM_BEFORE_ARM;break;
+    case W_ARM:ok=ok_reply(json);burn.armed=ok;burn.step=W_RPM_BEFORE_PATCH;break;
+    case W_PATCH:ok=burn_status_response(json,false);burn.step=W_VERIFY_PATCH;break;
+    case W_VERIFY_PATCH:
+        ok=burn_status_response(json,false)&&
+           burn_read_response(json,burn.chunk_len,burn.after+burn.chunk_start);
+        burn.offset=burn.chunk_start+burn.chunk_len;
+        burn.step=W_FIND_PATCH;break;
+    case W_BURN:
+        ok=burn_status_response(json,true);burn.step=W_VERIFY_ALL;burn.offset=0;
+        break;
+    case W_VERIFY_ALL:{
+        int n=burn.length-burn.offset;if(n>256)n=256;
+        ok=burn_status_response(json,false)&&
+           burn_read_response(json,n,burn.after+burn.offset);
+        burn.offset+=n;
+        if(burn.offset>=burn.length){burn.verified=true;burn.step=W_DISARM;}
+        break;}
+    case W_DISARM:
+        ok=ok_reply(json);
+        bt_async_cancel();burn.requested=false;
+        if(ok&&burn.verified)return burn_finish(true,"BURN VERIFIED / READBACK MATCHED");
+        return burn_finish(false,"BURN VERIFIED / DISARM NOT CONFIRMED");
+    case W_DISARM_FAILURE:
+        ok=ok_reply(json);bt_async_cancel();burn.requested=false;
+        if(!ok)return burn_finish(false,"WRITE UNCERTAIN / DISARM NOT CONFIRMED");
+        if(!strcmp(burn.failure,"ECU ARM REJECTED"))
+            return burn_finish(false,"ECU ARM REJECTED / ECU DISARMED");
+        return burn_finish(false,"WRITE UNCERTAIN / ECU DISARMED / INSPECT ECU");
+    default:break;
+    }
+    bt_async_cancel();burn.requested=false;
+    if(!ok)return burn_fail(burn_reject_reason(step));
     return 0;
 }
 

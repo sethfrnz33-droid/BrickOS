@@ -1,6 +1,6 @@
 # Brick Tuner Suite — DSi edition
 
-**Current release: [v2.4 — INI-driven tuning tree, Favorites, selectable definitions, contextual help and INI-defined graphs](README_V24.md).**
+**Current release: [v27 — nonblocking burn with progress, timeout and safe cancellation](README_V27.md).**
 
 This `DSi/` folder is a separate Nintendo DSi/DS build of Brick Tuner Suite. It coexists with the current **3DS** project: do **not** overwrite the root 3DS source, shared Makefile, or actively developed BrickOS ESP32 firmware.
 
@@ -22,3 +22,5 @@ For control mappings, changes, limitations, and full test notes see [README_V24.
 **v25:** See [README_V25.md](README_V25.md) for map axes, trace, two-screen layout, contextual help, and START-key updates.
 
 For the v26 native INI reference gauge, placement, and START/A confirmation update, see [README_V26.md](README_V26.md).
+
+For the v27 nonblocking protected-write fix, see [README_V27.md](README_V27.md).

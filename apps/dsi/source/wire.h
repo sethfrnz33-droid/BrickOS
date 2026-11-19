@@ -27,13 +27,27 @@ bool bt_json_bool(const char*json,const char*key,bool *out);
 bool bt_json_string(const char*json,const char*key,char*out,size_t capacity);
 /* Cooperative, nonblocking GET transport. Call bt_async_poll() once per frame.
  * No network operation may hold up input scanning or display updates. */
-typedef enum {BT_NET_NONE, BT_NET_STATUS, BT_NET_INI, BT_NET_LIVE, BT_NET_READ} BtNetJob;
+typedef enum {BT_NET_NONE, BT_NET_STATUS, BT_NET_INI, BT_NET_LIVE, BT_NET_READ, BT_NET_WRITE} BtNetJob;
 bool bt_async_begin(BtNetJob job, BtDefinition *definition, BtLive *live, int live_length, int frame);
 /* Returns 0 while pending, +1 on a complete verified response, -1 on error. */
 /* Cooperative calibration R reads, through the same persistent HTTP socket.
  * One request reads at most 256 bytes. The caller owns page/offset bounds,
  * reads the response ONLY after poll returns +1, and remains read-only. */
 bool bt_async_begin_cal_read(int page_id,int offset,int count,int frame);
+/* Nonblocking, fail-closed protected ECU burn. All work occurs in bt_write_poll()
+ * from the main frame loop; no synchronous network call is permitted. */
+bool bt_write_begin(const BtDefinition *d,const BtField *f,
+                    const uint8_t *old_data,const uint8_t *new_data,int length,int frame);
+/* 0 = in progress, +1 = verified success, -1 = failed/uncertain. */
+int bt_write_poll(int frame);
+bool bt_write_busy(void);
+const char *bt_write_phase(void);
+const char *bt_write_message(void);
+int bt_write_percent(void);
+/* Safe cancellation only before the ECU arm request begins. */
+bool bt_write_cancel(void);
+/* Notify the write state machine before any Wi-Fi-loss transport reset. */
+void bt_write_link_lost(void);
 bool bt_async_cal_read_result(uint8_t *dst,int count);
 int bt_async_poll(int frame);
 void bt_async_cancel(void);

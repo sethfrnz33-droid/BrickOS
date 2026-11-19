@@ -1,4 +1,4 @@
-/* Brick Tuner Suite DSi v2.6
+/* Brick Tuner Suite DSi v2.7
  * Native two-screen UI, sourced from the original 3DS v62 INI/BrickOS contract.
  * A DSi cannot render v62's Citro3D visuals; this edition retains a recognizable
  * dashboard / TunerStudio category tree / live channels / map and graph workflow.
@@ -226,6 +226,10 @@ static void resolve_active_formats(void){
     }
 }
 
+/* Baseline and edit memory are held fixed until the cooperative protected
+ * transaction reports verified readback or fails closed. */
+static uint8_t *write_baseline=NULL,*write_edited=NULL;
+static int write_length=0,write_focus=0;
 static void calibration_service(void);
 static const BtField *focused_cal_field(void);
 static double focused_value(void);
@@ -1252,6 +1256,20 @@ static void bottom_editor(void){
     tiny_text(bottom,8,181,editor_readonly?"READ ONLY  /  B BACK":
          "START BURN  /  R FAVORITE  /  B BACK",HIGHLIGHT,246);
 }
+static void bottom_write_progress(void){
+    fill(bottom,0,0,W,H,BG);
+    round_fill(bottom,8,29,240,138,7,PANEL);
+    tiny_fit(bottom,19,41,"ECU CALIBRATION TRANSACTION",HIGHLIGHT,216);
+    tiny_fit(bottom,17,67,bt_write_phase(),WHITE,225);
+    int pct=bt_write_percent();
+    round_fill(bottom,17,91,220,16,3,EDGE);
+    int filled=(pct*214)/100;
+    if(filled>0)round_fill(bottom,20,94,filled,10,2,pct>=78?GREEN:HIGHLIGHT);
+    char buf[36];snprintf(buf,sizeof(buf),"%d%%",pct);
+    tiny_fit(bottom,105,113,buf,HIGHLIGHT,46);
+    tiny_fit(bottom,16,139,"NO RETRY IF RESPONSE IS UNCERTAIN",MUTED,225);
+    tiny_fit(bottom,8,180,"B: CANCEL BEFORE ARM ONLY",MUTED,245);
+}
 static void bottom_burn_confirm(void){
     /* Modal confirmation: START merely opens this panel; no ECU write
      * can occur until a separate A-down event on the next input cycle. */
@@ -1280,6 +1298,7 @@ static void bottom_bit_picker(void){
     tiny_text(bottom,8,181,"A SELECT    B CANCEL",MUTED,242);
 }
 static void bottom_tune(void){
+    if(bt_write_busy()){bottom_write_progress();return;}
     if(cal_load.active){
         text(bottom,9,39,"READING ACTUAL ECU DATA",HIGHLIGHT,28);
         text(bottom,9,68,"THE UI REMAINS RESPONSIVE",WHITE,29);
@@ -1543,7 +1562,10 @@ static void update_wifi(void){
         wifi_up=false;bridge_up=false;ecu_up=false;ecu_status_known=false;want_ini=false;want_status=false;
         network_failure_count=0;network_resume_frame=0;last_socket_begin_frame=-1000;
         live_failure_streak=0;live_resume_frame=0;
-        loading_ini=false;bt_async_cancel();bt_async_forget_connection();set_compat();invalidate();
+        loading_ini=false;
+        if(bt_write_busy())bt_write_link_lost();
+        else{bt_async_cancel();bt_async_forget_connection();}
+        set_compat();invalidate();
         snprintf(client_ip,sizeof(client_ip),"-");snprintf(gateway_ip,sizeof(gateway_ip),"-");
         snprintf(status_msg,sizeof(status_msg),"WIFI CONNECTION LOST");
     }
@@ -1705,7 +1727,21 @@ static int live_length(void){
     if(idle_dashboard || (page==P_HOME&&gauge_layout>2))length=bt_idle_required_length(&def,&idle_gauges,length);
     return length;
 }
+static void service_write(void){
+    int r=bt_write_poll(frame);
+    if(!r)return;
+    if(r>0 && write_baseline && write_edited && write_length>0){
+        memcpy(write_baseline,write_edited,(size_t)write_length);
+        if(write_focus==0)table.dirty=false;
+        else if(write_focus<=2)table.axis_dirty[write_focus-1]=false;
+        snprintf(status_msg,sizeof(status_msg),"ECU BURN VERIFIED / READBACK MATCHED");
+    }else snprintf(status_msg,sizeof(status_msg),"ECU WRITE FAILED / INSPECT STATUS");
+    snprintf(note,sizeof(note),"%s",bt_write_message());
+    write_baseline=write_edited=NULL;write_length=0;
+    want_status=true;
+}
 static void service_network(void){
+    if(bt_write_busy()){service_write();return;}
     if(cal_load.active){calibration_service();return;}
     if(loading_cache){
         /* Cache parsing is a one-time fallback, never the steady-state
@@ -2204,14 +2240,14 @@ static void commit_map(void){
         snprintf(note,sizeof(note),"PRESS A TO BURN / B TO CANCEL");return;}
     table.confirm_burn=false;
     bt_async_cancel();bt_async_forget_connection();
-    snprintf(status_msg,sizeof(status_msg),"VERIFYING ECU / WRITING BENCH ONLY");
-    render();swiWaitForVBlank();present();
-    if(bt_commit_field(&def,field,baseline,edited,length,note,sizeof(note))){
-        memcpy(baseline,edited,(size_t)length);
-        if(map_focus==0)table.dirty=false;
-        else table.axis_dirty[map_focus-1]=false;
-        snprintf(status_msg,sizeof(status_msg),"ECU BURN VERIFIED");
-    }else snprintf(status_msg,sizeof(status_msg),"WRITE REFUSED / SEE LOWER SCREEN");
+    if(!bt_write_begin(&def,field,baseline,edited,length,frame)){
+        snprintf(note,sizeof(note),"BURN NOT STARTED / CHECK INI AND ECU STATUS");
+        return;
+    }
+    write_baseline=baseline;write_edited=edited;
+    write_length=length;write_focus=map_focus;
+    snprintf(note,sizeof(note),"ECU BURN IN PROGRESS");
+    snprintf(status_msg,sizeof(status_msg),"ECU SAFE WRITE / ASYNC PROGRESS");
 }
 static void goto_page(int next){
     if(next<0||next>=P_COUNT)return;
@@ -2263,6 +2299,15 @@ static void open_tune_item(void){
     open_target(m->target,m->label,from_view);
 }
 static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
+    if(bt_write_busy()){
+        if(down&KEY_B && bt_write_cancel()){
+            snprintf(note,sizeof(note),"ECU BURN CANCELLED BEFORE ARM");
+            write_baseline=write_edited=NULL;write_length=0;
+        }
+        /* No navigation or value editing during a protected transaction;
+         * the socket still progresses on every VBlank. */
+        return;
+    }
     if(cal_load.active){
         if(down&KEY_B){cal_load.active=false;bt_async_cancel();chosen_map=-1;
             snprintf(note,sizeof(note),"ECU READ CANCELLED");}
