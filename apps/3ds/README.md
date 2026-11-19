@@ -1,4 +1,6 @@
-> **Current imported release: v6.3.** See [RELEASE_V63_3D_MAP_CAMERA_FIX.md](RELEASE_V63_3D_MAP_CAMERA_FIX.md) for camera changes and [TEST_FEATURE_STATUS.md](TEST_FEATURE_STATUS.md) for test-feature implementation status. The historical v3.6/v3.7 notes below document earlier layouts.
+> **Current release: v6.4 — animated speaking mascot, dual 3DS HOME assets and INI/favourites fixes.** See [RELEASE_V64_MASCOT_AND_INI.md](RELEASE_V64_MASCOT_AND_INI.md). Original 3DS hardware and CIA conversion are not verified.
+
+> **Current release: v3.7.** See [RELEASE_V37_TUNERSTUDIO_TWO_SCREEN_TREE.md](RELEASE_V37_TUNERSTUDIO_TWO_SCREEN_TREE.md) for the ten-icon TunerStudio upper-screen tree, lower-screen live preview and DS settings cleanup.
 
 # Brick Tuner Suite v3.6 — Six-gauge Home + Real Top-Screen Tuning Tree
 
