@@ -356,6 +356,7 @@ extern const uint8_t dreamfont_start[],dreamfont_end[];
 static C2D_SpriteSheet dreamfont_sheet=NULL;
 extern const uint8_t ts_icons_start[],ts_icons_end[];
 static C2D_SpriteSheet ts_icon_sheet=NULL;
+#include "bts_mascot.h"
 static u64 pad_next_at=0;
 #define LIVE_STALE_AFTER_MS 900ULL
 #define GAUGE_SLOTS 9
@@ -996,8 +997,7 @@ static void sfx_init(void){
  if(R_FAILED(bts_ndsp_result))return;
  bts_ndsp_active=true;
  ndspSetOutputMode(NDSP_OUTPUT_STEREO);
- /* Load the eleven event clips first: failure to allocate optional
-    menu beeps must not take away the actual requested audio. */
+ /* Load the eleven event clips first: failure to allocate optional    menu beeps must not take away the actual requested audio. */
  bts_audio_init(true);
  sfx_samples=(s16*)linearAlloc(3*SFX_LENGTH*sizeof(s16));
  if(!sfx_samples)return;
@@ -1996,8 +1996,7 @@ static bool log_parse_header(char *line){return log_parse_header_named(line,log_
 static bool log_parse_record(char *line,LogSample *out){
  memset(out,0,sizeof(*out));
  char *p=line,*end=NULL;
- unsigned long t=strtoul(p,&end,10);
- if(end==p||*end!=','||t>UINT32_MAX)return false;
+ unsigned long t=strtoul(p,&end,10); if(end==p||*end!=','||t>UINT32_MAX)return false;
  out->t_ms=(u32)t;p=end+1;
  for(int i=0;i<LOG_FIELDS;i++){
    if(*p!=','&&*p!='\n'&&*p!='\r'&&*p){
@@ -2958,6 +2957,7 @@ static void fault_accept_message(const char *message){
  if(!fault_active||strcmp(message,fault_message)){
    copy_text(fault_message,sizeof(fault_message),message);
    fault_active=true;fault_rebuild_links();
+   bts_mascot_say();
    bts_audio_play(BTS_SOUND_CONFIG_ERROR,event_audio_enabled);
    note("Confirmed ECU ERROR: SELECT+Y for related settings");
  }
@@ -2971,6 +2971,7 @@ static void fault_open_page(void){
    note("Finish or discard current edits before opening ECU fault");return;
  }
  nav_capture();fault_return_page=ui_page;ui_page=PAGE_FAULT;
+ bts_mascot_say();
  selected=scroll_y=0;
  fault_rebuild_links();
  /* One exact field has an unambiguous repair destination: open it now. */
@@ -2994,8 +2995,7 @@ static void resolve_item(const char*id,int depth){if(depth>8||!id||!*id||result_
  else if(refs[i].panel==4)add_info_result(refs[i].label);
  else if(refs[i].panel==5)add_ini_gauge_result(refs[i].ref);
  else if(refs[i].panel==3){
-   for(int g=0;g<ini_graph_count;g++)if(!strcasecmp(refs[i].ref,ini_graphs[g].id)){
-      if(result_count<RES_CAP){
+   for(int g=0;g<ini_graph_count;g++)if(!strcasecmp(refs[i].ref,ini_graphs[g].id)){      if(result_count<RES_CAP){
          Resolved *r=&results[result_count++];memset(r,0,sizeof(*r));r->field=g;r->type=4;
          char pretty[58];snprintf(pretty,sizeof(pretty),"%s",ini_graphs[g].count?ini_graphs[g].channels[0]:"Live Data");
          snprintf(r->label,sizeof(r->label),"Graph %d: %.43s",g+1,pretty);
@@ -3994,8 +3994,7 @@ static void draw_scalar_top(void){
  draw_depth_grid(400,240);
  char title[100];shorten(title,sizeof(title),open_title,39);
  text(11,6,.57f,white,title);
- if(open_field<0||open_field>=cal_count)return;
- const Field*f=&cal[open_field];
+ if(open_field<0||open_field>=cal_count)return; const Field*f=&cal[open_field];
  text(11,28,.40f,secondary,f->kind==K_BITS?"ECU OPTION / INI CALIBRATION":"ECU SCALAR / INI CALIBRATION");
  round_panel(10,48,380,100,6,panel);
  text(20,57,.36f,secondary,staged?"STAGED LOCAL VALUE":"VERIFIED ECU READ");
@@ -4994,8 +4993,7 @@ static void draw_display(void){
     if(i==0)snprintf(label,sizeof(label),"Style: %s",gauge_styles[gauge_style]);
     else if(i<=9){
        pretty_label(pretty,sizeof(pretty),gauge_slot_label(i-1));
-       char mode[20];if(gauge_decimals[i-1]<0)snprintf(mode,sizeof(mode),"AUTO");
-       else snprintf(mode,sizeof(mode),"%d DP",gauge_decimals[i-1]);
+       char mode[20];if(gauge_decimals[i-1]<0)snprintf(mode,sizeof(mode),"AUTO");       else snprintf(mode,sizeof(mode),"%d DP",gauge_decimals[i-1]);
        snprintf(label,sizeof(label),"G%d %.22s [%s]",i,pretty,mode);
     }
 
@@ -5994,8 +5992,7 @@ static void draw_insights_top(void){
  BtsLogInsights *v=&insight_stats;
  char title[80];shorten(title,sizeof(title),log_channel_names[insight_channel],24);
  text(12,32,.55f,white,title);
- char brief[100];snprintf(brief,sizeof(brief),"%u/%u VALID   %.1f%%   %u GAPS",
-    v->valid,v->samples,v->samples?100.0*(double)v->valid/v->samples:0.0,v->gaps);
+ char brief[100];snprintf(brief,sizeof(brief),"%u/%u VALID   %.1f%%   %u GAPS",    v->valid,v->samples,v->samples?100.0*(double)v->valid/v->samples:0.0,v->gaps);
  text(12,56,.41f,v->missing?orange:bright,brief);
  round_panel(9,83,382,146,8,panel);
  if(!v->valid){text(20,116,.48f,orange,"No usable samples for this channel");return;}
@@ -6384,7 +6381,8 @@ static void draw_fault_top_overlay(void){
  if(ui_page==PAGE_FAULT){
     draw_depth_grid(400,240);rect(0,0,400,30,berry);
     text(10,3,.72f,white,"ECU CONFIGURATION ERROR");
-    fault_draw_lines(12,43,fault_message,47,7,.51f);
+    fault_draw_lines(12,43,fault_message,36,7,.51f);
+     bts_mascot_draw(282,38,.82f);
     text(12,205,.35f,bright,"A OPEN RELATED SETTING / B RETURN");
     if(fault_last_success && osGetTime()-fault_last_success>8000)
        text(12,224,.32f,orange,"Connection stale; error not confirmed cleared");
@@ -6394,6 +6392,7 @@ static void draw_fault_top_overlay(void){
  rect(0,214,400,26,berry);
  rect(2,216,396,22,soil);
  text(7,218,.40f,orange,"ECU ERROR - SELECT+Y FOR FIX");
+ if(bts_mascot_notice_active(osGetTime()))bts_mascot_draw(314,119,.56f);
  if(fault_last_success && osGetTime()-fault_last_success>8000)
     text(319,220,.30f,orange,"STALE");
 }
@@ -6992,8 +6991,7 @@ static void handle_keys(u32 k){
         }else if(staged)numeric_edit_prompt();
         else note("Full map shown; SELECT enables local editing");
      }else if(cal[open_field].kind==K_BITS&&choice_count>0&&editor_loaded){
-        int current=(int)field_value(editor,editor_length,&cal[open_field],0);
-        selected=scroll_y=0;
+        int current=(int)field_value(editor,editor_length,&cal[open_field],0);        selected=scroll_y=0;
         for(int i=0;i<choice_count;i++)if(choices[i].value==current){selected=i;break;}
         if(selected>6)scroll_y=selected-6;
         ui_page=PAGE_CHOICES;
@@ -7303,7 +7301,7 @@ int main(void){
 
  if(ptmu_ok)update_system_battery(osGetTime());
  LightLock_Init(&task_lock);
- load_gauge_preferences();load_favorites();sfx_init();sfx_play(1);
+ load_gauge_preferences();load_favorites();sfx_init();bts_mascot_init();sfx_play(1);
  if(!load_ini_cache()){note("No SD INI cache; auto-download when connected");ini_retry_at=0;}
  response=(char*)malloc(RESPONSE_CAP);soc_mem=(u32*)memalign(0x1000,SOCKET_MEM);
  Result ar=acInit();ac_ok=R_SUCCEEDED(ar);
@@ -7447,6 +7445,7 @@ int main(void){
  free(response);
  free(soc_mem);
  if(ini_source)free(ini_source);
+ bts_mascot_shutdown();
  sfx_close();
  if(ts_icon_sheet)C2D_SpriteSheetFree(ts_icon_sheet);
  if(dreamfont_sheet)C2D_SpriteSheetFree(dreamfont_sheet);
