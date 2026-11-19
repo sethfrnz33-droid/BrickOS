@@ -1,6 +1,9 @@
 import {tunerStructure,iniUrlForSignature,matchingIni,parseIni,hex,unhex,le16,pageId,readArgs,outputArgs,writeArgs,burnArgs,getValue,putValue,relative,readBLog,TYPES,makePatch,validatePatch,decodeLiveFrame,calibrationWritePlan,crc32} from './core.mjs';
 import {GuidedAnalyzer,guideRequiredBytes} from './guided.mjs';
 import {renderGuide} from './guided-ui.mjs';
+import {GuideStory,findManualTarget} from './guide-story.mjs';
+import {renderSethStory} from './guide-story-ui.mjs';
+import {SethSpeech} from './guide-voice.mjs';
 
 const $=x=>document.querySelector(x);
 const escapeHTML=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -9,6 +12,8 @@ const cleanLabel=x=>String(x).replace(/([a-z])([A-Z])/g,'$1 $2').replace(/_/g,' 
 const channelTitle=n=>({RPMValue:'Engine RPM',MAPValue:'Manifold Pressure',TPSValue:'Throttle Position',coolant:'Coolant Temperature',intake:'Intake Temperature',VBatt:'Battery Voltage',lambdaValue:'Measured Lambda',AFRValue:'Measured AFR',vehicleSpeedKph:'Vehicle Speed'}[n]||cleanLabel(n));
 const format=x=>x===null||!Number.isFinite(x)?'—':(Math.abs(x)<20 && x!==Math.round(x)?x.toFixed(2):x.toFixed(Math.abs(x)>999?0:1));
 const GUIDE = new GuidedAnalyzer();
+const STORY = new GuideStory();
+const SETH = new SethSpeech();
 const S={route:'overview',status:null,ecuSignature:'',connected:false,definition:null,rawIni:'',
         latest:null,latestMs:0,liveBusy:false,liveHz:20,liveMode:'fast',selectedChannel:'rpm',liveSeq:0,liveRttMs:0,liveFallback:false,liveFailureCount:0,liveRxCount:0,liveWindowMs:0,liveDisplayHz:0,liveThroughput:0,liveDurationMs:0,scopeChannels:['rpm','map','tps'],
         search:'',tableSearch:'',tsSelected:'',tsOpen:{},tsStructure:null,settingsCategory:'All',tableCategory:'All',editor:null,field:null,selectStart:0,selection:[0],
@@ -57,7 +62,7 @@ S.dashboardLayout=['split','gauges','scope'].includes(PREF.layout)?PREF.layout:'
 S.scopeNames=Array.isArray(PREF.scope)?PREF.scope.filter(x=>typeof x==='string').slice(0,3):[];
 S.tuneFavorites=Array.isArray(PREF.favorites)?PREF.favorites.filter(x=>typeof x==='string').slice(0,24):[];
 S.tuneRecent=Array.isArray(PREF.recent)?PREF.recent.filter(x=>typeof x==='string').slice(0,12):[];
-S.guideTab='next';S.guideSearch='';S.guideLastRender=0;S.guideMenuLinks={};
+S.guideTab='next';S.guideSearch='';S.guideLastRender=0;S.guideMenuLinks={};S.guideScreen='story';S.guidePacket=null;
 S.tuneCategory='';S.tuneSearch='';S.tuneBrowserOpen=true;S.gaugeEdit=null;S.commandOpen=false;S.commandSearch='';
 function savePrefs(){try{localStorage.setItem(PREF_KEY,JSON.stringify({gauges:S.gaugeSlots,layout:S.dashboardLayout,scope:S.scopeNames,favorites:S.tuneFavorites,recent:S.tuneRecent}))}catch{toast('Device preference storage unavailable; layout may not persist',true)}}
 function navHighlight(){document.querySelectorAll('#nav [data-route]').forEach(b=>b.classList.toggle('active',b.dataset.route===(['tables','settings','tuner'].includes(S.route)?'tuning':S.route)))}
@@ -131,7 +136,7 @@ function markHeader(){
  if(hasDef()&&!S.tsStructure)rebuildTs();navHighlight();
  const tuneButton=$('#nav [data-route="tuning"]');if(tuneButton){const pending=staged().length;tuneButton.classList.toggle('has-staged',pending>0);tuneButton.dataset.pending=String(pending);tuneButton.title=pending?`${pending} unsaved tuning changes — Burn to save`:'ECU tuning';}
 }
-function navTo(route){if(!confirmLeaveEditor())return false;if(S.route==='guided'&&route!=='guided'&&GUIDE.mode==='learn')GUIDE.setMode('paused');S.commandOpen=false;S.route=route;S.search='';S.editor=null;S.field=null;
+function navTo(route){if(!confirmLeaveEditor())return false;if(S.route==='guided'&&route!=='guided'){SETH.stop();if(GUIDE.mode==='learn')GUIDE.setMode('paused');}S.commandOpen=false;S.route=route;S.search='';S.editor=null;S.field=null;
  if(route==='tuning'){S.tuneBrowserOpen=true;}else if(route!=='tables'&&route!=='settings')S.tsSelected='';
  render();window.scrollTo({top:0,behavior:'instant'});return true;
 }
@@ -327,7 +332,26 @@ function system(){const z=S.status;return pageHeader('06','Connection & diagnost
  <div class="rule"></div><p class="tiny">AP-only test build: internet downloads and STA mode are disabled. Import an INI from your phone if needed; USB detection does not require an INI.</p></div>
  <div class="section-label">USB CONNECTION</div><div class="panel"><h2>Connect Big Brick over USB</h2><div class="steps spaced"><div>Connect the STM32 USB device interface to the ESP32-S3 USB host interface using the same USB wiring as your proven working3wayhub firmware. USB host VBUS must be powered appropriately.</div><div>BrickOS speaks the rusEFI TunerStudio protocol directly to STM32 over USB; no TCP bridge or desktop TunerStudio connection is required.</div><div>Join the open <code>brick</code> Wi-Fi network and open <code>http://192.168.4.1/</code>.</div><div>BrickOS now attempts read-only ECU SD access over the STM32 USB Mass Storage interface (LUN1), if exposed by the installed firmware. Place a plain generated <code>rusefi.ini</code> on the card; it imports only when its signature matches the connected ECU. The ESP32 SPIFFS stores the verified copy. Existing USB CDC tuning remains active.</div></div></div>`;
 }
-function guided(){return renderGuide(GUIDE,{tab:S.guideTab,search:S.guideSearch,status:S.status,menuLinks:S.guideMenuLinks});}
+function storyPacket(){
+ const key=safeSignature()?S.definition.signature:'';
+ // Story is bound to the *current matching definition*, never to a stale INI.
+ const packet=STORY.packet({engine:GUIDE,menuTree:S.tsStructure,menuLinks:S.guideMenuLinks,ecuKey:key});
+ S.guidePacket=packet;return packet;
+}
+function guided(){
+ if(S.guideScreen==='story')return renderSethStory(storyPacket(),{muted:SETH.muted});
+ return `<div class="seth-return"><button type="button" class="btn ghost" data-seth-return>← Back to Seth's guide</button></div>`+
+ renderGuide(GUIDE,{tab:S.guideTab,search:S.guideSearch,status:S.status,menuLinks:S.guideMenuLinks});
+}
+function storySpeak(playVoice){
+ if(S.route==='guided'&&S.guideScreen==='story'&&S.guidePacket)SETH.speak(S.guidePacket.text,S.guidePacket.voice,{playVoice});
+}
+async function fetchStoryCatalog(){
+ try{const res=await fetch('/api/guide/v1/catalog',{cache:'no-store'});if(!res.ok)throw Error('HTTP '+res.status);
+ STORY.load(await res.json());if(S.route==='guided'){render();storySpeak(false);}
+ }catch(e){console.warn('Seth guide catalogue not available',e);}
+}
+
 function refreshGuideLinks(){
  S.guideMenuLinks={};const tree=S.tsStructure;if(!tree)return;
  for(const item of tree.itemById.values()){
@@ -496,7 +520,7 @@ async function startLive(){
     duration=performance.now()-since;
   }
   S.latest=incoming;S.latestMs=Date.now();
-  if(safeSignature()&&GUIDE.def){GUIDE.observe(incoming,S.latestMs,sequence);if(S.route==='guided'&&performance.now()-S.guideLastRender>900&&!document.activeElement?.matches('input,textarea,select')){S.guideLastRender=performance.now();render();}}S.liveRttMs=performance.now()-since;
+  if(safeSignature()&&GUIDE.def){GUIDE.observe(incoming,S.latestMs,sequence);if(S.route==='guided'&&S.guideScreen!=='story'&&performance.now()-S.guideLastRender>900&&!document.activeElement?.matches('input,textarea,select')){S.guideLastRender=performance.now();render();}}S.liveRttMs=performance.now()-since;
   S.liveDurationMs=duration;S.liveFailureCount=0;
   S.liveRxCount++;
   if(!S.liveWindowMs)S.liveWindowMs=S.latestMs;
@@ -892,7 +916,34 @@ case 'reset-gauges':S.gaugeSlots=defaultGauges();S.gaugeEdit=null;savePrefs();re
  }}catch(e){toast(e.message,true)}}
 
 document.addEventListener('click',evt=>{
- const tab=evt.target.closest('[data-guide-tab]');if(tab){S.guideTab=tab.dataset.guideTab;S.guideSearch='';if(S.route!=='guided')navTo('guided');else render();return;}
+ const selected=evt.target.closest('[data-seth-choice]');
+ const backward=evt.target.closest('[data-seth-back]');
+ const home=evt.target.closest('[data-seth-home]');
+ const ret=evt.target.closest('[data-seth-return]');
+ const mute=evt.target.closest('[data-seth-mute]');
+ const skip=evt.target.closest('[data-seth-skip]');
+ if(mute){SETH.toggle();render();storySpeak(false);return;}
+ if(skip){SETH.reveal();return;}
+ if(ret){SETH.stop();S.guideScreen='story';render();storySpeak(false);return;}
+ if(selected||backward||home){
+  S.guideScreen='story';
+  let action;
+  try{action=STORY.go(home?'welcome':backward?'back':selected.dataset.sethChoice)}catch(e){toast(e.message,true);return;}
+  if(action.type==='workspace'){SETH.stop();S.guideScreen='analysis';S.guideTab=['evidence','atlas','systems','next','history'].includes(action.tab)?action.tab:'next';render();return;}
+  if(action.type==='manual_field'){
+   const field=GUIDE.inventory[action.index];const item=field?S.guideMenuLinks[field.name]:null;
+   if(!item){toast('This INI field has no verified original menu link',true);return;}SETH.stop();chooseTsItem(item);return;
+  }
+  if(action.type==='manual'){
+   const target=findManualTarget(action.stage,S.tsStructure);
+   if(!target){toast('No verified original INI menu for this system',true);return;}
+   SETH.stop();chooseTsItem(target.id);return;
+  }
+  SETH.stop();render();storySpeak(true);
+ }
+});
+document.addEventListener('click',evt=>{
+ const tab=evt.target.closest('[data-guide-tab]');if(tab){SETH.stop();S.guideScreen='analysis';S.guideTab=tab.dataset.guideTab;S.guideSearch='';if(S.route!=='guided')navTo('guided');else render();return;}
  const stage=evt.target.closest('[data-guide-stage]');if(stage){S.guideTab='systems';render();document.querySelector('.guide-steps')?.scrollIntoView({block:'start'});return;}
  const mode=evt.target.closest('[data-guide-mode]');if(mode){
   try{if(mode.dataset.guideMode==='learn'&&(!connected()||!safeSignature()||!GUIDE.report().fresh))throw Error('Live verified telemetry required');
@@ -1066,3 +1117,6 @@ async function initialize(){
  // Show the source as ready, but never silently generate simulated ECU data.
 }
 initialize();
+
+// Separate dialogue catalogue ships from ESP; no DS executable dialogue text.
+fetchStoryCatalog();

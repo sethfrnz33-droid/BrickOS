@@ -19,7 +19,15 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_LIST_DIR}/../web/app.js"
   "${CMAKE_CURRENT_LIST_DIR}/../web/core.mjs"
   "${CMAKE_CURRENT_LIST_DIR}/../web/guided.mjs"
-  "${CMAKE_CURRENT_LIST_DIR}/../web/guided-ui.mjs")
+  "${CMAKE_CURRENT_LIST_DIR}/../web/guided-ui.mjs"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/guide-story.mjs"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/guide-story-ui.mjs"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/guide-voice.mjs"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/guide-catalog.json"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/guide-assets/seth-head.png"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/guide-assets/seth-jaw.png"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/guide-assets/seth-mouth.png"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/guide-assets/voice.mp3")
 execute_process(
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/../tools/generate_web_assets.py"
   RESULT_VARIABLE guide_asset_result

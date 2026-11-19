@@ -146,6 +146,16 @@ static esp_err_t jspage(httpd_req_t *r){return asset(r,"application/javascript; 
 static esp_err_t corepage(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_core,brick_asset_core_len);}
 static esp_err_t guidedpage(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guided,brick_asset_guided_len);}
 static esp_err_t guideduipage(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guided_ui,brick_asset_guided_ui_len);}
+/* Versioned guide text + assets; intentionally static/read-only. DS clients can
+ * fetch the SAME catalogue from the ESP later, without shipping new copy. */
+static esp_err_t guide_story_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_story,brick_asset_guide_story_len);}
+static esp_err_t guide_story_ui_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_story_ui,brick_asset_guide_story_ui_len);}
+static esp_err_t guide_voice_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_voice,brick_asset_guide_voice_len);}
+static esp_err_t guide_catalog_get(httpd_req_t *r){return asset(r,"application/json; charset=utf-8",brick_asset_guide_catalog,brick_asset_guide_catalog_len);}
+static esp_err_t guide_head_get(httpd_req_t *r){return asset(r,"image/png",brick_asset_seth_head,brick_asset_seth_head_len);}
+static esp_err_t guide_jaw_get(httpd_req_t *r){return asset(r,"image/png",brick_asset_seth_jaw,brick_asset_seth_jaw_len);}
+static esp_err_t guide_mouth_get(httpd_req_t *r){return asset(r,"image/png",brick_asset_seth_mouth,brick_asset_seth_mouth_len);}
+static esp_err_t guide_voice_get(httpd_req_t *r){return asset(r,"audio/mpeg",brick_asset_seth_voice,brick_asset_seth_voice_len);}
 static cJSON *read_request_json(httpd_req_t *r){
     if(r->content_len<1 || r->content_len>MAX_BODY)return NULL;
     char *s=calloc((size_t)r->content_len+1,1);if(!s)return NULL;
@@ -835,7 +845,7 @@ static void wifi_start(void){
     ESP_LOGI(TAG,"AP READY: SSID=brick, OPEN (no password), http://192.168.4.1/");
 }
 static void http_start(void){
-    httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=16384;cfg.max_uri_handlers=34;
+    httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=16384;cfg.max_uri_handlers=42;
     cfg.lru_purge_enable=true; cfg.recv_wait_timeout=8;cfg.send_wait_timeout=15;
     httpd_handle_t server=NULL;ESP_ERROR_CHECK(httpd_start(&server,&cfg));
     const httpd_uri_t routes[]={
@@ -845,6 +855,14 @@ static void http_start(void){
       {.uri="/core.mjs",.method=HTTP_GET,.handler=corepage},
       {.uri="/guided.mjs",.method=HTTP_GET,.handler=guidedpage},
       {.uri="/guided-ui.mjs",.method=HTTP_GET,.handler=guideduipage},
+      {.uri="/guide-story.mjs",.method=HTTP_GET,.handler=guide_story_js},
+      {.uri="/guide-story-ui.mjs",.method=HTTP_GET,.handler=guide_story_ui_js},
+      {.uri="/guide-voice.mjs",.method=HTTP_GET,.handler=guide_voice_js},
+      {.uri="/api/guide/v1/catalog",.method=HTTP_GET,.handler=guide_catalog_get},
+      {.uri="/guide/seth-head.png",.method=HTTP_GET,.handler=guide_head_get},
+      {.uri="/guide/seth-jaw.png",.method=HTTP_GET,.handler=guide_jaw_get},
+      {.uri="/guide/seth-mouth.png",.method=HTTP_GET,.handler=guide_mouth_get},
+      {.uri="/guide/voice.mp3",.method=HTTP_GET,.handler=guide_voice_get},
       {.uri="/api/status",.method=HTTP_GET,.handler=status_get},
       {.uri="/api/ts",.method=HTTP_POST,.handler=ts_post},
       {.uri="/api/live",.method=HTTP_GET,.handler=live_get},

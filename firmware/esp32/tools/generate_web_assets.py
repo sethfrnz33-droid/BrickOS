@@ -14,6 +14,14 @@ assets = {
     'core': 'core.mjs',
     'guided': 'guided.mjs',
     'guided_ui': 'guided-ui.mjs',
+    'guide_story': 'guide-story.mjs',
+    'guide_story_ui': 'guide-story-ui.mjs',
+    'guide_voice': 'guide-voice.mjs',
+    'guide_catalog': 'guide-catalog.json',
+    'seth_head': 'guide-assets/seth-head.png',
+    'seth_jaw': 'guide-assets/seth-jaw.png',
+    'seth_mouth': 'guide-assets/seth-mouth.png',
+    'seth_voice': 'guide-assets/voice.mp3',
 }
 header = root / 'main' / 'web_assets.h'
 source = root / 'main' / 'web_assets.c'
