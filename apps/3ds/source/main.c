@@ -73,7 +73,7 @@ typedef struct {char name[64];const char *value;} MacroDef;
 typedef struct {int value;char label[56];} Choice;
 typedef struct {char id[64],alt[64],label[76],x[60],y[60],z[60],xchan[60],ychan[60];bool curve,xro,yro;} TableDef;
 typedef struct {char owner[64],ref[64],label[60];int panel;} DialogRef;
-typedef struct {char label[72],command[64];int field;int type;} Resolved;
+typedef struct {char label[72],command[64],info[128];int field;int type;} Resolved;
 
 enum {T_U08,T_S08,T_U16,T_S16,T_U32,T_S32,T_F32,T_F64,T_BAD};
 enum {K_SCALAR,K_ARRAY,K_BITS};
@@ -85,7 +85,7 @@ static IniGraphDef ini_graphs[INI_GRAPH_CAP];
 static int ini_graph_count=0,ini_graph_selected=-1,ini_graph_return=PAGE_DETAIL,ini_graph_return_selected=0;
 static float ini_graph_values[INI_GRAPH_LINES][240];
 static bool ini_graph_ok[INI_GRAPH_LINES][240];
-typedef struct {char name[64],channel[64],minimum[96],maximum[96];} GaugeDef;
+typedef struct {char name[64],channel[64],label[64],minimum[96],maximum[96];} GaugeDef;
 static GaugeDef gauges[512];static int gauge_def_count=0;
 static MenuItem menus[MENU_CAP];static int menu_count=0;
 /* Optional TunerStudio [SettingContextHelp] descriptions from the ECU's own
@@ -902,6 +902,7 @@ static int parse_ini_all(const char*body,int length){char*buf=(char*)malloc((siz
    if(gn>=5){GaugeDef*g=&gauges[gauge_def_count++];memset(g,0,sizeof(*g));
      snprintf(g->name,sizeof(g->name),"%s",key);
      copy_text(g->channel,sizeof(g->channel),gc[0]);
+     copy_text(g->label,sizeof(g->label),gc[1]);
      copy_text(g->minimum,sizeof(g->minimum),gc[3]);
      copy_text(g->maximum,sizeof(g->maximum),gc[4]);
    }
@@ -946,6 +947,8 @@ static int parse_ini_all(const char*body,int length){char*buf=(char*)malloc((siz
  }
  else if(!strcasecmp(key,"panel")&&n) add_ref(dialog,a[0],a[0],true);
  else if(!strcasecmp(key,"field")&&n>=2&&*a[1]&&*a[1]!='{'&&strchr(a[1],' ')==NULL)add_ref(dialog,a[1],a[0],0);
+ else if(!strcasecmp(key,"field")&&n==1&&*a[0])add_ref(dialog,a[0],a[0],4);
+ else if(!strcasecmp(key,"gauge")&&*dialog&&n>=1&&*a[0])add_ref(dialog,a[0],a[0],5);
  else if(!strcasecmp(key,"commandButton")&&n>=2&&*a[1])
       add_ref(dialog,a[1],a[0],2);
  }
@@ -2601,6 +2604,31 @@ static void search_prompt(void){
 }
 static bool has_field_result(int id){for(int i=0;i<result_count;i++)if(results[i].field==id)return true;return false;}
 static void add_result(const char*label,int fid,int typ){if(fid<0||fid>=cal_count||result_count>=RES_CAP||has_field_result(fid))return;Resolved*r=&results[result_count++];snprintf(r->label,sizeof(r->label),"%s",(label&&*label)?label:cal[fid].name);r->field=fid;r->type=typ;}
+/* Read-only text and gauge controls from the ECU's actual INI. */
+static void add_info_result(const char *raw){
+ if(!raw||!*raw||result_count>=RES_CAP)return;
+ while(*raw=='#'||*raw=='!')raw++;
+ while(isspace((unsigned char)*raw))raw++;
+ if(!*raw)return;
+ Resolved *r=&results[result_count++];memset(r,0,sizeof(*r));
+ copy_text(r->label,sizeof(r->label),raw);
+ copy_text(r->info,sizeof(r->info),raw);
+ r->field=-1;r->type=6;
+}
+static void add_ini_gauge_result(const char *name){
+ if(!name||!*name||result_count>=RES_CAP)return;
+ Resolved *r=&results[result_count];memset(r,0,sizeof(*r));
+ for(int i=0;i<gauge_def_count;i++)if(!strcasecmp(name,gauges[i].name)){
+   const GaugeDef *g=&gauges[i];
+   copy_text(r->label,sizeof(r->label),*g->label?g->label:g->name);
+   copy_text(r->command,sizeof(r->command),g->channel);
+   Field *ch=lookup((char*)g->channel,true);
+   r->field=ch?(int)(ch-channels):-1;
+   r->type=7;result_count++;return;
+ }
+ copy_text(r->label,sizeof(r->label),name);
+ r->field=-1;r->type=7;result_count++;
+}
 static void add_action_result(const char*label,const char*command){
  if(result_count>=RES_CAP)return;
  Resolved*r=&results[result_count++];
@@ -2956,6 +2984,8 @@ static void resolve_item(const char*id,int depth){if(depth>8||!id||!*id||result_
  for(int i=0;i<ref_count;i++){if(strcasecmp(refs[i].owner,id))continue;
  if(refs[i].panel==1)resolve_item(refs[i].ref,depth+1);
  else if(refs[i].panel==2)add_action_result(refs[i].label,refs[i].ref);
+ else if(refs[i].panel==4)add_info_result(refs[i].label);
+ else if(refs[i].panel==5)add_ini_gauge_result(refs[i].ref);
  else if(refs[i].panel==3){
    for(int g=0;g<ini_graph_count;g++)if(!strcasecmp(refs[i].ref,ini_graphs[g].id)){
       if(result_count<RES_CAP){
@@ -3789,6 +3819,8 @@ static void enter_selected(void){
        else preview_stim_action(&results[selected]);
      }
      else if(results[selected].type==4){open_ini_graph(results[selected].field,PAGE_DETAIL,selected);}
+      else if(results[selected].type==6){note("INI description: read only");}
+      else if(results[selected].type==7){note("INI gauge: read only");}
      else {detail_sel=selected;field_return_page=PAGE_DETAIL;
        bool from_3d_ini=results[selected].type==5;
        open_cal(results[selected].field,results[selected].label);
@@ -4162,9 +4194,15 @@ static void draw_tune_dialog_top(void){
     const Resolved *item=&results[i];
     int type=item->type;
     draw_ts_icon((type==1||type==5)?11:12,12+foreground,y+1,.53f);
-    char desc[74];shorten(desc,sizeof(desc),item->label,31);
+    char desc[74];shorten(desc,sizeof(desc),item->label,type==7?23:31);
     text(39+foreground,y+2,.54f,active?white:cream,desc);
-    if(active)text(374+foreground,y+2,.43f,green,">");
+    if(type==7){
+       double reading=0.0;char value[30]="--";
+       if(channel_live_value(item->field,&reading))
+          snprintf(value,sizeof(value),fabs(reading)>=1000?"%.0f":"%.2f",reading);
+       text(323+foreground,y+2,.43f,live_stale?orange:bright,value);
+     }
+     if(active)text(374+foreground,y+2,.43f,green,">");
  }
  text(10,223,.32f,secondary,"A EDIT FIELD  |  B RETURN TO FUEL / SETUP / ETC");
 }
@@ -4706,7 +4744,9 @@ static const char *selected_help_text(void){
  }
  if(ui_page==PAGE_DETAIL && selected>=0 && selected<result_count){
     const Resolved *r=&results[selected];
-    if(r->field>=0&&r->field<cal_count && (r->type==0||r->type==1||r->type==5)){
+    if(r->type==6)return r->info;
+     if(r->type==7)return help_find(r->command);
+     if(r->field>=0&&r->field<cal_count && (r->type==0||r->type==1||r->type==5)){
        const char *tip=help_find(cal[r->field].name);
        if(tip)return tip;
     }
@@ -4902,6 +4942,8 @@ static void draw_list(void){
         else strcpy(tag,"UNAVAILABLE");
       }
       else if(results[i].type==4)strcpy(tag,"GRAPH");
+      else if(results[i].type==6)strcpy(tag,"INFO");
+      else if(results[i].type==7)strcpy(tag,"LIVE");
       else strcpy(tag,cal[results[i].field].kind==K_ARRAY?"TABLE":"FIELD");}
    float y=starty+r*rowheight;
    if(dense){
