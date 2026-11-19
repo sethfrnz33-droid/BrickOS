@@ -1,6 +1,6 @@
 {
   "schema": "brickos.guide.dialog.v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "identity": "seth",
   "display_name": "Seth",
   "origin": "ESP-hosted guide catalogue; clients are renderers, not rule owners",
@@ -219,19 +219,19 @@
     "tour.start": {
       "id": "tour.start",
       "speaker": "seth",
-      "text": "Full tour it is. I'll follow the systems your ECU actually exposes, keep track of what we have verified, and flag what needs someone to check in the real world. None of this changes your tune by itself.",
+      "text": "Full tour. We'll use a ten-stage structure based on HP Academy's public outline, then adapt the details to this ECU's matching INI. I'll explain what's verified, what isn't, and where the real settings live. No automatic changes.",
       "tone": "intro",
       "choices": [
         {
-          "label": "Check ECU identity and INI",
-          "go": "tour.identity"
+          "label": "Begin Step 1: ECU configuration",
+          "go": "tour.configuration"
         },
         {
-          "label": "See the complete tour map",
+          "label": "See all ten stages",
           "go": "tour.map"
         },
         {
-          "label": "Change to targeted help",
+          "label": "Get help with one problem",
           "go": "targeted"
         }
       ]
@@ -239,20 +239,20 @@
     "tour.map": {
       "id": "tour.map",
       "speaker": "seth",
-      "text": "The route is: ECU identity, sensors, synchronization, starting, idle, warmup, fuel model, fuel corrections, drivability, ignition review, optional systems, and final validation. We'll skip what's genuinely not applicable—not what's merely missing data.",
+      "text": "Our route has ten chapters: ECU configuration, trigger, base tables, physical references, startup, idle, steady fuel, steady ignition, instrumented power review and final confirmation. Warmup, trims, transients and advanced systems remain available as focused subtopics. Skipping an explanation never verifies a setting.",
       "tone": "normal",
       "choices": [
         {
-          "label": "Begin with ECU identity",
-          "go": "tour.identity"
+          "label": "Begin Step 1",
+          "go": "tour.configuration"
         },
         {
-          "label": "Walk through INI settings",
-          "go": "atlas.entry"
-        },
-        {
-          "label": "Choose a system instead",
+          "label": "Jump to a specific issue",
           "go": "targeted"
+        },
+        {
+          "label": "Browse every INI field",
+          "go": "atlas.entry"
         }
       ]
     },
@@ -271,12 +271,12 @@
           "go": "manual.identity"
         },
         {
-          "label": "Continue: Sensors",
+          "label": "Review sensors and I/O",
           "go": "tour.sensors"
         },
         {
-          "label": "Choose another topic",
-          "go": "targeted"
+          "label": "Continue: Trigger",
+          "go": "tour.trigger"
         }
       ],
       "stage": "identity",
@@ -292,15 +292,15 @@
       "tone": "normal",
       "choices": [
         {
-          "label": "What does the ECU show?",
+          "label": "Review reported sensor evidence",
           "go": "evidence.sensors"
         },
         {
-          "label": "Find related settings in the INI",
+          "label": "Find original ECU sensor settings",
           "go": "manual.sensors"
         },
         {
-          "label": "Continue: Trigger and synchronization",
+          "label": "Continue Step 2: Trigger",
           "go": "tour.trigger"
         },
         {
@@ -320,53 +320,53 @@
     "tour.trigger": {
       "id": "tour.trigger",
       "speaker": "seth",
-      "text": "The ECU needs a trustworthy crank/cam reference. I can read reported sync-related evidence where the firmware exposes it; physical timing reference is a separate check.",
+      "text": "Step 2: Trigger setup. We identify which crank/cam strategy the active configuration uses and whether the ECU reports useful synchronization diagnostics. That is not the same as verifying the physical timing reference, which comes later.",
       "tone": "normal",
       "choices": [
         {
-          "label": "What does the ECU show?",
+          "label": "Inspect available sync evidence",
           "go": "evidence.trigger"
         },
         {
-          "label": "Find related settings in the INI",
+          "label": "Open relevant trigger settings",
           "go": "manual.trigger"
         },
         {
-          "label": "Continue: First-start observations",
-          "go": "tour.starting"
+          "label": "Continue Step 3: Base tables",
+          "go": "tour.base_tables"
         },
         {
-          "label": "Choose another topic",
-          "go": "targeted"
+          "label": "Get targeted trigger help",
+          "go": "topics.trigger"
         }
       ],
       "stage": "trigger",
       "roles": [
         "sync"
       ],
-      "tag": "Trigger and synchronization"
+      "tag": "02 / TRIGGER SETUP"
     },
     "tour.starting": {
       "id": "tour.starting",
       "speaker": "seth",
-      "text": "Here we separate cranking, catching, after-start, and stable running. Different systems own different parts of that timeline, so we do not treat every start problem as a VE error.",
+      "text": "Step 5: Initial startup evidence. We distinguish crank, catch, after-start and settled behavior as separate events. A sync error, unknown injector configuration or invalid sensor cannot be diagnosed by simply changing VE. I'll show what's observable and what requires a qualified check.",
       "tone": "normal",
       "choices": [
         {
-          "label": "What does the ECU show?",
+          "label": "Review available start evidence",
           "go": "evidence.starting"
         },
         {
-          "label": "Find related settings in the INI",
+          "label": "Explore start and warmup issues",
+          "go": "topics.start"
+        },
+        {
+          "label": "Open original starting settings",
           "go": "manual.starting"
         },
         {
-          "label": "Continue: Idle behavior",
+          "label": "Continue Step 6: Idle",
           "go": "tour.idle"
-        },
-        {
-          "label": "Choose another topic",
-          "go": "targeted"
         }
       ],
       "stage": "starting",
@@ -374,29 +374,29 @@
         "rpm",
         "clt"
       ],
-      "tag": "First-start observations"
+      "tag": "05 / INITIAL STARTUP"
     },
     "tour.idle": {
       "id": "tour.idle",
       "speaker": "seth",
-      "text": "Idle is air, fuel, spark, hardware and feedback working together. We identify which strategy is enabled before blaming a PID value or editing a table.",
+      "text": "Step 6: Idle. We separate airflow, fueling, spark correction and feedback instead of treating every RPM fluctuation as bad PID. First we inspect the active idle strategy and measurements; then I can explain what's still unverified.",
       "tone": "normal",
       "choices": [
         {
-          "label": "What does the ECU show?",
+          "label": "Review idle measurements",
           "go": "evidence.idle"
         },
         {
-          "label": "Find related settings in the INI",
+          "label": "Help with an idle symptom",
+          "go": "topics.idle"
+        },
+        {
+          "label": "Find original idle settings",
           "go": "manual.idle"
         },
         {
-          "label": "Continue: Warmup",
-          "go": "tour.warmup"
-        },
-        {
-          "label": "Choose another topic",
-          "go": "targeted"
+          "label": "Continue Step 7: Steady fuel",
+          "go": "tour.steady_fuel"
         }
       ],
       "stage": "idle",
@@ -405,7 +405,7 @@
         "idleTarget",
         "idleCommand"
       ],
-      "tag": "Idle behavior"
+      "tag": "06 / IDLE"
     },
     "tour.warmup": {
       "id": "tour.warmup",
@@ -613,23 +613,23 @@
     "tour.done": {
       "id": "tour.done",
       "speaker": "seth",
-      "text": "That's the tour of the systems we've identified. A completed tour means we've accounted for the configuration—not that the engine has been mechanically verified or that every map is optimized. Want to look at a specific finding?",
+      "text": "We've covered all ten chapters. Some findings may still need measurements or qualified verification; finishing a tour doesn't make the calibration complete. I live in this ECU, so I plan to be annoyingly clear about that.",
       "tone": "thoughtful",
       "choices": [
         {
-          "label": "Open evidence and INI atlas",
-          "go": "workspace"
+          "label": "Review unresolved evidence",
+          "go": "workspace.evidence"
         },
         {
-          "label": "Get help with a symptom",
+          "label": "Get targeted help",
           "go": "targeted"
         },
         {
-          "label": "Walk through INI settings",
+          "label": "Browse INI settings",
           "go": "atlas.entry"
         },
         {
-          "label": "Return to guide home",
+          "label": "Guide home",
           "go": "welcome"
         }
       ]
@@ -2650,6 +2650,410 @@
           "go": "welcome"
         }
       ]
+    },
+    "tour.configuration": {
+      "id": "tour.configuration",
+      "speaker": "seth",
+      "text": "Step 1: We start with what the ECU is configured to control. The matching INI reveals its field definitions and live channels, not whether every wire or sensor has been physically verified. I'll sort the knowns from the assumptions before we go further.",
+      "tone": "normal",
+      "stage": "identity",
+      "roles": [
+        "rpm",
+        "battery"
+      ],
+      "tag": "01 / ECU CONFIGURATION",
+      "choices": [
+        {
+          "label": "Check ECU identity and evidence",
+          "go": "evidence.identity"
+        },
+        {
+          "label": "Review inputs and sensor configuration",
+          "go": "tour.sensors"
+        },
+        {
+          "label": "Open ECU settings",
+          "go": "manual.identity"
+        },
+        {
+          "label": "Continue Step 2: Trigger",
+          "go": "tour.trigger"
+        }
+      ]
+    },
+    "tour.base_tables": {
+      "id": "tour.base_tables",
+      "speaker": "seth",
+      "text": "Step 3: Base tables. Before we interpret fueling or spark behavior, we need to know which fuel model and ignition tables are actually active. I can find matching INI entries; I cannot declare an unknown starting map correct just because it exists.",
+      "tone": "normal",
+      "stage": "fuel",
+      "roles": [
+        "rpm",
+        "map",
+        "target"
+      ],
+      "tag": "03 / BASE TABLES",
+      "choices": [
+        {
+          "label": "Find original fuel table settings",
+          "go": "manual.fuel"
+        },
+        {
+          "label": "Find original ignition settings",
+          "go": "manual.spark"
+        },
+        {
+          "label": "Inspect existing fuel evidence",
+          "go": "evidence.fuel"
+        },
+        {
+          "label": "Continue Step 4: Reference checks",
+          "go": "tour.reference"
+        }
+      ]
+    },
+    "tour.reference": {
+      "id": "tour.reference",
+      "speaker": "seth",
+      "text": "Step 4: Reference checks. The ECU can report ignition angle and fuel pressure if the matching INI provides those channels. Physical timing and fuel-system behavior still require qualified external verification. I'm trapped in the ECU, not carrying a timing light.",
+      "tone": "normal",
+      "stage": "spark",
+      "roles": [
+        "spark",
+        "fuelPressure"
+      ],
+      "tag": "04 / PHYSICAL REFERENCES",
+      "choices": [
+        {
+          "label": "Review reported reference channels",
+          "go": "evidence.reference"
+        },
+        {
+          "label": "Open original ignition settings",
+          "go": "manual.spark"
+        },
+        {
+          "label": "I need help interpreting a sensor",
+          "go": "topics.sensors"
+        },
+        {
+          "label": "Continue Step 5: Starting",
+          "go": "tour.starting"
+        }
+      ]
+    },
+    "evidence.reference": {
+      "id": "evidence.reference",
+      "speaker": "seth",
+      "text": "Here is what the ECU can actually report: {{available:spark|fuelPressure|rpm}}. A reported reading is not independent confirmation of a physical timing mark or fuel-pressure measurement. Unavailable signals are recorded as unknown.",
+      "tone": "thoughtful",
+      "stage": "spark",
+      "roles": [
+        "spark",
+        "fuelPressure",
+        "rpm"
+      ],
+      "tag": "REFERENCE EVIDENCE",
+      "choices": [
+        {
+          "label": "Open ignition settings",
+          "go": "manual.spark"
+        },
+        {
+          "label": "Return to reference checks",
+          "go": "tour.reference"
+        },
+        {
+          "label": "Open evidence workspace",
+          "go": "workspace.evidence"
+        }
+      ]
+    },
+    "tour.steady_fuel": {
+      "id": "tour.steady_fuel",
+      "speaker": "seth",
+      "text": "Step 7: Steady-state fuel. The active fuel strategy, valid measured/target lambda, closed-loop trims and time-aligned operating conditions determine what the evidence means. A tidy lambda number can be compensation, not a correct VE table. We review findings first; nothing writes itself.",
+      "tone": "normal",
+      "stage": "fuel",
+      "roles": [
+        "lambda",
+        "target",
+        "gego",
+        "stft1",
+        "ltft1"
+      ],
+      "tag": "07 / STEADY FUEL",
+      "choices": [
+        {
+          "label": "Inspect current fuel evidence",
+          "go": "evidence.fuel"
+        },
+        {
+          "label": "Understand trims and warmup",
+          "go": "tour.fuel_support"
+        },
+        {
+          "label": "Open original fuel settings",
+          "go": "manual.fuel"
+        },
+        {
+          "label": "Continue Step 8: Ignition review",
+          "go": "tour.steady_spark"
+        }
+      ]
+    },
+    "tour.fuel_support": {
+      "id": "tour.fuel_support",
+      "speaker": "seth",
+      "text": "Fuel trims, warmup and throttle transitions need their own explanations even though the main tour has ten steps. We keep their evidence separate so the VE learner doesn't mistake one compensation for another.",
+      "tone": "normal",
+      "stage": "fuel",
+      "roles": [
+        "lambda",
+        "target",
+        "gego",
+        "stft1",
+        "ltft1"
+      ],
+      "tag": "FUEL SUPPORT TOPICS",
+      "choices": [
+        {
+          "label": "Inspect STFT and LTFT",
+          "go": "tour.trims"
+        },
+        {
+          "label": "Warmup and after-start",
+          "go": "tour.warmup"
+        },
+        {
+          "label": "Throttle transients",
+          "go": "tour.transients"
+        },
+        {
+          "label": "Back to steady-state fuel",
+          "go": "tour.steady_fuel"
+        }
+      ]
+    },
+    "tour.steady_spark": {
+      "id": "tour.steady_spark",
+      "speaker": "seth",
+      "text": "Step 8: Steady-state ignition. We'll identify the active ignition table and reported corrections, then make clear what the sensors can and cannot establish. Knock absence, MAP and acceleration are not proof of best-torque timing; that needs proper measurement and professional review.",
+      "tone": "normal",
+      "stage": "spark",
+      "roles": [
+        "spark",
+        "knock"
+      ],
+      "tag": "08 / STEADY IGNITION",
+      "choices": [
+        {
+          "label": "Inspect spark/knock evidence",
+          "go": "evidence.spark"
+        },
+        {
+          "label": "Open original ignition settings",
+          "go": "manual.spark"
+        },
+        {
+          "label": "Help me understand ignition",
+          "go": "topics.spark"
+        },
+        {
+          "label": "Continue Step 9: Instrumented review",
+          "go": "tour.full_power"
+        }
+      ]
+    },
+    "tour.full_power": {
+      "id": "tour.full_power",
+      "speaker": "seth",
+      "text": "Step 9: Full-power validation is a separate professional, instrumented stage—not an automatic test initiated by this guide. I can organize the ECU's reported faults and available evidence, but I won't infer that a high-load calibration is safe or complete from missing warnings.",
+      "tone": "normal",
+      "stage": "validation",
+      "roles": [
+        "knock",
+        "fuelPressure",
+        "oilPressure"
+      ],
+      "tag": "09 / INSTRUMENTED REVIEW",
+      "choices": [
+        {
+          "label": "Review available ECU evidence",
+          "go": "evidence.validation"
+        },
+        {
+          "label": "Review optional system configuration",
+          "go": "tour.advanced"
+        },
+        {
+          "label": "See unresolved diagnostic findings",
+          "go": "workspace.systems"
+        },
+        {
+          "label": "Continue Step 10: Confirm results",
+          "go": "tour.confirm"
+        }
+      ]
+    },
+    "tour.confirm": {
+      "id": "tour.confirm",
+      "speaker": "seth",
+      "text": "Step 10: Confirm the tune. We compare what was actually verified with what remains unknown: ECU identity, physical checks, measured operating regions, diagnostic faults, and any changes since the last assessment. Finishing this conversation does not certify the engine.",
+      "tone": "normal",
+      "stage": "validation",
+      "roles": [
+        "rpm",
+        "lambda",
+        "sync"
+      ],
+      "tag": "10 / FINAL CONFIRMATION",
+      "choices": [
+        {
+          "label": "Review evidence and exclusions",
+          "go": "workspace.evidence"
+        },
+        {
+          "label": "Review full INI coverage",
+          "go": "workspace.atlas"
+        },
+        {
+          "label": "Review final findings",
+          "go": "evidence.validation"
+        },
+        {
+          "label": "Finish the full tour",
+          "go": "tour.done"
+        }
+      ]
     }
-  }
+  },
+  "tour_source": {
+    "reference": "HP Academy public Practical Standalone Tuning 10-step course outline",
+    "url": "https://www.hpacademy.com/courses/practical-standalone-tuning/",
+    "note": "Original BrickOS explanations and INI-derived links. No reproduction of proprietary course instruction or generic tuning values."
+  },
+  "tour_steps": [
+    {
+      "step": 1,
+      "id": "configuration",
+      "title": "ECU configuration and testing",
+      "node": "tour.configuration",
+      "expert": "identity",
+      "roles": [
+        "rpm",
+        "battery"
+      ],
+      "external_validation": false
+    },
+    {
+      "step": 2,
+      "id": "trigger",
+      "title": "Trigger setup",
+      "node": "tour.trigger",
+      "expert": "trigger",
+      "roles": [
+        "sync"
+      ],
+      "external_validation": false
+    },
+    {
+      "step": 3,
+      "id": "baseline",
+      "title": "Base table configuration",
+      "node": "tour.base_tables",
+      "expert": "fuel",
+      "roles": [
+        "target",
+        "rpm"
+      ],
+      "external_validation": false
+    },
+    {
+      "step": 4,
+      "id": "references",
+      "title": "Base ignition / fuel pressure verification",
+      "node": "tour.reference",
+      "expert": "spark",
+      "roles": [
+        "spark",
+        "fuelPressure"
+      ],
+      "external_validation": true
+    },
+    {
+      "step": 5,
+      "id": "starting",
+      "title": "Initial startup",
+      "node": "tour.starting",
+      "expert": "starting",
+      "roles": [
+        "rpm",
+        "sync"
+      ],
+      "external_validation": false
+    },
+    {
+      "step": 6,
+      "id": "idle",
+      "title": "Idle tuning",
+      "node": "tour.idle",
+      "expert": "idle",
+      "roles": [
+        "idleTarget",
+        "idleCommand",
+        "lambda"
+      ],
+      "external_validation": false
+    },
+    {
+      "step": 7,
+      "id": "steady_fuel",
+      "title": "Steady-state fuel",
+      "node": "tour.steady_fuel",
+      "expert": "fuel",
+      "roles": [
+        "lambda",
+        "target",
+        "gego"
+      ],
+      "external_validation": false
+    },
+    {
+      "step": 8,
+      "id": "steady_spark",
+      "title": "Steady-state ignition",
+      "node": "tour.steady_spark",
+      "expert": "spark",
+      "roles": [
+        "spark",
+        "knock"
+      ],
+      "external_validation": true
+    },
+    {
+      "step": 9,
+      "id": "power",
+      "title": "Full-power instrumented review",
+      "node": "tour.full_power",
+      "expert": "validation",
+      "roles": [
+        "fuelPressure",
+        "knock"
+      ],
+      "external_validation": true
+    },
+    {
+      "step": 10,
+      "id": "confirmation",
+      "title": "Final confirmation",
+      "node": "tour.confirm",
+      "expert": "validation",
+      "roles": [
+        "sync",
+        "lambda"
+      ],
+      "external_validation": true
+    }
+  ]
 }
