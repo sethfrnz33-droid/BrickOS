@@ -46,3 +46,7 @@ Host tests are not ESP-IDF cross compilation or physical engine validation. Flas
 Seth's default Full Tour now follows the ten-stage sequence published in HP Academy's public Practical Standalone Tuning course outline, with explicit base-table discovery and physical-reference verification before the starting and idle chapters. This is a **read-only dialogue workflow**, not an operating procedure or ECU calibration algorithm. Quick Help, INI Atlas, the original manual editor, and existing DS network protocols remain unchanged.
 
 The canonical versioned dialogue is `web/guide-catalog.json`; every fixed response is documented in `docs/24-seth-complete-dialogue.md`, and the stage ordering plus future DS packet fields in `docs/27-hpa-master-tour.md`. Run `python tools/generate_web_assets.py` after changing source assets, or let the existing ESP-IDF configure step regenerate them. Hardware validation remains outstanding.
+
+## Full Tour chapter checks — dialogue catalogue 1.2.0
+
+Each of the ten tour chapters offers three context-aware questions. Seth shows matched INI-channel evidence and explains missing inputs; users may report a review, say they do not know, request an explanation, inspect evidence or open a verified original INI menu item. Browser-local user reports never count as independent ECU validation. This update adds no ECU writes, ESP-resident autotuning, 3DS guide screens or DS connection changes. [Dialogue script](../../docs/28-seth-chapter-questions.md).
