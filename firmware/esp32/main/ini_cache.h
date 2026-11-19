@@ -20,3 +20,16 @@ esp_err_t ini_cache_import_exact_file(const char *source_path, const char *ecu_s
 typedef struct { unsigned offset; double scale, translate; } brick_bench_u16_t;
 bool ini_cache_bench_channels(const char *ecu_signature,
                               brick_bench_u16_t *rpm, brick_bench_u16_t *battery);
+
+
+/* Read-only TunerStudio ControllerCommands inventory, never an actuator API. */
+typedef struct {
+    bool declared;
+    bool shown_as_button;
+    char label[96];
+} brick_ini_command_info_t;
+
+/* Returns false on invalid name, absent/mismatched ECU INI, or inaccessible
+ * storage. Returning true does NOT mean the command can be executed. */
+bool ini_cache_command_info(const char *ecu_signature, const char *command_id,
+                             brick_ini_command_info_t *info);
