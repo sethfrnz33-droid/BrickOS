@@ -489,13 +489,15 @@ static bool trace_found=false;
 /* The UI never waits for HTTP; worker holds the shared HTTP response until
  * the main thread consumes its result. LightLock protects task handoff. */
 enum {TASK_IDLE,TASK_STATUS,TASK_INI,TASK_LIVE,TASK_CAL,TASK_AXIS_X,TASK_AXIS_Y,TASK_WRITE,TASK_RPM_LIMIT,TASK_INI_FLAGS,
-      TASK_STIM_PREPARE,TASK_STIM_START,TASK_STIM_STOP,TASK_ERROR,TASK_COMMAND_INSPECT};
+      TASK_STIM_PREPARE,TASK_STIM_START,TASK_STIM_STOP,TASK_ERROR,TASK_COMMAND_INSPECT,TASK_TEST_ABORT};
 static LightLock task_lock;
 static volatile int task_state=0; /* 0 free, 1 pending, 2 busy, 3 completed */
 static int task_type=TASK_IDLE,task_result=-1,task_page=0,task_offset=0,task_len=0,task_field=-1;
 static uint8_t task_calibration[EDIT_CAP];
 /* Metadata inspection only; no actuator commands or payload bytes. */
 static bool command_inspect_pending=false,command_inspect_defined=false,command_inspect_visible=false;
+static bool test_abort_pending=false;
+static char test_abort_error[160]="";
 static char command_inspect_name[64]="";
 /* Multi-step, offline-safe UI demo for TunerStudio command buttons.
  * The demo never sends an ECU output command. */
@@ -2750,6 +2752,17 @@ static void warn_before_hazardous_test(unsigned kind){
  hazardous_test.released=(hidKeysHeld()&(KEY_L|KEY_R))==0;
  note("Hazardous-test warning: L+R acknowledge, B cancel");
 }
+/* "Abort test" is a safety stop, unlike test-start command buttons.
+ * It transmits a fixed named cancel operation through the Bridge. */
+static void request_output_test_abort(void){
+ if(test_abort_pending){note("ECU test abort already queued");return;}
+ if(!net_ok||!ecu_session||!ecu_signature[0]||!wifi_candidate){
+    note("ECU not connected; cannot confirm test abort");return;
+ }
+ if(demo_confirm.phase)bts_demo_reset(&demo_confirm);
+ test_abort_pending=true;
+ note("Sending real ECU test abort; awaiting acknowledgement...");
+}
 static void begin_output_demo(const Resolved *r){
  if(!r||r->type!=3)return;
  if(demo_confirm.phase||hazardous_test.kind){
@@ -3975,7 +3988,9 @@ static void enter_selected(void){
      if(results[selected].type==3){
        /* Only supported, guarded commands can be dispatched. The bridge's
         * /api/ts endpoint rejects all Z physical output test commands. */
-       if(is_stim_action(&results[selected]))
+       if(!strcmp(results[selected].command,"cmd_test_cancel"))
+           request_output_test_abort();
+       else if(is_stim_action(&results[selected]))
            preview_stim_action(&results[selected]);
        else begin_output_demo(&results[selected]);
      }
@@ -4376,8 +4391,10 @@ static void draw_tune_dialog_top(void){
        round_panel(177,144,204,39,5,panel);
        text(190,149,.46f,orange,"TUNERSTUDIO COMMAND");
        text(179,168,.36f,secondary,
+          !strcmp(r->command,"cmd_test_cancel")?
+           "A SEND REAL ECU TEST ABORT":
           is_stim_action(r)?"Uses guarded trigger action":
-          "A DEMO / 2-STEP CONFIRM / NO OUTPUT");
+           "A DEMO / 2-STEP CONFIRM / NO OUTPUT");
     }else if(r->type==6){
        text(178,144,.44f,secondary,"INI INFORMATION / READ ONLY");
     }else if(r->type==7){
@@ -5088,12 +5105,14 @@ static void draw_config_dialog_bottom(void){
     if(button){
        /* Actual button styling; explicit disabled state instead of an
         * unusable test button pretending it can actuate the ECU. */
-       bool supported=is_stim_action(item)&&
-          (!strcmp(item->command,"cmd_disable_self_stim")?
-           stim_stop_supported:stim_start_supported);
+       bool abort=!strcmp(item->command,"cmd_test_cancel");
+       bool supported=abort ||
+          (is_stim_action(item)&&
+           (!strcmp(item->command,"cmd_disable_self_stim")?
+            stim_stop_supported:stim_start_supported));
        round_panel(215,y+2,88,19,4,supported?muted_leaf:outline);
        text(222,y+5,.34f,supported?bright:orange,
-            supported?"COMMAND":"DEMO");
+            abort?"ABORT":supported?"COMMAND":"DEMO");
     }else if(item->type==6){
        text(268,y+5,.32f,secondary,"INFO");
     }else if(item->type==7){
@@ -7385,6 +7404,26 @@ static void net_thread(void *arg){
           stim_failure[0]=0;
           result=stim_http_action(type);
           if(result<0)snprintf(stim_failure,sizeof(stim_failure),"%.150s",ui_note);
+       }else if(type==TASK_TEST_ABORT){
+          char escaped[320],payload[400];
+          if(!ecu_signature[0]||
+             !escape_json_string(ecu_signature,escaped,sizeof(escaped))){
+             result=-1;
+             copy_text(test_abort_error,sizeof(test_abort_error),"Missing ECU signature");
+          }else{
+             snprintf(payload,sizeof(payload),"{\"signature\":\"%s\"}",escaped);
+             result=post_api("/api/test/abort",payload,9000);
+             bool ack=false,verified=false;
+             if(result>0&&
+                json_bool(http_body(),"command_acknowledged",&ack)&&ack&&
+                json_bool(http_body(),"running_state_verified",&verified)&&!verified){
+                result=1;
+             }else{
+                result=-1;
+                copy_text(test_abort_error,sizeof(test_abort_error),
+                   "ECU did not acknowledge abort; output state UNKNOWN");
+             }
+          }
        }else if(type==TASK_COMMAND_INSPECT){
            char path[128];
            snprintf(path,sizeof(path),"/api/ts/inspect?name=%s",command_inspect_name);
@@ -7495,6 +7534,13 @@ static void complete_task(void){
       ini_flags_requested=false;ini_flags_retry_at=now+10000;
    }
    break;
+ case TASK_TEST_ABORT:
+   note(result>0?
+      "ECU test abort ACKNOWLEDGED; verify actual hardware state":
+      (test_abort_error[0]?test_abort_error:
+       "ECU abort failed; physical output state UNKNOWN"));
+   status_requested=true;
+   break;
  case TASK_COMMAND_INSPECT:
    if(result>0){
        note(command_inspect_defined&&command_inspect_visible?
@@ -7556,6 +7602,14 @@ static void complete_task(void){
 }
 static void run_scheduler(u64 now){
  if(!net_ok||!wifi_candidate||!task_idle()||work_suspended)return;
+ /* A queued safety abort takes priority over tuning, writes and telemetry. */
+ if(test_abort_pending){
+    if(task_submit(TASK_TEST_ABORT,0,0,0,-1)){
+       test_abort_pending=false;
+       test_abort_error[0]=0;
+    }
+    return;
+ }
  /* User safety actions outrank streaming telemetry and queued reads. */
  if(stim_pending!=STIM_NONE){
     int operation=stim_pending;
