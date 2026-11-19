@@ -10,3 +10,7 @@ extern const uint8_t brick_asset_js[];
 extern const size_t brick_asset_js_len;
 extern const uint8_t brick_asset_core[];
 extern const size_t brick_asset_core_len;
+extern const uint8_t brick_asset_guided[];
+extern const size_t brick_asset_guided_len;
+extern const uint8_t brick_asset_guided_ui[];
+extern const size_t brick_asset_guided_ui_len;
