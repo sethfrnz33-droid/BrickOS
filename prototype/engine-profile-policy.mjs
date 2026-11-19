@@ -76,7 +76,7 @@ export function evaluateEngineProfile(profile,{ecuInjection=null,definitionMatch
     add('UNSUPPORTED_GDI','BrickOS Guided Tuning does not support GDI or mixed PFI/GDI calibration.',true);
     experts.fuel='unsupported_gdi';
   }else if(injection==='pfi'){
-    experts.fuel='pfI_review_only';
+    experts.fuel='pfi_review_only';
     if(!definitionMatched){add('ECU_DEFINITION_NOT_MATCHED','No verified matching ECU/INI is provided for fuel interpretation.',true);experts.fuel='hold';}
     if(ecuInjection&&ecuInjection!=='pfi'){add('INJECTION_CONFLICT','ECU configuration disagrees with recorded PFI hardware; reconciliation required.',true);experts.fuel='hold';}
     if(!known(val(profile,'pump_control')))ask('pump_control','Pump command method is independent from pressure regulation.');
