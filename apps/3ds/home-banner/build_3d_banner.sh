@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Convert the prepared E46 GLB to a real 3DS CGFX HOME Menu banner.
+# Convert the mascot billboard GLB to a transparent 3DS CGFX HOME Menu banner.
 # The model is not inserted into the Brick Tuner Suite app itself.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -107,14 +107,10 @@ if [[ ! -f home-banner/tools/pycgfx/main.py ]]; then
   git clone -q https://github.com/skyfloogle/pycgfx.git home-banner/tools/pycgfx
   git -C home-banner/tools/pycgfx checkout -q 1f78850086f3a77c41e07162e842f97a5bf3c18a
 fi
-# V4.9: rotating E46 + connected 3DS handheld + a title that remains readable.
-# Fit-check the finished CGFX; never package a banner larger than 512 KiB.
-# If the detailed diorama is too large, try lower car texture resolution.
-# Last-resort fallbacks preserve the car and title, then the known-good car.
-# The source of the accepted banner is written to banner_source.txt.
+# Mascot HOME Menu billboard only; never reintroduce an unrelated car.
 BANNER_READY=0
-for source in home-banner/e46_diorama_full.glb home-banner/e46_diorama_tiny.glb home-banner/e46_diorama_safe.glb home-banner/e46_home_banner_lite_single.glb home-banner/e46_home_banner_tiny_single.glb; do
-  echo "Converting E46 HOME Menu model: $source"
+for source in home-banner/mascot_banner.glb; do
+  echo "Converting mascot HOME model: $source"
   rm -f home-banner/banner.cgfx
   if "$PY" home-banner/tools/pycgfx/main.py "$source" home-banner/banner.cgfx; then
     if "$PY" - "$source" <<'PYVALID'
@@ -128,14 +124,9 @@ if not p.exists() or p.read_bytes()[:4] != b'CGFX':
 if p.stat().st_size > 0x80000:
     print(f'{source}: {p.stat().st_size:,} bytes exceeds CGFX 512 KiB limit',file=sys.stderr)
     sys.exit(1)
-print(f'3D CGFX ready: {p} ({p.stat().st_size:,} bytes), from {source}')
+print(f'CGFX ready: {p} ({p.stat().st_size:,} bytes), from {source}')
 PYVALID
     then
-      if [[ "$source" == home-banner/e46_home_banner_* ]]; then
-        echo 'WARNING: 3DS + title scene exceeded the limit; using original E46-only banner.' >&2
-      elif [[ "$source" == home-banner/e46_diorama_safe.glb ]]; then
-        echo 'WARNING: 3DS handheld could not fit; using E46 + title only.' >&2
-      fi
       printf '%s\n' "$source" > home-banner/banner_source.txt
       BANNER_READY=1
       break
@@ -144,7 +135,6 @@ PYVALID
 done
 if [[ "$BANNER_READY" != 1 ]]; then
   rm -f home-banner/banner.cgfx
-  echo 'No E46 3D banner variant fit the 512 KiB CGFX limit.' >&2
-  echo 'See home-banner/README.md. The original GLB is preserved.' >&2
+  echo 'Mascot banner conversion failed. No unrelated fallback will be packaged.' >&2
   exit 1
 fi
