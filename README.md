@@ -29,6 +29,8 @@ Use your verified ESP32 programming COM port in place of the **example** `COM7`.
 
 ## Guided Tuning
 
+- [Seth Full Tour — ten-stage sequence and DS-portable INI contract](docs/27-hpa-master-tour.md)
+
 - [HP Academy public 10-step workflow comparison and recommended Guide refinements](docs/26-hp-academy-process-comparison.md)
 
 ### Current planning specifications (research/design, not implemented firmware)
