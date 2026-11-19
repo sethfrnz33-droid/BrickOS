@@ -5,6 +5,7 @@
 #include <3ds.h>
 #include <citro2d.h>
 #include "test_confirm.h"
+#include "bts_ini_numeric.h"
 #include <3ds/services/soc.h>
 #include <3ds/services/ac.h>
 #include <3ds/services/ptmu.h>
@@ -68,7 +69,7 @@ static void copy_text(char *dest, size_t cap, const char *src){
 
 /* Field indices are looked up by INI name; never infer ECU offsets. */
 typedef struct {char label[68],target[64];int group;} MenuItem;
-typedef struct {char name[60],unit[26];int page,offset,width,height,kind,type,bytes,bitlo,bithi;double scale,translate,low,high;bool validScale,limitsKnown,powerCycle;int dyn_axis_kind;const char *choice_spec;} Field;
+typedef struct {char name[60],unit[26];int page,offset,width,height,kind,type,bytes,bitlo,bithi;double scale,translate,low,high;bool validScale,limitsKnown,powerCycle;int dyn_axis_kind;const char *choice_spec,*source_spec;} Field;
 typedef struct {char name[64];const char *value;} MacroDef;
 typedef struct {int value;char label[56];} Choice;
 typedef struct {char id[64],alt[64],label[76],x[60],y[60],z[60],xchan[60],ychan[60];bool curve,xro,yro;} TableDef;
@@ -472,7 +473,7 @@ static float trace_interp_x=0,trace_interp_y=0;
 static bool trace_found=false;
 /* The UI never waits for HTTP; worker holds the shared HTTP response until
  * the main thread consumes its result. LightLock protects task handoff. */
-enum {TASK_IDLE,TASK_STATUS,TASK_INI,TASK_LIVE,TASK_CAL,TASK_AXIS_X,TASK_AXIS_Y,TASK_WRITE,TASK_RPM_LIMIT,
+enum {TASK_IDLE,TASK_STATUS,TASK_INI,TASK_LIVE,TASK_CAL,TASK_AXIS_X,TASK_AXIS_Y,TASK_WRITE,TASK_RPM_LIMIT,TASK_INI_FLAGS,
       TASK_STIM_PREPARE,TASK_STIM_START,TASK_STIM_STOP,TASK_ERROR};
 static LightLock task_lock;
 static volatile int task_state=0; /* 0 free, 1 pending, 2 busy, 3 completed */
@@ -505,15 +506,18 @@ static void fault_rebuild_links(void);
 
 static int pending_cal_field=-1;
 static bool ini_cached_on_sd=false,work_suspended=false;
+/* Resolve TunerStudio conversion expressions from actual ECU flags, not
+ * guessed defaults. The worker reads flags; only UI thread changes fields. */
+static BtsIniFlags ini_flags={0},task_ini_flags={0};
+static bool ini_flags_requested=false;
+static u64 ini_flags_retry_at=0;
+static char ini_flags_signature[160]="";
 /* A write is placed ahead of telemetry polling. The queue only runs following
  * deliberate START -> A confirmation and remains subject to bench interlocks. */
 static bool write_queued=false,write_inflight=false,write_verified=false;
 static bool rpm_limit_requested=false,rpm_limit_known=false;
 static u64 rpm_limit_retry_at=0;
 static double rpm_limit_value=0;
-static bool task_axis_scale_known=false;
-static double task_axis_scale=1.0;
-static bool task_axis_is_map=false;
 static u32 successful_live=0,live_errors=0;static int live_http_code=0;
 
 
@@ -779,7 +783,7 @@ static int field_index(const char*name){for(int i=0;i<cal_count;i++)if(!strcasec
 static int parse_field(const char *name,const char *value,int page,bool runtime){char a[12][128];int n=csv(value,a,12);if(n<3)return 0;int kind=!strcasecmp(a[0],"scalar")?K_SCALAR:!strcasecmp(a[0],"array")?K_ARRAY:!strcasecmp(a[0],"bits")?K_BITS:-1;
  int typ=dtype(a[1]),off=int_number(a[2],-1);if(kind<0||typ==T_BAD||off<0)return 0;
  Field*f=NULL;if(runtime){if(chan_count>=CHAN_CAP)return 0;f=&channels[chan_count++];}else{if(cal_count>=FIELD_CAP)return 0;f=&cal[cal_count++];}
- memset(f,0,sizeof(*f));snprintf(f->name,sizeof(f->name),"%s",name);f->page=page;f->kind=kind;f->type=typ;f->offset=off;f->width=1;f->height=1;int pos=3;
+ memset(f,0,sizeof(*f));snprintf(f->name,sizeof(f->name),"%s",name);f->page=page;f->kind=kind;f->type=typ;f->offset=off;f->source_spec=value;f->width=1;f->height=1;int pos=3;
  if(kind==K_ARRAY){int w=0,h=1;if(sscanf(a[3],"[%dx%d]",&w,&h)!=2&&sscanf(a[3],"[%d]",&w)!=1)w=0;if(w<1||h<1||w*h>2048){f->bytes=0;return 1;}f->width=w;f->height=h;pos=4;}
  else if(kind==K_BITS)pos=4;
  f->bytes=f->width*f->height*dsize(typ);if(kind==K_BITS){int lo=-1,hi=-1;if(sscanf(a[3],"[%d:%d]",&lo,&hi)!=2){if(sscanf(a[3],"[%d]",&lo)==1)hi=lo;}f->bitlo=lo;f->bithi=hi;
@@ -806,6 +810,55 @@ static int parse_field(const char *name,const char *value,int page,bool runtime)
    f->low=lo;f->high=hi;f->limitsKnown=true;
  }
  return 1;}
+/* Evaluate the ECU's own numeric conversion, translation AND display
+ * bounds together. Unknown modes and unknown limits stay unavailable. */
+static bool ini_resolve_numeric_field(Field *f){
+ if(!f||f->kind==K_BITS||!f->source_spec)return false;
+ char parts[12][128];int n=csv(f->source_spec,parts,12);
+ int pos=f->kind==K_ARRAY?4:3;
+ if(n<pos+3)return false;
+ double scale=0,translate=0,low=0,high=0;
+ if(!bts_ini_numeric(parts[pos+1],&ini_flags,&scale) ||
+    !bts_ini_numeric(parts[pos+2],&ini_flags,&translate) ||
+    !isfinite(scale)||!isfinite(translate)||scale==0)return false;
+ bool limits=false;
+ if(n>pos+4){
+    if(!bts_ini_numeric(parts[pos+3],&ini_flags,&low)||
+       !bts_ini_numeric(parts[pos+4],&ini_flags,&high)||low>high)
+       return false;
+    limits=true;
+ }
+ f->scale=scale;f->translate=translate;
+ f->limitsKnown=limits;
+ if(limits){f->low=low;f->high=high;}
+ if(parts[pos][0]=='{'){
+    char unit[26];if(bts_ini_unit(parts[pos],&ini_flags,unit,sizeof(unit)))
+       copy_text(f->unit,sizeof(f->unit),unit);
+    else f->unit[0]=0;
+ }
+ f->validScale=true;return true;
+}
+static void ini_resolve_all_numeric_fields(void){
+ for(int i=0;i<cal_count;i++)ini_resolve_numeric_field(&cal[i]);
+ for(int i=0;i<chan_count;i++)ini_resolve_numeric_field(&channels[i]);
+}
+static void ini_drop_dynamic_conversions(void){
+ memset(&ini_flags,0,sizeof(ini_flags));
+ ini_flags_requested=false;ini_flags_retry_at=0;ini_flags_signature[0]=0;
+ for(int pass=0;pass<2;pass++){
+    Field *fields=pass?channels:cal;int count=pass?chan_count:cal_count;
+    for(int i=0;i<count;i++){
+       Field *f=&fields[i];if(f->kind==K_BITS||!f->source_spec)continue;
+       char parts[12][128];int n=csv(f->source_spec,parts,12);
+       int pos=f->kind==K_ARRAY?4:3;
+       if(n>pos+2 && (strchr(parts[pos+1],'?')||strchr(parts[pos+2],'?') ||
+            (n>pos+4&&(strchr(parts[pos+3],'?')||strchr(parts[pos+4],'?'))))){
+           f->validScale=false;f->limitsKnown=false;
+       }
+    }
+ }
+ ini_resolve_all_numeric_fields();
+}
 static void parse_page_ids(const char*value){char a[64][128];int n=csv(value,a,64);page_ids_count=n;
  for(int i=0;i<n;i++){unsigned hi=0,lo=0;char *p=strstr(a[i],"\\x");
  if(p&&sscanf(p,"\\x%2x\\x%2x",&lo,&hi)==2)page_ids[i]=(int)(lo|(hi<<8));
@@ -886,6 +939,7 @@ static int parse_ini_all(const char*body,int length){char*buf=(char*)malloc((siz
  ini_source=buf;
  macro_count=power_cycle_count=0;rpm_limit_requested=rpm_limit_known=false;rpm_limit_retry_at=0;
  menu_count=cal_count=chan_count=table_count=ref_count=gauge_def_count=ini_graph_count=0;page_ids_count=0;ini_setting_help_count=0;
+ memset(&ini_flags,0,sizeof(ini_flags));ini_flags_requested=false;ini_flags_retry_at=0;ini_flags_signature[0]=0;
  memset(nav_bookmark,0,sizeof(nav_bookmark));memset(page_ids,-1,sizeof(page_ids));memset(page_sizes,-1,sizeof(page_sizes));memset(page_burnable,0,sizeof(page_burnable));memset(page_writeable,0,sizeof(page_writeable));ini_signature[0]=0;
  char*save=NULL;char*row=strtok_r(buf,"\r\n",&save);char section[32]="";int currentpage=1,lasttable=-1,lastcurve=-1;char dialog[64]="";int currentgraph=-1;bool onmain=false;
  while(row){char*p=trim(row);if(!strncmp(p,"#define ",8))parse_macro(p);
@@ -958,6 +1012,7 @@ static int parse_ini_all(const char*body,int length){char*buf=(char*)malloc((siz
    Field *f=lookup(power_cycle_names[i],false);
    if(f)f->powerCycle=true;
  }
+ ini_resolve_all_numeric_fields();
  stim_preview=false;
  menu_loaded=menu_count>0;snprintf(menu_info,sizeof(menu_info),"%d menu  %d maps  %d fields",menu_count,table_count,cal_count);
  if(!menu_loaded){note("INI has no recognized menus");return 0;}note("ECU definition loaded - select a menu");return menu_count;}
@@ -1541,6 +1596,7 @@ static bool json_bool(const char*body,const char*name,bool*out){char needle[80];
 static bool json_string(const char*body,const char*name,char*out,int cap){char needle[80];snprintf(needle,sizeof(needle),"\"%s\"",name);const char*p=strstr(body,needle);if(!p)return false;p=strchr(p,':');if(!p)return false;p++;while(isspace((unsigned char)*p))p++;if(*p++!='"')return false;int at=0;while(*p&&*p!='"'&&at<cap-1){if(*p=='\\'&&p[1])p++;out[at++]=*p++;}out[at]=0;return true;}
 static void decode_status(void){if(last_http!=200)return;char*b=http_body();if(!b)return;
  const bool was_connected=ecu_session;
+ char old_signature[160];copy_text(old_signature,sizeof(old_signature),ecu_signature);
  bool reported_session=false;
  /* A partial/malformed status must not be treated as a successful reconnect. */
  if(!json_bool(b,"ecu_session_connected",&reported_session))return;
@@ -1554,6 +1610,9 @@ static void decode_status(void){if(last_http!=200)return;char*b=http_body();if(!
  stim_on_by_bridge=!strcmp(stim_server_state,"START_ACKNOWLEDGED");
  json_string(b,"brick_os_build",esp_firmware_build,sizeof(esp_firmware_build));
  json_string(b,"ecu_signature",ecu_signature,sizeof(ecu_signature));esp_status_valid=true;
+ if(!ecu_session || !was_connected || strcmp(old_signature,ecu_signature)){
+    if(ini_flags_requested||ini_flags_signature[0])ini_drop_dynamic_conversions();
+ }
  if(!ecu_session && was_connected){
     fault_session_was_lost=true;
     fault_poll_requested=true;
@@ -5236,7 +5295,7 @@ static u32 heat_color(double value,double lo,double hi){
 static double axis_value(int axis,int index){
  if(axis<0||axis>1||!axis_ready[axis]||axis_field[axis]<0)return NAN;
  Field*f=&cal[axis_field[axis]];
- if(f->dyn_axis_kind&&!f->validScale)return get_number(axis_data[axis],axis_len[axis],index*dsize(f->type),f->type);
+ /* Unknown conditional axis modes must never be displayed as raw values. */
  return field_value(axis_data[axis],axis_len[axis],f,index);
 }
 /* Show fewer map cells at once so actual 3DS numerals stay legible.
@@ -7066,6 +7125,15 @@ static void net_thread(void *arg){
           if(result<0)snprintf(stim_failure,sizeof(stim_failure),"%.150s",ui_note);
        }else if(type==TASK_WRITE){
           perform_queued_write();result=write_verified?1:0;
+       }else if(type==TASK_INI_FLAGS){
+          BtsIniFlags latest={0};int got=0;
+          for(int i=0;i<BTS_INI_FLAG_COUNT;i++){
+             double value=0;
+             if(read_cal_constant(bts_ini_flag_names[i],&value)){
+                latest.values[i]=value;latest.known[i]=true;got++;
+             }
+          }
+          task_ini_flags=latest;result=got?1:-1;
        }else if(type==TASK_RPM_LIMIT){
           double limit=0;
           if(read_cal_constant("rpmHardLimit",&limit)&&limit>0){
@@ -7098,23 +7166,7 @@ static void net_thread(void *arg){
           result=get_request(path);
        }else if(type==TASK_CAL||type==TASK_AXIS_X||type==TASK_AXIS_Y){
           result=read_bytes(page,off,task_calibration,len);
-          task_axis_scale_known=false;
-          if(type==TASK_AXIS_Y&&result==len&&field_index("useMetricOnInterface")>=0){
-            Field *f=&cal[task_field];
-            if(f->dyn_axis_kind>0){
-              const char *override=f->dyn_axis_kind==1?"veOverrideMode":
-                         f->dyn_axis_kind==2?"ignOverrideMode":"afrOverrideMode";
-              double metric=0,mode=0,fuel=0;
-              if(read_cal_constant("useMetricOnInterface",&metric)&&
-                 read_cal_constant(override,&mode)&&
-                 read_cal_constant("fuelAlgorithm",&fuel)){
-                bool use_map=mode==1||(mode==0&&fuel==0);
-                task_axis_scale=(!use_map||metric!=0)?1.0:0.145038;
-                task_axis_is_map=use_map;
-                task_axis_scale_known=true;
-              }
-            }
-          }
+
        }
        LightLock_Lock(&task_lock);task_result=result;task_state=3;LightLock_Unlock(&task_lock);
     }else svcSleepThread(10000000LL);
@@ -7147,12 +7199,23 @@ static void complete_task(void){
    status_requested=true;
    break;
  case TASK_WRITE:
+   if(result>0&&write_verified)ini_drop_dynamic_conversions();
    write_inflight=false;
    bts_audio_stop_burn_loop();
    if(result>0&&write_verified)bts_audio_play(BTS_SOUND_BURN_OK,event_audio_enabled);
    else bts_audio_play(BTS_SOUND_CONNECTED,event_audio_enabled); /* fart with reverb */
    /* Keep perform_queued_write()'s exact verified/power-cycle/error text. */
    /* On failure the modified bytes remain staged for inspection/retry. */
+   break;
+ case TASK_INI_FLAGS:
+   if(result>0&&ecu_session&&*ini_signature&&!strcmp(ecu_signature,ini_signature)){
+      ini_flags=task_ini_flags;
+      copy_text(ini_flags_signature,sizeof(ini_flags_signature),ecu_signature);
+      ini_resolve_all_numeric_fields();map_text_dirty=true;
+      note("ECU unit modes loaded; INI conversions updated");
+   }else{
+      ini_flags_requested=false;ini_flags_retry_at=now+10000;
+   }
    break;
  case TASK_RPM_LIMIT:
    rpm_limit_known=result>0;
@@ -7185,12 +7248,7 @@ static void complete_task(void){
        memcpy(axis_data[a],task_calibration,(size_t)result);
        memcpy(axis_original[a],task_calibration,(size_t)result);
        axis_len[a]=result;axis_ready[a]=true;
-       if(a==1&&task_axis_scale_known){
-          Field *af=&cal[field];af->scale=task_axis_scale;
-          af->translate=0;af->validScale=true;
-          snprintf(af->unit,sizeof(af->unit),"%s",task_axis_is_map?
-             (task_axis_scale<.9?"PSI":"kPa"):"load");
-       }
+
        map_text_dirty=true;
      }
    }
@@ -7226,6 +7284,13 @@ static void run_scheduler(u64 now){
     if(task_submit(TASK_WRITE,0,0,0,-1)){
        write_queued=false;write_inflight=true;
        note("Bench burn in progress; checking authorization and ECU data");
+    }
+    return;
+ }
+ if(menu_loaded&&ecu_session&&*ecu_signature&&!strcmp(ini_signature,ecu_signature)&&
+    !ini_flags_requested&&now>=ini_flags_retry_at){
+    if(task_submit(TASK_INI_FLAGS,0,0,0,-1)){
+        ini_flags_requested=true;ini_flags_retry_at=now+15000;
     }
     return;
  }
