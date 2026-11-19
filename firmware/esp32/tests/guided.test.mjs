@@ -36,7 +36,7 @@ test('discards transients and missing lambda and does not silently infer missing
  g.observe(sample({rpm:2000,tps:30,map:110}),1100,2);
  assert.ok(g.rejections['RPM transient']>0);assert.ok(g.rejections['TPS transient']>0);
  const withoutGego={...def,channels:def.channels.filter(x=>x.name!=='Gego')};const h=new GuidedAnalyzer();h.attach(withoutGego,def.signature);h.setMode('learn');h.observe(sample(),1000,1);
- assert.equal(h.accepted,0);assert.ok(h.rejections['fuel trim feedback unknown']>0);
+ assert.equal(h.accepted,0);assert.ok(h.rejections['Gego correction unavailable']>0);
 });
 test('filters validate ranges and reset collected evidence',()=>{
  const g=new GuidedAnalyzer();g.attach(def,def.signature);g.setMode('learn');g.observe(sample(),1000,1);
