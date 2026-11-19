@@ -521,7 +521,9 @@ static esp_err_t sensor_capture_post(httpd_req_t *r){
        !isfinite(rpm)||fabs(rpm)>0.1)
         return error_reply(r,403,"Cannot confirm stopped ECU from fresh RPM reading");
     char again[160];
-    if(!stim_session_match(requested,again,sizeof(again))||strcmp(again,active))
+    /* requested points into the freed request JSON; validate against our
+     * retained verified signature instead (prevents use-after-free). */
+    if(!stim_session_match(active,again,sizeof(again))||strcmp(again,active))
         return error_reply(r,403,"ECU USB session changed during sensor preflight");
     const uint8_t args[]={0x00,0x14,0x00,allowed[selected].selector};
     ts_reply_t *reply=calloc(1,sizeof(*reply));
