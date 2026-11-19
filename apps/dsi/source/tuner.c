@@ -649,35 +649,92 @@ int bt_bit_choices(const char *ini_path,const char *field_name,char labels[][36]
     fclose(f);return count;
 }
 
-/* Contextual help is typically generated in [SettingContextHelp].  Keeping
- * help on SD rather than in the definition snapshot saves scarce DS RAM and
- * preserves the entire explanation, not just the first short CSV column. */
+/* [SettingContextHelp] contains almost 2,000 individual entries in the
+ * Proteus INI. Scanning 900KB from SD for EACH highlighted setting made the
+ * DSi feel stuck inside nested folders. Keep only key hashes and SD offsets
+ * (about 16KB on ARM9), then seek directly to the actual INI description. */
+#define BTS_HELP_INDEX_CAP 2500
+typedef struct { uint32_t key_hash; uint32_t file_offset; } BtHelpOffset;
+static BtHelpOffset help_offsets[BTS_HELP_INDEX_CAP];
+static int help_offset_count=-1;
+static char help_index_path[256];
+static uint32_t help_hash(const char *text){
+    uint32_t hash=2166136261u;
+    for(const unsigned char *p=(const unsigned char *)text;*p;p++){
+        hash^=(unsigned char)tolower(*p);hash*=16777619u;
+    }
+    return hash;
+}
+static int compare_help(const void *aa,const void *bb){
+    const BtHelpOffset *a=aa,*b=bb;
+    if(a->key_hash<b->key_hash)return -1;
+    if(a->key_hash>b->key_hash)return 1;
+    return a->file_offset<b->file_offset?-1:a->file_offset>b->file_offset;
+}
+void bt_ini_help_index_reset(void){
+    help_offset_count=-1;help_index_path[0]=0;
+}
+static bool help_index_open(const char *path){
+    if(help_offset_count>=0 && !strcmp(help_index_path,path))return true;
+    bt_ini_help_index_reset();
+    FILE *f=fopen(path,"rb");if(!f)return false;
+    bool in_section=false;
+    int count=0;
+    for(;;){
+        long offset=ftell(f);
+        if(offset<0 || (unsigned long)offset>UINT32_MAX)break;
+        if(!fgets(choice_line,sizeof(choice_line),f))break;
+        char *p=trim(choice_line);
+        if(*p=='['){
+            if(in_section)break;
+            in_section=!strncasecmp(p,"[SettingContextHelp]",20);
+            continue;
+        }
+        if(!in_section || !*p || *p==';' || *p=='#')continue;
+        char *eq=strchr(p,'=');if(!eq)continue;
+        *eq=0;
+        if(count>=BTS_HELP_INDEX_CAP){fclose(f);return false;}
+        help_offsets[count].key_hash=help_hash(trim(p));
+        help_offsets[count].file_offset=(uint32_t)offset;
+        count++;
+    }
+    fclose(f);
+    qsort(help_offsets,(size_t)count,sizeof(help_offsets[0]),compare_help);
+    cp(help_index_path,sizeof(help_index_path),path);
+    help_offset_count=count;
+    return true;
+}
+/* Read INI text exactly; the hash index is only for locating data, never an
+ * approximation of the key or a synthetic tooltip. */
 bool bt_ini_context_help(const char *ini_path,const char *target,char *out,size_t cap){
     if(!out||cap<2)return false;
     out[0]=0;
-    if(!ini_path||!target||!*target)return false;
+    if(!ini_path||!target||!*target||!help_index_open(ini_path))return false;
+    uint32_t wanted=help_hash(target);
+    int lo=0,hi=help_offset_count;
+    while(lo<hi){int mid=lo+(hi-lo)/2;
+        if(help_offsets[mid].key_hash<wanted)lo=mid+1;
+        else hi=mid;
+    }
+    if(lo>=help_offset_count||help_offsets[lo].key_hash!=wanted)return false;
     FILE *f=fopen(ini_path,"rb");if(!f)return false;
-    bool section=false,found=false;
-    while(fgets(choice_line,sizeof(choice_line),f)){
-        char *p=trim(choice_line);
-        if(*p=='['){section=!strncasecmp(p,"[SettingContextHelp]",20);continue;}
-        if(!section||!*p||*p==';'||*p=='#')continue;
-        char *eq=strchr(p,'=');if(!eq)continue;
+    bool found=false;
+    for(int i=lo;i<help_offset_count && help_offsets[i].key_hash==wanted;i++){
+        if(fseek(f,(long)help_offsets[i].file_offset,SEEK_SET)!=0||
+           !fgets(choice_line,sizeof(choice_line),f))continue;
+        char *p=trim(choice_line),*eq=strchr(p,'=');if(!eq)continue;
         *eq=0;if(strcasecmp(trim(p),target))continue;
         char *v=trim(eq+1);size_t n=strlen(v);
         if(n>1&&v[0]=='"'){
-            char *end=strrchr(v+1,'"');
-            if(end){*end=0;v++;}
+            char *end=strrchr(v+1,'"');if(end){*end=0;v++;}
         }else{
             char *comment=strchr(v,';');if(comment)*comment=0;
             v=trim(v);
         }
-        cp(out,cap,v);
-        found=out[0]!=0;break;
+        cp(out,cap,v);found=out[0]!=0;break;
     }
     fclose(f);return found;
 }
-
 
 /* Load the exact definition without reinterpreting expressions or CSV commas.
  * This runs only at editor opening (not per frame). */
@@ -756,9 +813,12 @@ bool bt_ini_virtual_array(const char *path,const char *name,double *values,int c
 bool bt_ini_field_format(const char *path,const char *name,BtIniFormat *format){
     if(!format)return false;
     memset(format,0,sizeof(*format));
-    char buffer[1100];
+    /* ARM9 parsing is single-threaded. Large temporary INI CSV buffers
+     * belong in static working memory, not the DSi's tiny C stack. */
+    static char buffer[1100];
+    static char a[11][128];
     if(!bt_ini_rhs(path,"Constants",name,buffer,sizeof(buffer)))return false;
-    char a[11][128];int n=csv(buffer,a,11);
+    int n=csv(buffer,a,11);
     if(n<8)return false;
     int idx=!strcasecmp(a[0],"array")?4:!strcasecmp(a[0],"scalar")?3:-1;
     if(idx<0||n<=idx+4)return false;

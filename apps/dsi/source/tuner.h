@@ -100,6 +100,8 @@ bool bt_numeric_eval(const char *expression,BtVarLookup variable,void *ctx,doubl
 int bt_bit_choices(const char *ini_path,const char *field_name,char labels[][36],int cap);
 /* INI supplied [SettingContextHelp] tooltip text, never synthetic prose. */
 bool bt_ini_context_help(const char *ini_path,const char *target,char *text,size_t cap);
+/* Drop cached SD offsets when a different ECU INI is loaded. */
+void bt_ini_help_index_reset(void);
 /* INI [UserDefined] help topics: help=topic then text=... entries. */
 bool bt_ini_topic_help(const char *ini_path,const char *topic,char *out,size_t cap);
 void bt_ini_reset(BtDefinition *d);

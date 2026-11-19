@@ -32,7 +32,7 @@ with Server(('127.0.0.1',PORT),Handler) as server:
     cmd=['gcc','-std=gnu11','-D_DEFAULT_SOURCE','-O2','-Wall','-Wextra','-Werror',
          '-DBTS_ESP_HOST="127.0.0.1"',f'-DBTS_ESP_PORT={PORT}',
          '-Itests/stubs','-Isource','tests/test_v23_open.c','source/tuner.c',
-         'source/wire.c','source/storage.c','source/dashboard.c','-lm','-o','/tmp/bts_v23_open']
+         'source/wire.c','source/storage.c','source/dashboard.c','source/surface3d.c','-lm','-o','/tmp/bts_v23_open']
     subprocess.run(cmd,cwd=ROOT,check=True)
     subprocess.run(['/tmp/bts_v23_open'],cwd=ROOT,check=True,timeout=30)
     server.shutdown()
