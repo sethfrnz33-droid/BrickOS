@@ -2734,21 +2734,6 @@ static void add_action_result(const char*label,const char*command){
  snprintf(r->command,sizeof(r->command),"%s",command);
  r->field=-1;r->type=3; /* No physical ECU commands can be sent. */
 }
-static unsigned hazardous_test_kind(const Resolved *r){
- if(!r||r->type!=3)return BRICK_TEST_NONE;
- if(!strcmp(r->command,"cmd_enable_self_stim"))return BRICK_TEST_TRIGGER;
- /* Other INI bench-test commands remain unsupported. The guard still applies
-  * to their entry points so accidental UI wiring cannot bypass warning. */
- char command[sizeof(r->command)];
- for(size_t i=0;i<sizeof(command);i++){
-   char c=r->command[i];command[i]=(char)tolower((unsigned char)c);if(!c)break;
- }
- command[sizeof(command)-1]=0;
- if(strstr(command,"disable")||strstr(command,"stop")||strstr(command,"_off"))return BRICK_TEST_NONE;
- if(strstr(command,"inject"))return BRICK_TEST_INJECTOR;
- if(strstr(command,"ignition")||strstr(command,"spark")||strstr(command,"coil"))return BRICK_TEST_IGNITION;
- return BRICK_TEST_NONE;
-}
 static void warn_before_hazardous_test(unsigned kind){
  brick_test_confirm_begin(&hazardous_test,kind);
  /* If shoulder buttons are already released, next L+R can confirm. */
