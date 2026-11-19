@@ -7684,20 +7684,20 @@ static void complete_task(void){
 }
 static void run_scheduler(u64 now){
  if(!net_ok||!wifi_candidate||!task_idle()||work_suspended)return;
+ /* A queued safety abort takes priority over tuning, writes and telemetry. */
+ if(test_abort_pending){
+    if(task_submit(TASK_TEST_ABORT,0,0,0,-1)){
+       test_abort_pending=false;
+       test_abort_error[0]=0;
+    }
+    return;
+ }
  /* Sensor capture is a single-shot, non-actuating calibration command. */
  if(sensor_capture_pending){
     if(task_submit(TASK_SENSOR_CAPTURE,0,0,0,-1)){
        sensor_capture_pending=false;
        sensor_capture_inflight=true;
        sensor_capture_error[0]=0;
-    }
-    return;
- }
- /* A queued safety abort takes priority over tuning, writes and telemetry. */
- if(test_abort_pending){
-    if(task_submit(TASK_TEST_ABORT,0,0,0,-1)){
-       test_abort_pending=false;
-       test_abort_error[0]=0;
     }
     return;
  }
