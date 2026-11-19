@@ -98,7 +98,7 @@ scene={
  'asset':{'version':'2.0','generator':'Brick Tuner Suite mascot asset generator'},
  'scene':0,'scenes':[{'nodes':[0]}],
  'nodes':[{'name':'Brick ECU mascot','mesh':0,'rotation':[0,0,0,1]}],
- 'meshes':[{'primitives':[{'attributes':{'POSITION':0,'TEXCOORD_0':1},'indices':2,'material':0,'mode':4}]}],
+ 'meshes':[{'name':'Brick ECU Mascot Billboard','primitives':[{'attributes':{'POSITION':0,'TEXCOORD_0':1},'indices':2,'material':0,'mode':4}]}],
  'accessors':[
   {'bufferView':0,'componentType':5126,'count':4,'type':'VEC3','min':[-1.,-.5,0.],'max':[1.,.5,0.]},
   {'bufferView':1,'componentType':5126,'count':4,'type':'VEC2'},
