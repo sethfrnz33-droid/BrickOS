@@ -203,7 +203,7 @@ static int workspace_count(int page){
  switch(page){
  case PAGE_HUB:return 4;
  case PAGE_TUNE_HUB:return 4;
- case PAGE_LOGS_HUB:return 5;
+ case PAGE_LOGS_HUB:return 3;
  case PAGE_ANALYZE_HUB:return 5;
  case PAGE_SETTINGS_HUB:return 4;
  default:return 0;
@@ -222,7 +222,7 @@ static const char* workspace_title(int page){
 static const char* workspace_action(int page,int index){
  static const char* root[]={"Tune","Analyze","Logging","DS Settings"};
  static const char* tune[]={"TunerStudio Categories","Open ECU Tree","Browse ECU Tree","Return To ECU Tree"};
- static const char* logs[]={"Record Live Log","Browse Saved Logs","Resume Loaded Replay","Live Trend Graphs","Live ECU Channels"};
+ static const char* logs[]={"Record Live Log","Browse Saved Logs","Resume Loaded Replay"};
  static const char* analysis[]={"Analyze Loaded Log","Compare Two Logs","Trace Log to Map","Check Log Quality","Log Statistics"};
  static const char* settings[]={"Display & Gauges","Wi-Fi & ECU Connection","Menu Sound On / Off","Soundboard / Event Sounds"};
  if(index<0||index>=workspace_count(page))return "";
@@ -2551,6 +2551,13 @@ static void favorite_toggle(const char *target,const char *label){
 }
 static void toggle_selected_favorite(void){
  const char *target=NULL,*label=NULL;
+ if(ui_page==PAGE_DETAIL&&selected>=0&&selected<result_count){
+    const Resolved *r=&results[selected];
+    if((r->type==0||r->type==1||r->type==5)&&r->field>=0&&r->field<cal_count)
+       favorite_toggle(cal[r->field].name,r->label);
+    else note("Only calibration settings can be starred");
+    return;
+ }
  if(ui_page==PAGE_MENU){int k=menu_index(selected);if(k>=0&&menus[k].group!=1){target=menus[k].target;label=menus[k].label;}}
  else if(ui_page==PAGE_GROUP){int k=group_child_index(selected);if(k>=0){target=menus[k].target;label=menus[k].label;}}
  else if(ui_page==PAGE_MAPS&&selected>=0&&selected<table_count){target=tables[selected].id;label=*tables[selected].label?tables[selected].label:tables[selected].id;}
@@ -3657,8 +3664,8 @@ static void workspace_enter(int page,int choice){
     switch(choice){case 0:ui_page=PAGE_RECORDER;break;
     case 1:log_browser_parent=page;refresh_log_files();ui_page=PAGE_LOG_BROWSER;selected=log_browser_selected;break;
     case 2:if(replay_count>0){ui_page=PAGE_REPLAY;replay_playing=false;}else {log_browser_parent=page;refresh_log_files();ui_page=PAGE_LOG_BROWSER;}break;
-    case 3:graph_return_page=page;ui_page=PAGE_GRAPH;break;
-    case 4:channels_return_page=page;ui_page=PAGE_CHANNELS;channel_cursor=0;channel_live_extend();break;}
+    /* Live graphs are under INI View, not duplicate Logging. */
+    /* Live channel inspector stays under View. */}
  }else if(page==PAGE_ANALYZE_HUB){
     if(replay_count<=0){
        log_browser_parent=page;refresh_log_files();ui_page=PAGE_LOG_BROWSER;
@@ -4625,6 +4632,7 @@ static void draw_tune_preview_bottom(void){
        char name[86];shorten(name,sizeof(name),m->label,33);
        text(34,y+2,.53f,focus?white:cream,name);
        if(m->group==1)text(297,y+3,.49f,focus?green:secondary,">");
+        else if(*m->target&&favorite_has(m->target))text(296,y+3,.44f,bright,"*");
     }
     if(total>rows){
        float track=(float)(rows*rowheight),thumb=fmaxf(12.0f,track*rows/(float)total);
@@ -4634,7 +4642,7 @@ static void draw_tune_preview_bottom(void){
  }
  rect(0,210,320,1,outline);
  text(8,217,.37f,tune_lower_focus?green:bright,
-      tune_lower_focus?"BOTTOM FOCUS / A OPEN / B UP":"TOP FOCUS / A SELECT BOTTOM");
+      tune_lower_focus?"A OPEN  Y STAR  X FAVOURITES":"A SELECT  X FAVOURITES");
 }
 /* An idle instrument must not repeat an instrument visible above it.
  * Compare ECU byte identities in addition to names: INI aliases may have
@@ -4969,7 +4977,8 @@ static void draw_list(void){
      ui_page==PAGE_VIEWS?"A OPEN  B BACK  SELECT BACK":
      ui_page==PAGE_TRACE_MAPS?"A TRACE MAP  B RETURN TO LOG":
      ui_page==PAGE_LOG_BROWSER?"A OPEN  Y DELETE  X REFRESH  B BACK":
-     "A OPEN  B BACK  C-STICK FAST SCROLL");
+     ui_page==PAGE_DETAIL?"A OPEN  Y STAR  B BACK":
+      "A OPEN  B BACK  C-STICK FAST SCROLL");
 }
 static void map_touch_button(float x,float y,float w,const char*label,bool active);
 static void draw_display(void){
@@ -6868,6 +6877,19 @@ static void handle_keys(u32 k){
  }
  if(ui_page==PAGE_TUNE_TREE){
    if(k&KEY_SELECT){ui_page=PAGE_HUB;selected=scroll_y=0;tune_reset_preview();return;}
+   if(k&KEY_X){
+      nav_capture();favorites_parent=PAGE_TUNE_TREE;
+      tune_from_tree=false;favorites_origin=false;search_origin=false;
+      ui_page=PAGE_FAVORITES;selected=scroll_y=0;return;
+   }
+   if(k&KEY_Y){
+      if(!tune_lower_focus){note("Focus a lower-screen setting first");return;}
+      int idx=tune_preview_index(tune_bucket,tune_open_group,tune_lower_selected);
+      if(idx>=0&&idx<menu_count&&menus[idx].group!=1&&*menus[idx].target)
+          favorite_toggle(menus[idx].target,menus[idx].label);
+      else note("Only INI settings can be starred");
+      return;
+   }
    if(!tune_lower_focus){
       int count=tune_visible_buckets();
       int prev=tune_bucket;
@@ -6895,6 +6917,7 @@ static void handle_keys(u32 k){
  }
  if(in_map_view()&&map_3d_view&&(k&(KEY_X|KEY_Y)))return;
  if(k&KEY_Y){if(ui_page==PAGE_VIEWS)return;if(ui_page==PAGE_CHOICES)return;
+  if(ui_page==PAGE_DETAIL){toggle_selected_favorite();return;}
  if(ui_page==PAGE_CATS||ui_page==PAGE_SEARCH){search_prompt();return;}
  if(ui_page==PAGE_MENU||ui_page==PAGE_GROUP||ui_page==PAGE_MAPS||ui_page==PAGE_FAVORITES){toggle_selected_favorite();return;}
  if(ui_page==PAGE_FIELD){if(staged)adjust_cell(1.0);else {pending_cal_field=open_field;cal_requested=true;note("Queued calibration refresh");}}else {ini_refresh=true;note("Queued INI refresh (SD cache retained)");}return;}
