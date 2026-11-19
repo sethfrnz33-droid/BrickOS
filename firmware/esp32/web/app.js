@@ -446,21 +446,22 @@ async function requestPing(){
  render();
 }
 async function resolveLiveIni(){
- if(!connected())return;
- const signature=S.ecuSignature;
- S.iniExpectedUrl=iniUrlForSignature(signature)||'';
- // Always reload from SPIFFS rather than trusting a prior browser tab's state.
- try{
-  const result=await fetch('/api/ini/file',{cache:'no-store'});
-  if(result.ok){const text=await result.text();const def=matchingIni(text,signature,parseIni);
-   if(S.definition?.signature!==def.signature)clearCalibrationSession();S.rawIni=text;S.definition=def;rebuildTs();GUIDE.attach(def,signature);S.signatureMismatch=false;
-   S.iniResolveState='Verified cached INI against live ECU';return;
+  if(!connected())return;
+  const signature=S.ecuSignature;
+  S.iniExpectedUrl=iniUrlForSignature(signature)||'';
+  // ECU SD -> ESP SPIFFS -> optional phone local cache. The file hash tracks
+  // change; a live ECU signature still gates access to calibration fields.
+  if(await loadCachedIni(false,signature)){
+    S.signatureMismatch=false;
+    S.iniResolveState='Matching ECU INI loaded from saved definition';
+    return;
   }
- }catch(e){S.iniResolveState='Cached INI rejected: '+e.message}
- // Never allow stale offsets or scaling to remain active after a firmware change.
- S.definition=null;S.rawIni='';S.tsStructure=null;GUIDE.reset(true);refreshGuideLinks();drawTsTree();S.latest=null;clearCalibrationSession();S.signatureMismatch=true;
- if(!S.iniExpectedUrl){S.iniResolveState='Custom ECU signature: matching INI must be supplied manually';return}
- S.iniResolveState='AP-only: download disabled. Import exact INI manually when needed.';
+  S.definition=null;S.rawIni='';S.iniRevision='';S.tsStructure=null;GUIDE.reset(true);
+  refreshGuideLinks();drawTsTree();S.latest=null;clearCalibrationSession();
+  S.signatureMismatch=true;
+  S.iniResolveState=S.iniExpectedUrl?
+    'Waiting for ECU SD INI import or manual definition':
+    'Custom ECU signature: matching INI must be provided';
 }
 async function getStatus(){if(S.working)return;try{
  const wasReady=S.status?.usb_device_ready===true;
