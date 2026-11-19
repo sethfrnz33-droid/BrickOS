@@ -38,7 +38,7 @@ Use your verified ESP32 programming COM port in place of the **example** `COM7`.
 - [Shared ESP/3DS/phone state contract and acceptance tests](docs/23-guided-tuning-protocol-and-acceptance.md)
 - [Earlier UX specification](docs/10-user-experience.md) and [calibration proposal / review transaction model](docs/18-transaction-and-review.md)
 
-Guided Tuning is a **separate, opt-in mode** designed to discover the active ECU/INI configuration, learn from valid telemetry, explain calibration dependencies, and make evidence-backed recommendations. It must never impede manual tuning or silently change ECU flash. The existing Python simulator under `prototype/` is not merged into the v4.8 ESP firmware; firmware capabilities should always be labeled by actual release.
+Guided Tuning is a **separate, opt-in mode** designed to discover the active ECU/INI configuration, learn from valid telemetry, explain calibration dependencies, and make evidence-backed recommendations. It must never impede manual tuning or silently change ECU flash. The phone-first **read-only Guided Tuning** browser workspace is now integrated under `firmware/esp32/web/`, with [implementation notes](firmware/esp32/README_GUIDED_PHONE_V1.md). It uses the existing ESP USB live sampler and runs its learning decisions in the phone browser; the ESP-resident autonomous controller and automatic ECU changes remain unimplemented. The existing Python simulator under `prototype/` remains independent.
 
 ## Source provenance
 
