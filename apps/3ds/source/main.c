@@ -488,11 +488,14 @@ static bool trace_found=false;
 /* The UI never waits for HTTP; worker holds the shared HTTP response until
  * the main thread consumes its result. LightLock protects task handoff. */
 enum {TASK_IDLE,TASK_STATUS,TASK_INI,TASK_LIVE,TASK_CAL,TASK_AXIS_X,TASK_AXIS_Y,TASK_WRITE,TASK_RPM_LIMIT,TASK_INI_FLAGS,
-      TASK_STIM_PREPARE,TASK_STIM_START,TASK_STIM_STOP,TASK_ERROR};
+      TASK_STIM_PREPARE,TASK_STIM_START,TASK_STIM_STOP,TASK_ERROR,TASK_COMMAND_INSPECT};
 static LightLock task_lock;
 static volatile int task_state=0; /* 0 free, 1 pending, 2 busy, 3 completed */
 static int task_type=TASK_IDLE,task_result=-1,task_page=0,task_offset=0,task_len=0,task_field=-1;
 static uint8_t task_calibration[EDIT_CAP];
+/* Metadata inspection only; no actuator commands or payload bytes. */
+static bool command_inspect_pending=false,command_inspect_defined=false,command_inspect_visible=false;
+static char command_inspect_name[64]="";
 static volatile bool worker_stop=false,worker_reconnect=false;
 static Thread worker=NULL;
 static bool ini_refresh=false,status_requested=true,cal_requested=false;
@@ -3956,7 +3959,15 @@ static void enter_selected(void){
         * /api/ts endpoint rejects all Z physical output test commands. */
        if(is_stim_action(&results[selected]))
            preview_stim_action(&results[selected]);
-       else note("ECU output test unavailable: BrickOS /api/ts rejects Z");
+       else if(!net_ok||!ecu_session||!ecu_signature[0]||
+               !menu_loaded||strcmp(ini_signature,ecu_signature))
+           note("Matching ECU/INI connection required for inspection");
+       else if(command_inspect_pending)note("INI command inspection already queued");
+       else{
+           copy_text(command_inspect_name,sizeof(command_inspect_name),results[selected].command);
+           command_inspect_pending=true;
+           note("Inspecting INI definition only; no hardware output");
+       }
      }
      else if(results[selected].type==4){open_ini_graph(results[selected].field,PAGE_DETAIL,selected);}
       else if(results[selected].type==6){note("INI description: read only");}
@@ -4356,7 +4367,7 @@ static void draw_tune_dialog_top(void){
        text(190,149,.46f,orange,"TUNERSTUDIO COMMAND");
        text(179,168,.36f,secondary,
           is_stim_action(r)?"Uses guarded trigger action":
-          "Bridge does not support this test");
+          "A INSPECT INI / NO ECU ACTUATION");
     }else if(r->type==6){
        text(178,144,.44f,secondary,"INI INFORMATION / READ ONLY");
     }else if(r->type==7){
@@ -5072,7 +5083,7 @@ static void draw_config_dialog_bottom(void){
            stim_stop_supported:stim_start_supported);
        round_panel(215,y+2,88,19,4,supported?muted_leaf:outline);
        text(222,y+5,.34f,supported?bright:orange,
-            supported?"COMMAND":"NO BRIDGE");
+            supported?"COMMAND":"INSPECT");
     }else if(item->type==6){
        text(268,y+5,.32f,secondary,"INFO");
     }else if(item->type==7){
@@ -7316,6 +7327,22 @@ static void net_thread(void *arg){
           stim_failure[0]=0;
           result=stim_http_action(type);
           if(result<0)snprintf(stim_failure,sizeof(stim_failure),"%.150s",ui_note);
+       }else if(type==TASK_COMMAND_INSPECT){
+           char path[128];
+           snprintf(path,sizeof(path),"/api/ts/inspect?name=%s",command_inspect_name);
+           result=get_request(path);
+           if(result>0&&last_http==200){
+               bool declared=false,visible=false,actuated=true;
+               char *body=http_body();
+               if(!body||!json_bool(body,"declared_in_ini",&declared)||
+                  !json_bool(body,"shown_as_button",&visible)||
+                  !json_bool(body,"ecu_command_sent",&actuated)||actuated)
+                   result=-1;
+               else{
+                   command_inspect_defined=declared;
+                   command_inspect_visible=visible;
+               }
+           }else result=-1;
        }else if(type==TASK_WRITE){
           perform_queued_write();result=write_verified?1:0;
        }else if(type==TASK_INI_FLAGS){
@@ -7410,6 +7437,13 @@ static void complete_task(void){
       ini_flags_requested=false;ini_flags_retry_at=now+10000;
    }
    break;
+ case TASK_COMMAND_INSPECT:
+   if(result>0){
+       note(command_inspect_defined&&command_inspect_visible?
+          "INI command validated; hardware NOT actuated":
+          "Command not defined or not shown by matching ECU INI");
+   }else note("Bridge command inspection unavailable; no ECU output sent");
+   break;
  case TASK_RPM_LIMIT:
    rpm_limit_known=result>0;
    rpm_limit_retry_at=now+(result>0?60000:15000);
@@ -7478,6 +7512,11 @@ static void run_scheduler(u64 now){
        write_queued=false;write_inflight=true;
        note("Bench burn in progress; checking authorization and ECU data");
     }
+    return;
+ }
+ if(command_inspect_pending){
+    if(task_submit(TASK_COMMAND_INSPECT,0,0,0,-1))
+       command_inspect_pending=false;
     return;
  }
  if(menu_loaded&&ecu_session&&*ecu_signature&&!strcmp(ini_signature,ecu_signature)&&
