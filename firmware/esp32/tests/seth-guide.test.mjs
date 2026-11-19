@@ -65,3 +65,28 @@ test('catalogue role mappings can be replaced with a new INI variant without new
  g.setRoleAliases({rpm:['newFirmwareRpmName']});assert.equal(g.roleAliases.rpm[0],'newFirmwareRpmName');
  assert.throws(()=>g.setRoleAliases({rpm:[null]}),/Invalid role alias/);
 });
+
+test('ten published conceptual stages form the default full-tour route',()=>{
+ assert.equal(catalog.tour_steps.length,10);
+ assert.deepEqual(catalog.tour_steps.map(s=>s.step),[1,2,3,4,5,6,7,8,9,10]);
+ const s=new GuideStory(catalog);s.bindDefinition('ECU-A');s.go('tour.start');
+ assert.equal(catalog.nodes['tour.start'].choices[0].go,catalog.tour_steps[0].node);
+ for(let i=0;i<10;i++){
+  const step=catalog.tour_steps[i];s.go(step.node);const packet=s.packet({engine,menuTree,ecuKey:'ECU-A'});
+  assert.equal(packet.tour_step,i+1);assert.equal(packet.tour_total,10);
+  assert.equal(packet.tour_title,step.title);assert.ok(packet.read_only);
+  if(i<9)assert.ok(catalog.nodes[step.node].choices.some(c=>c.go===catalog.tour_steps[i+1].node));
+  assert.match(renderSethStory(packet),new RegExp('STEP '+(i+1)+' / 10'));
+ }
+});
+test('quick help stays independent and the HPA tour adapts to INI evidence availability',()=>{
+ const s=new GuideStory(catalog);s.bindDefinition('ECU-A');s.go('tour.base_tables');
+ const p=s.packet({engine,menuTree,ecuKey:'ECU-A'});
+ assert.equal(p.tour_step,3);assert.ok(p.choices.some(c=>c.go==='manual.fuel'));
+ s.go('targeted');s.go('topics.idle');
+ assert.equal(s.packet({engine,menuTree,ecuKey:'ECU-A'}).tour_step,null);
+ s.go('tour.reference');const q=s.packet({engine,menuTree,ecuKey:'ECU-A'});
+ assert.equal(q.tour_step,4);assert.match(q.text,/external verification/);
+ const missing=s.packet({engine:{fields:{},report:()=>({fresh:false,values:{}})},ecuKey:'ECU-A'});
+ assert.equal(missing.tour_step,4);assert.equal(missing.manual_target,null);
+});
