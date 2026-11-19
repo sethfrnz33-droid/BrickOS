@@ -1,0 +1,4 @@
+--atlas -f rgba -z auto
+mascot/mouth.png
+mascot/head.png
+mascot/jaw.png
