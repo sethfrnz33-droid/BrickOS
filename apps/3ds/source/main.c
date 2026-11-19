@@ -4548,6 +4548,74 @@ static bool bts_result_curve(const Resolved *r){
       !strcasecmp(tables[i].z,field))return true;
  return false;
 }
+/* Draw actual calibration values returned by the USB ECU. Unread fields are
+ * always marked unavailable; a synthetic graph must never look like data. */
+static void draw_ini_spatial_plot(const Resolved *r,
+                                  float x,float y,float w,float h){
+ if(!r||r->field<0||r->field>=cal_count||w<16||h<18)return;
+ const Field *f=&cal[r->field];
+ const BtsPanelPreview *preview=NULL;
+ for(int k=0;k<BTS_PANEL_PREVIEW_COUNT;k++){
+    if(panel_previews[k].field==r->field){preview=&panel_previews[k];break;}
+ }
+ if(!preview||!preview->ready||preview->length!=f->bytes||
+    !f->validScale||f->kind!=K_ARRAY){
+     text(x+7,y+7,.35f,secondary,"READING ACTUAL ECU DATA");
+     return;
+ }
+ int nx=f->width,ny=f->height,cells=nx*ny;
+ if(nx<1||ny<1||cells>4096)return;
+ double minimum=INFINITY,maximum=-INFINITY;
+ for(int i=0;i<cells;i++){
+    double value=field_value(preview->bytes,preview->length,f,i);
+    if(!isfinite(value))continue;
+    if(value<minimum)minimum=value;
+    if(value>maximum)maximum=value;
+ }
+ if(!isfinite(minimum)||!isfinite(maximum)){
+     text(x+7,y+7,.37f,orange,"ECU VALUES UNAVAILABLE");
+     return;
+ }
+ float plot_x=x+7,plot_y=y+6,plot_w=w-14,plot_h=h-17;
+ bool curve=bts_result_curve(r);
+ if(curve){
+    if(cells==1){rect(plot_x,plot_y+plot_h*.5f,3,3,green);}
+    else {
+       double delta=maximum-minimum;
+       for(int px=0;px<(int)plot_w;px+=2){
+          double where=px*(cells-1)/(double)plot_w;
+          int left=(int)where;
+          if(left>=cells)left=cells-1;
+          int right=left+1<cells?left+1:left;
+          double a=field_value(preview->bytes,preview->length,f,left);
+          double b=field_value(preview->bytes,preview->length,f,right);
+          if(!isfinite(a)||!isfinite(b))continue;
+          double sample=a+(b-a)*(where-left);
+          float yy=(float)(delta>1e-9?(sample-minimum)/delta:0.5);
+          rect(plot_x+px,plot_y+plot_h-3-yy*(plot_h-4),2.5f,2.5f,green);
+       }
+    }
+ }else {
+    float cell_w=plot_w/nx,cell_h=plot_h/ny;
+    double delta=maximum-minimum;
+    for(int row=0;row<ny;row++)for(int col=0;col<nx;col++){
+       int idx=(ny-1-row)*nx+col;
+       double value=field_value(preview->bytes,preview->length,f,idx);
+       if(!isfinite(value))continue;
+       double fraction=delta>1e-9?(value-minimum)/delta:.5;
+       if(fraction<0)fraction=0;
+       if(fraction>1)fraction=1;
+       u32 color=C2D_Color32((u8)(34+183*fraction),
+                            (u8)(103+100*(1-fabs(2*fraction-1))),
+                            (u8)(159-111*fraction),255);
+       rect(plot_x+col*cell_w,plot_y+row*cell_h,
+            fmaxf(.6f,cell_w-.6f),fmaxf(.6f,cell_h-.6f),color);
+    }
+ }
+ char range[72];snprintf(range,sizeof(range),"%.1f to %.1f %s",
+                         minimum,maximum,f->unit);
+ text(plot_x,plot_y+plot_h+1,.30f,secondary,range);
+}
 static void draw_ini_spatial_zone(int region,float x,float y,float width,float height){
  int first=bts_first_in_region(region);if(first<0)return;
  bool active=bts_effective_region(selected)==region;
@@ -4593,8 +4661,13 @@ static void draw_ini_spatial_zone(int region,float x,float y,float width,float h
     cursor+=20;
     float bottom=y+height-8;
     round_panel(x+7,cursor,width-14,bottom-cursor,4,panel2);
-    text(x+14,cursor+6,.39f,bright,graph?"LIVE GRAPH":curve?"BLEND CURVE":"ECU TABLE");
-    text(x+14,cursor+29,.36f,secondary,"Select then A to open");
+    if(graph){
+       text(x+14,cursor+6,.39f,bright,"LIVE GRAPH");
+       text(x+14,cursor+27,.35f,secondary,"A OPENS CHANNEL GRAPH");
+    }else{
+       /* The plot is the INI's own map or curve, not a generic placeholder. */
+       draw_ini_spatial_plot(r,x+9,cursor+2,width-18,bottom-cursor-2);
+    }
  }else if(fields){
     int shown=0;
     for(int i=0;i<result_count&&shown<3;i++){
