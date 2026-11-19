@@ -1,6 +1,6 @@
 # Brick Tuner Suite — DSi edition
 
-**Current release: [v31 — grouped dual-screen INI View live data and trends](README_V31.md).**
+**Current release: [v34 — expanded INI input/output/text tuning support](README_V34.md).**
 
 This `DSi/` folder is a separate Nintendo DSi/DS build of Brick Tuner Suite. It coexists with the current **3DS** project: do **not** overwrite the root 3DS source, shared Makefile, or actively developed BrickOS ESP32 firmware.
 
@@ -38,3 +38,5 @@ For the Kevin Jonas high-RPM alert addition, see README_V32.md.
 
 
 For the clutch-switch LEGO audio cycle, see README_V33.md.
+
+For the v34 full-definition input/output bitfield, short text field, and readoutPanel integration, see [README_V34.md](README_V34.md).

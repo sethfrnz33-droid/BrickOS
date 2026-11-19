@@ -31,7 +31,10 @@ int main(int argc,char**argv){
     }
     const BtGauge*ref=bt_gauge(&d,"pedalPositionGauge");
     assert(ref&&ref->channel[0]);
-    assert(d.gauge_count>=380&&refs==67&&unresolved==0&&placed>90);
+    /* readoutPanel now resolves gauge-template readouts as additional read-only
+     * references: original 67 gauge directives remain, never removed. */
+    fprintf(stderr,"v34 gauge refs=%d placements=%d unresolved=%d templates=%d\n",refs,placed,unresolved,d.gauge_count);
+    assert(d.gauge_count>=380&&refs>=67&&unresolved==0&&placed>90);
     for(int i=0;i<d.ref_count;i++)if(!strcasecmp(d.refs[i].owner,"pedalSensor")&&d.refs[i].kind==1){
         if(!strcasecmp(d.refs[i].name,"pedalSensorLeft"))assert(!strcasecmp(d.refs[i].placement,"West"));
         if(!strcasecmp(d.refs[i].name,"pedalGauges"))assert(!strcasecmp(d.refs[i].placement,"East"));

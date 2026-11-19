@@ -55,15 +55,15 @@ static int positive_int(const char *s,int otherwise) {
     double x;return num(s,&x)&&x>=0&&x<=65535&&floor(x)==x?(int)x:otherwise;
 }
 int bt_type_size(BtType t) {
-    if(t==BT_U08||t==BT_S08)return 1;
+    if(t==BT_U08||t==BT_S08||t==BT_ASCII)return 1;
     if(t==BT_U16||t==BT_S16)return 2;
     if(t==BT_U32||t==BT_S32||t==BT_F32)return 4;
     if(t==BT_F64)return 8;
     return 0;
 }
 static BtType dtype(const char *s) {
-    static const char *names[]={"U08","S08","U16","S16","U32","S32","F32","F64"};
-    for(int i=0;i<8;++i)if(!strcasecmp(s,names[i]))return (BtType)i;
+    static const char *names[]={"U08","S08","U16","S16","U32","S32","F32","F64","ASCII"};
+    for(int i=0;i<9;++i)if(!strcasecmp(s,names[i]))return (BtType)i;
     return BT_UNKNOWN;
 }
 /* DSi DS-mode memory is scarce: allocate metadata only for entries actually in the INI.
@@ -89,24 +89,45 @@ static void parse_field(BtDefinition*d,const char *key,const char *value,bool ru
         if(d->constant_count>=BTS_MAX_CONSTANTS||!grow(d,(void**)&d->constants,&d->constant_capacity,d->constant_count+1,sizeof(BtField),BTS_MAX_CONSTANTS,32)){d->truncated=true;return;}
         f=&d->constants[d->constant_count];
     }
-    char cols[11][128];int n=csv(value,cols,11);
+    char cols[12][128];int n=csv(value,cols,12);
     if(n<3)return;
-    int kind=!strcasecmp(cols[0],"scalar")?0:!strcasecmp(cols[0],"array")?1:!strcasecmp(cols[0],"bits")?2:-1;
-    BtType type=dtype(cols[1]);int off=positive_int(cols[2],-1);
-    if(kind<0||type==BT_UNKNOWN||off<0)return;
+    int kind=!strcasecmp(cols[0],"scalar")?0:!strcasecmp(cols[0],"array")?1:
+             !strcasecmp(cols[0],"bits")?2:!strcasecmp(cols[0],"string")?3:-1;
+    BtType type=dtype(cols[1]);int at=2;
+    /* The supplied generated Proteus F7 INI contains several I2C
+     * definitions spelled `bits, U08, , 3864, [0:2], ...`.  The empty
+     * field has no semantics; only accept this known exact structural
+     * variant if the following token is an explicit byte offset and the
+     * next one is a valid bit range.  Never invent a missing address. */
+    if(kind==2&&n>=6&&cols[2][0]==0&&
+       cols[3][0]&&cols[4][0]=='[')at=3;
+    int off=at<n?positive_int(cols[at],-1):-1;
+    if(kind<0||type==BT_UNKNOWN||off<0||
+       (kind==3&&type!=BT_ASCII)||
+       (kind!=3&&type==BT_ASCII))return;
     memset(f,0,sizeof(*f));cp(f->name,sizeof(f->name),key);
     f->kind=kind;f->type=type;f->offset=off;f->page=runtime?0:d->current_page;
     f->width=f->height=1;
-    int p=3;
-    if(kind==1){int w=0,h=1;if(sscanf(cols[3],"[%dx%d]",&w,&h)!=2&&sscanf(cols[3],"[%d]",&w)!=1)w=0;
+    int p=at+1;
+    if(kind==1){int w=0,h=1;if(p>=n ||
+       (sscanf(cols[p],"[%dx%d]",&w,&h)!=2&&sscanf(cols[p],"[%d]",&w)!=1))w=0;
         if(w<1||h<1||w*h>2048)return;
-        f->width=w;f->height=h;p=4;
-    }else if(kind==2){p=4;int lo=-1,hi=-1;
-        if(sscanf(cols[3],"[%d:%d]",&lo,&hi)!=2){if(sscanf(cols[3],"[%d]",&lo)==1)hi=lo;}
+        f->width=w;f->height=h;p++;
+    }else if(kind==2){int lo=-1,hi=-1;
+        if(p>=n)return;
+        if(sscanf(cols[p],"[%d:%d]",&lo,&hi)!=2){if(sscanf(cols[p],"[%d]",&lo)==1)hi=lo;}
         f->bit_lo=lo;f->bit_hi=hi;f->scaled=lo>=0&&hi>=lo&&hi<bt_type_size(type)*8&&hi-lo<32;
         f->scale=1.0;
+        p++;
+    }else if(kind==3){
+        int bytes=p<n?positive_int(cols[p],-1):-1;
+        /* A normal 16/32-byte string is an addressable INI calibration;
+         * large Lua script blobs require a separate streaming editor. */
+        if(bytes<1||bytes>BTS_MAP_CELLS)return;
+        f->width=bytes;f->scale=1.0;f->scaled=true;
+        p++;
     }
-    if(kind!=2){
+    if(kind==0||kind==1){
         if(p<n)cp(f->unit,sizeof(f->unit),cols[p]);
         f->scaled=p+2<n&&num(cols[p+1],&f->scale)&&num(cols[p+2],&f->translate)&&f->scale!=0.0;
         if(p+4<n&&num(cols[p+3],&f->low)&&num(cols[p+4],&f->high)&&f->low<=f->high)f->limits_known=true;
@@ -224,6 +245,24 @@ static void line_parse(BtDefinition *d,char *line) {
              * An indicator has no writable calibration field. */
             char detail[120];snprintf(detail,sizeof(detail),"%.56s%.56s",a[1],a[2]);
             add_ref(d,d->current_dialog,p,a[2],8,detail,"");
+        }else if(!strcasecmp(key,"readoutPanel")&&n>0){
+            /* A readoutPanel begins an independent, referenced collection of
+             * live values, just like indicatorPanel; do not attach its readouts
+             * to the prior dialog and create fake numeric controls. */
+            cp(d->current_dialog,sizeof(d->current_dialog),a[0]);
+            d->last_graph=-1;
+        }else if(!strcasecmp(key,"readout")&&n>0&&*d->current_dialog){
+            const char *channel=a[0];
+            /* A readout can name a gauge template instead of an output field. */
+            bool is_gauge=false;
+            for(int gi=0;gi<d->gauge_count;gi++)
+                if(!strcasecmp(d->gauges[gi].name,channel)){is_gauge=true;break;}
+            add_ref(d,d->current_dialog,channel,n>1&&*a[1]?a[1]:channel,
+                    is_gauge?7:4,"","");
+        }else if(!strcasecmp(key,"settingSelector")&&n>0&&*d->current_dialog){
+            /* Presets apply several ECU fields; expose the definition but do
+             * not silently execute an unsafe partial multi-field commit. */
+            add_ref(d,d->current_dialog,"@preset",a[0],9,"",n>1?a[1]:"");
         }else if(!strcasecmp(key,"dialog")){
             cp(d->current_dialog,sizeof(d->current_dialog),n?a[0]:"");
             d->last_graph=-1;
@@ -250,8 +289,34 @@ static void line_parse(BtDefinition *d,char *line) {
             cp(line->channel,sizeof(line->channel),a[0]);line->graph=d->last_graph;
             d->graphs[d->last_graph].line_count++;
         }else if(!strcasecmp(key,"field")&&n>0){
-            if(n>=2&&*a[1]&&!ini_expression(a[1])&&!strchr(a[1],' '))
-                add_ref(d,d->current_dialog,a[1],a[0],0,n>4?a[4]:"",n>2?a[2]:"");
+            /* The supplied ETB SENT input declaration has a quoted label
+             * immediately followed by its identifier, without a comma.
+             * Recover it only if both tokens are explicit and unambiguous. */
+            const char *missing_comma=NULL;
+            char recovered_label[128]={0};
+            if(a[0][0]=='"'){
+                const char *end=strchr(a[0]+1,'"');
+                if(end){
+                    size_t len=(size_t)(end-(a[0]+1));
+                    const char *rest=trim((char *)(end+1));
+                    bool okay=len>0&&len<sizeof(recovered_label)&&*rest!=0;
+                    for(const char *q=rest;okay&&*q;q++)
+                        if(!isalnum((unsigned char)*q)&&*q!='_')okay=false;
+                    if(okay){
+                        memcpy(recovered_label,a[0]+1,len);recovered_label[len]=0;
+                        missing_comma=rest;
+                    }
+                }
+            }
+            if(missing_comma&&n>1&&(!strcmp(a[1],"1")||ini_expression(a[1]))){
+                const char *cond="";
+                for(int ci=1;ci<n;ci++)if(ini_expression(a[ci]))cond=a[ci];
+                add_ref(d,d->current_dialog,missing_comma,recovered_label,0,"",cond);
+            }else if(n>=2&&*a[1]&&!ini_expression(a[1])&&!strchr(a[1],' ')){
+                const char *cond="";
+                for(int ci=2;ci<n;ci++)if(ini_expression(a[ci]))cond=a[ci];
+                add_ref(d,d->current_dialog,a[1],a[0],0,n>4?a[4]:"",cond);
+            }
             else if(*a[0])add_ref(d,d->current_dialog,"@text",a[0],5,"",n>2?a[2]:"");
         }else if(!strcasecmp(key,"displayOnlyField")&&n>=2){
             add_ref(d,d->current_dialog,a[1],a[0],3,n>4?a[4]:"",n>2?a[2]:"");
@@ -440,7 +505,7 @@ bool bt_field_value(const BtDefinition *d,const BtField*f,const uint8_t*b,int n,
     else for(int i=size-1;i>=0;i--)u=(u<<8)|b[off+i];
     double raw=0;
     switch(f->type){
-        case BT_U08:case BT_U16:case BT_U32:raw=(double)u;break;
+        case BT_U08:case BT_U16:case BT_U32:case BT_ASCII:raw=(double)u;break;
         case BT_S08:raw=(int8_t)u;break;
         case BT_S16:raw=(int16_t)u;break;
         case BT_S32:raw=(int32_t)u;break;
@@ -529,7 +594,7 @@ bool bt_encode_value(const BtDefinition*d,const BtField*f,uint8_t*b,int len,int 
     }else{
         double mn=0,mx=0;
         switch(f->type){
-            case BT_U08:mx=255;break;case BT_S08:mn=-128;mx=127;break;
+            case BT_U08:mx=255;break;case BT_ASCII:mx=127;break;case BT_S08:mn=-128;mx=127;break;
             case BT_U16:mx=65535;break;case BT_S16:mn=-32768;mx=32767;break;
             case BT_U32:mx=4294967295.0;break;case BT_S32:mn=-2147483648.0;mx=2147483647.0;break;
             default:return false;
@@ -564,14 +629,25 @@ static bool find_ini_choices(FILE *f,const char *field){
         char *value=trim(eq+1);
         if(strncasecmp(value,"bits",4))break;
         int comma=0,quote=0,brackets=0;
+        bool empty_offset=false;
         for(char *q=value;*q;q++){
             if(*q=='"')quote=!quote;
             if(!quote){
                 if(*q=='[')brackets++;
                 if(*q==']'&&brackets)brackets--;
-                if(*q==','&&!brackets&&++comma==4){
-                    if(strlen(trim(q+1))>=sizeof(choice_spec))return false;
-                    cp(choice_spec,sizeof(choice_spec),trim(q+1));return true;
+                if(*q==','&&!brackets){
+                    comma++;
+                    if(comma==2){
+                        /* There are two commas around an explicit empty
+                         * offset token in some generated INI entries. */
+                        const char *start=q+1;
+                        while(*start&&isspace((unsigned char)*start))start++;
+                        empty_offset=*start==',';
+                    }
+                    if(comma==(empty_offset?5:4)){
+                        if(strlen(trim(q+1))>=sizeof(choice_spec))return false;
+                        cp(choice_spec,sizeof(choice_spec),trim(q+1));return true;
+                    }
                 }
             }
         }

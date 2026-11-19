@@ -286,7 +286,7 @@ static bool snapshot_arrays(FILE*f,BtDefinition*d,uint32_t *hash,bool write){
 bool bt_sd_snapshot_save(const BtDefinition*d){
     if(!ready||!d||!d->valid)return false;
     BtsSnapshotHeader head={0};
-    memcpy(head.magic,"BTSMD26",8);head.format=4;
+    memcpy(head.magic,"BTSMD34",8);head.format=5;
     if(!bts_raw_identity(&head.raw_size,&head.raw_crc))return false;
     head.field_size=sizeof(BtField);head.map_size=sizeof(BtMap);
     head.menu_size=sizeof(BtMenu);head.ref_size=sizeof(BtDialogRef);
@@ -328,7 +328,7 @@ bool bt_sd_snapshot_load(BtDefinition*d){
     FILE *f=fopen(path,"rb");if(!f)return false;
     BtsSnapshotHeader h={0};
     bool ok=fread(&h,1,sizeof(h),f)==sizeof(h);
-    if(ok)ok=memcmp(h.magic,"BTSMD26",8)==0&&h.format==4&&
+    if(ok)ok=memcmp(h.magic,"BTSMD34",8)==0&&h.format==5&&
         h.raw_size==raw_size&&h.raw_crc==raw_crc&&
         h.field_size==sizeof(BtField)&&h.map_size==sizeof(BtMap)&&
         h.menu_size==sizeof(BtMenu)&&h.ref_size==sizeof(BtDialogRef)&&

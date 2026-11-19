@@ -25,7 +25,7 @@ subprocess.run(['gcc','-std=gnu11','-Wall','-Wextra','-Werror','-O2','-Itests/st
 main=(root/'source/main.c').read_text()
 store=(root/'source/storage.c').read_text()
 parser=(root/'source/tuner.c').read_text()
-assert 'BTSMD26' in store and 'head.format=4' in store
+assert 'BTSMD34' in store and 'head.format=5' in store
 assert 'add_ref(d,d->current_dialog,a[0],a[0],1' in parser
 assert 'panel_layout_wrapper' in main and 'dialog_entry_find' in main
 assert 'gauge_only_panel' in main and 'rebuild_dialog_gauges' in main

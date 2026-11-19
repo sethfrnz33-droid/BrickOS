@@ -15,7 +15,7 @@
 #define BTS_LIVE_CAP 3072
 #define BTS_MAP_CELLS 2048
 
-typedef enum { BT_U08, BT_S08, BT_U16, BT_S16, BT_U32, BT_S32, BT_F32, BT_F64, BT_UNKNOWN } BtType;
+typedef enum { BT_U08, BT_S08, BT_U16, BT_S16, BT_U32, BT_S32, BT_F32, BT_F64, BT_ASCII, BT_UNKNOWN } BtType;
 typedef struct {
     char name[64], unit[26];
     int page, offset, width, height, bit_lo, bit_hi, kind;
@@ -36,7 +36,7 @@ typedef struct {
 typedef struct {
     char owner[64], name[64], label[72], detail[120], condition[80];
     char placement[8]; /* TunerStudio North/South/East/West/Center; layout, not a field */
-    int kind; /* 0 field, 1 panel, 2 command button, 3 read-only field, 4 runtime, 5 text/help, 6 liveGraph, 7 gauge, 8 status indicator */
+    int kind; /* 0 field, 1 panel, 2 command, 3 read-only, 4 runtime, 5 label, 6 graph, 7 gauge, 8 indicator, 9 settingSelector */
 } BtDialogRef;
 typedef struct {
     char name[64], channel[64], label[72], unit[40];

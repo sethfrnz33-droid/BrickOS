@@ -310,8 +310,8 @@ static int step_index=1;
 static bool abandon_confirm=false;
 static bool keypad_open=false;
 static char keypad_input[24]="";
-/* Dynamic INI GPIO/input/output dropdowns routinely contain 100+ entries. */
-#define BTS_DSI_CHOICE_CAP 256
+/* INI enum ID domains may be 9-bit (512 slots); retain reserved holes. */
+#define BTS_DSI_CHOICE_CAP 512
 static int bit_choice_count=0;
 static char bit_choice_labels[BTS_DSI_CHOICE_CAP][36];
 /* A filtered *display index* into the exact INI enum IDs. The raw ECU
@@ -324,6 +324,10 @@ static void filter_bit_choices(void){
 }
 static bool bit_picker_open=false;
 static int bit_picker_pick=0,bit_picker_scroll=0;
+static bool ascii_lowercase=false;
+static const char *const ascii_rows[4]={
+    "ABCDEFGHIJ","KLMNOPQRST","UVWXYZ0123","456789.-_/"
+};
 static const char *keypad_keys[16]={
     "7","8","9","DEL", "4","5","6","CLR",
     "1","2","3","SIGN", ".","0","OK","BACK"
@@ -892,6 +896,28 @@ static void map_top(void){
         return;
     }
     const BtMap*m=selected_map();if(!m)return;
+    if(chosen_map==BTS_MAX_MAPS && active_field_present[0]&&active_fields[0].kind==3){
+        tiny_fit(top,11,33,m->label,HIGHLIGHT,230);
+        tiny_text(top,11,55,"INI ASCII STRING / FIXED BYTE LENGTH",CYAN,236);
+        char line[48];snprintf(line,sizeof(line),"CHARACTER %d OF %d",cx+1,table.width);
+        tiny_text(top,11,75,line,WHITE,232);
+        round_fill(top,7,92,242,48,5,PANEL);
+        char value[64];int k=0;
+        /* Visible preview wraps in two rows, independent of byte capacity. */
+        for(int j=0;j<table.width && j<40;j++){
+            int c=(int)table.cells[j];
+            if(!c)break;
+            value[k++]=c>=32&&c<=126?(char)c:'?';
+        }
+        value[k]=0;
+        if(!k)snprintf(value,sizeof(value),"(EMPTY)");
+        tiny_fit(top,13,101,value,WHITE,230);
+        snprintf(line,sizeof(line),"CURSOR [%d] = %d",cx+1,(int)table.cells[cx]);
+        tiny_text(top,13,121,line,HIGHLIGHT,230);
+        tiny_text(top,11,149,table.dirty?"STAGED STRING CHANGES":"CURRENT ECU STRING",table.dirty?HIGHLIGHT:GREEN,230);
+        tiny_fit(top,11,177,editor_readonly?"READ ONLY":"TOUCH KEYBOARD / START TO CONFIRM BURN",MUTED,240);
+        return;
+    }
     map_live_trace(m);
     tiny_fit(top,11,33,m->label,HIGHLIGHT,m->curve?182:236);
     if(chosen_map==BTS_MAX_MAPS && table.width==1 && table.height==1){
@@ -1145,7 +1171,8 @@ static int dialog_count(void){return dialog_visible_total;}
 static bool dialog_selectable(int row){
     if(row<0||row>=dialog_visible_total)return false;
     int at=dialog_visible_ids[row];
-    return def.refs[at].kind!=5&&def.refs[at].kind!=8&&def.refs[at].kind!=2;
+    return def.refs[at].kind!=5&&def.refs[at].kind!=8&&
+           def.refs[at].kind!=2&&def.refs[at].kind!=9;
 }
 static void dialog_advance(int direction){
     int row=dialog_pick+direction;
@@ -1238,7 +1265,7 @@ static void dialog_action(void){
     if(r->kind==2){
         snprintf(note,sizeof(note),"COMMAND BUTTON UNAVAILABLE: %.55s",r->label);return;
     }
-    if(r->kind==5||r->kind==8)return; /* Labels/indicators are not controls. */
+    if(r->kind==5||r->kind==8||r->kind==9)return; /* Non-editable metadata */
     if(r->kind==4){
         double v=0;
         if(get_value(r->name,&v)){
@@ -1791,6 +1818,20 @@ static void bottom_bit_picker(void){
     }
     tiny_text(bottom,8,181,"A SELECT    B CANCEL",MUTED,242);
 }
+/* Short INI ASCII fields use the normal protected read/stage/verify path.
+ * Never try to write a 48 KB Lua script as a tiny scalar. */
+static void bottom_ascii_editor(void){
+    tiny_fit(bottom,10,23,"ASCII FIELD / TOUCH KEY TO REPLACE",HIGHLIGHT,234);
+    for(int row=0;row<4;row++)for(int col=0;col<10;col++){
+        int x=7+col*24,y=42+row*29;
+        round_fill(bottom,x,y,22,24,3,PANEL);
+        char letter[2]={ascii_rows[row][col],0};
+        if(ascii_lowercase&&letter[0]>='A'&&letter[0]<='Z')letter[0]=(char)(letter[0]+32);
+        text(bottom,x+6,y+5,letter,editor_readonly?MUTED:WHITE,2);
+    }
+    tiny_fit(bottom,6,161,"L/R CURSOR  Y CASE  X DELETE",CYAN,245);
+    tiny_fit(bottom,6,180,"SELECT SPACE  START BURN  B BACK",MUTED,245);
+}
 static void bottom_tune(void){
     if(bt_write_busy()){bottom_write_progress();return;}
     if(cal_load.active){
@@ -1813,6 +1854,7 @@ static void bottom_tune(void){
     }
     if(chosen_map>=0&&table.valid){
         if(table.confirm_burn)bottom_burn_confirm();
+        else if(active_field_present[0] && active_fields[0].kind==3)bottom_ascii_editor();
         else bottom_editor();
         return;
     }
@@ -1825,12 +1867,13 @@ static void bottom_tune(void){
             int ix=dialog_scroll+row,at=dialog_at(ix),y=36+row*18;
             if(at<0)continue;
             const BtDialogRef *r=&def.refs[at];
-            bool noncontrol=r->kind==5||r->kind==8;
+            bool noncontrol=r->kind==5||r->kind==8||r->kind==9;
             bool action=r->kind==2;
             bool sel=ix==dialog_pick&&!noncontrol;
             if(sel)round_fill(bottom,6,y,244,16,3,PANEL);
-            if(noncontrol&&r->kind==5){
-                tiny_fit(bottom,12,y+4,r->label,MUTED,225);
+            if(noncontrol&&(r->kind==5||r->kind==9)){
+                tiny_fit(bottom,12,y+4,r->label,MUTED,r->kind==9?172:225);
+                if(r->kind==9)tiny_text(bottom,191,y+4,"PRESET",CYAN,50);
                 continue;
             }
             if(r->kind==8){
@@ -1849,8 +1892,16 @@ static void bottom_tune(void){
                 tiny_text(bottom,211,y+4,"CMD",RED,30);
                 continue;
             }
-            menu_text(bottom,12,y+1,r->label,sel?HIGHLIGHT:WHITE,207);
-            if(is_favorite(r->name))text(bottom,228,y+3,"*",HIGHLIGHT,2);
+            menu_text(bottom,12,y+1,r->label,sel?HIGHLIGHT:WHITE,185);
+            /* The INI declares the control type. A pin/output/input selector
+             * is visibly different from a scalar, text field, or folder. */
+            const BtField *item=bt_field(&def,r->name,false);
+            if(item){
+                const char *tag=item->kind==2?"SEL":item->kind==3?"TXT":
+                                item->kind==1?"ARR":"VAL";
+                tiny_text(bottom,204,y+4,tag,CYAN,28);
+            }
+            if(is_favorite(r->name))text(bottom,233,y+3,"*",HIGHLIGHT,2);
             if(r->kind==6)text(bottom,241,y+4,"G",CYAN,1);
             if(r->kind==1)text(bottom,241,y+4,">",CYAN,1);
         }
@@ -2450,7 +2501,7 @@ static void open_map(int id){
     map_surface_3d=false; /* Open flat 2D grid; 3D surface is optional. */
     cal_load.active=true;cal_load.stage=-3;cal_load.total=0;cal_load.map_id=id;
     snprintf(status_msg,sizeof(status_msg),"READING ECU CALIBRATION");
-    snprintf(note,sizeof(note),"READING %s FROM ECU",m->label);
+    snprintf(note,sizeof(note),"READING %.72s FROM ECU",m->label);
 }
 static const BtField *cal_stage_field(void){
     if(!selected_map())return NULL;
@@ -2996,8 +3047,40 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
             return;
         }
         if(editor_help_visible){if(down&KEY_B)editor_help_visible=false;return;}
-        if((down&KEY_TOUCH)&&tp->py>=148&&tp->py<174&&editor_description[0]){
+        if((down&KEY_TOUCH)&&tp->py>=148&&tp->py<174&&editor_description[0]&&
+           !(active_field_present[0]&&active_fields[0].kind==3)){
             editor_help_visible=true;return;
+        }
+        if(active_field_present[0]&&active_fields[0].kind==3){
+            if(down&KEY_START){commit_map();return;}
+            if(down&KEY_L&&cx>0)cx--;
+            if(down&KEY_R&&cx+1<table.width)cx++;
+            if(down&KEY_Y)ascii_lowercase=!ascii_lowercase;
+            if(down&KEY_X)(void)set_map_cell(0);
+            if(down&KEY_SELECT)(void)set_map_cell(' ');
+            if(down&(KEY_UP|KEY_DOWN)){
+                int c=(int)table.cells[cx];
+                if(c<32||c>126)c=32;
+                else c=(down&KEY_UP)?(c==126?32:c+1):(c==32?126:c-1);
+                (void)set_map_cell(c);
+            }
+            if(down&KEY_A&&cx+1<table.width)cx++;
+            if((down&KEY_TOUCH)&&tp&&tp->px>=7&&tp->px<247&&
+               tp->py>=42&&tp->py<158){
+                int col=(tp->px-7)/24,row=(tp->py-42)/29;
+                if(row>=0&&row<4&&col>=0&&col<10){
+                    char c=ascii_rows[row][col];
+                    if(ascii_lowercase&&c>='A'&&c<='Z')c=(char)(c+32);
+                    if(set_map_cell((unsigned char)c)&&cx+1<table.width)cx++;
+                }
+            }
+            if(down&KEY_B){
+                if(any_map_dirty()&&!abandon_confirm){abandon_confirm=true;
+                    snprintf(note,sizeof(note),"B AGAIN TO DISCARD UNSAVED TEXT");return;}
+                chosen_map=-1;table.valid=false;note[0]=0;abandon_confirm=false;
+                if(favorite_return){goto_page(P_FAV);return;}
+            }
+            return;
         }
         bool orbit=map_surface_3d&&((held|down)&KEY_L);
         if(orbit){
