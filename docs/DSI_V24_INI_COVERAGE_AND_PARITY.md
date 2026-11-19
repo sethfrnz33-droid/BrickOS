@@ -1,26 +1,23 @@
-# DSi INI integration — v24 validation (2026-11-19)
+# DSi INI integration — v25 status and parity gates (2026-11-19)
 
-Scope: **apps/dsi only**. Do not modify apps/3ds or firmware/esp32 for the DSi tuning integration.
+Scope: **apps/dsi only**. Do not modify `apps/3ds` or `firmware/esp32` as part of the DSi editor project.
 
-## Confirmed against uploaded Proteus F7 INI
-- Parser valid: yes; truncation: no; OOM: no.
-- 1,945 constants; 1,081 live output channels; 195 map and curve definitions.
-- 338 menu nodes; 3,500 dialog references; 103 INI live graph definitions; 341 graph lines; 5 pages.
-- Host tests pass for 200-choice macro-backed enums with reserved holes, nested macros, contextual help, read-only axes, and protected ECU writes.
+## Deployment
+- **v25 DSi source is now committed to main:** [cb4f92aa](https://github.com/sethfrnz33-droid/BrickOS/commit/cb4f92aa91ca744db451a9089e0e661a1ae879f0).
+- The commit changes 10 files, all under `apps/dsi`. No 3DS or ESP32 files were changed in this commit.
+- Full DSi release notes: [apps/dsi/README_V25.md](../apps/dsi/README_V25.md). Keep this document synchronized with future DSi releases.
 
-## DSi v24 changes staged locally (not yet synchronized to GitHub source)
-- Remove redundant ECU Maps and Live Graphs home entries; View remains the INI-driven live visualization path.
-- Add SD-backed Favorites to quickly open INI-defined settings.
-- Expand INI-backed bitfield dropdown handling to 256 choices.
-- Preserve read-only/power-cycle metadata and contextual description text.
-- Maintain protected ECU calibration writes.
+## INI coverage / host-verified
+- Full Proteus F7 definition parsed without reported truncation: 1,945 constants; 1,081 live output channels; 195 map/curve definitions with **222 series** after preserving repeated curve yBins; 338 menu nodes; 103 graph definitions; 5 config pages.
+- 200-entry macro-backed enums, reserved holes, nested macros, contextual help, virtual axes with defaultValue, simple computed channels, and safety checks have regression coverage.
+- V25 includes colored maps with X/Y labels, removal of fake folder title fields, denser lower-screen layout, paginated View graph lines, INI help, and START-as-Favorite instead of exit. Calibration burn remains R twice.
 
-## Parity acceptance criteria (NOT YET VERIFIED ON HARDWARE)
-1. Every INI TableEditor and CurveEditor entry opens and supports accurate axes/values where writable.
-2. Every [UserDefined] panel, field, button, and nested panel reflects its INI definition.
-3. Every [OutputChannels] reading referenced by View can be displayed and refreshed from live ECU data.
-4. All enum definitions, conditional visibility, units/scaling, help text, and related INI semantics are honored, including expressions and special values.
-5. No silent fallback to guessed controls, unsupported editing, or truncated option lists.
-6. End-to-end DSi hardware tests verify round-trip calibration writes and live data display.
+## Not established (do not claim 3DS or TunerStudio parity yet)
+1. Every INI TableEditor / CurveEditor entry displays correct axes, units, colors and writable values on real DSi hardware.
+2. All [UserDefined] panels, conditional controls, buttons, nested dialogs and enum choices obey the definition, including expressions not yet supported.
+3. All [OutputChannels] signals referenced by View have verified live transport updates and correct numerical decoding.
+4. Trace positions follow actual live X/Y channels on the associated maps/curves, including complex expressions.
+5. Complex derived expressions, virtual fields without explicit defaults, and TunerStudio-only commands are handled appropriately without pretending to modify ECU memory.
+6. End-to-end .nds build plus DSi hardware tests cover map editing, burn/readback, live View, offline cache and navigation.
 
-Source ZIP is produced in the current working environment. **Do not regard this document as a source-code deployment.** No 3DS code was modified.
+**Host tests do not demonstrate hardware correctness or full TunerStudio feature parity.**
