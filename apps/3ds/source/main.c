@@ -4010,7 +4010,6 @@ static void shorten(char*dst,int cap,const char*src,int max);
 static const char* home_tile_name(int i);
 /* Clean full-screen live digital instrument panel. No ornamental meshes can
  * cover the readings: on all non-graph/map pages the top always shows gauges. */
-static float home_ease(float v){return v*v*(3.0f-2.0f*v);}
 static void home_digit(int slot,float x,float y,float w,float h,bool focused){
  (void)focused; /* Gauges display measurements; RPM is not a selected menu. */
  BTSCardBody *body=&bts_card_world.card[slot%BTS_CARD_COUNT];
@@ -5856,7 +5855,8 @@ static void draw_curve_deck(void){
  char step[68];snprintf(step,sizeof(step),"FOCUS: %s   STEP %.3g  |  %s",map_focus==1?"X BREAKPOINT":"Y OUTPUT",steps[step_index],staged?"EDIT":"VIEW");
  text(10,67,.34f,secondary,step);
  int first=cell-2;if(first<0)first=0;
- if(first+5>n)first=n-5;if(first<0)first=0;
+ if(first+5>n)first=n-5;
+           if(first<0)first=0;
  for(int i=first;i<n&&i<first+5;i++){
    float y=82+(i-first)*18;
    round_panel(7,y,306,17,3,i==cell?muted_leaf:panel);
@@ -6052,7 +6052,7 @@ static void draw_quality_deck(void){
  text(17,89,.45f,cream,line);
  snprintf(line,sizeof(line),"Unavailable samples: %u",q->missing);
  text(17,111,.45f,q->missing?orange:green,line);
- snprintf(line,sizeof(line),"Largest time gap: %u ms",q->maximum_observed_gap_ms);
+ snprintf(line,sizeof(line),"Largest time gap: %lu ms",(unsigned long)q->maximum_observed_gap_ms);
  text(17,133,.45f,cream,line);
  snprintf(line,sizeof(line),"Long intervals: %u   Repeated times: %u",q->long_gaps,q->repeated_timestamps);
  text(17,155,.42f,cream,line);
@@ -6265,7 +6265,8 @@ static void draw_replay_deck(void){
  text(9,68,.43f,cream,timing);
  rect(9,92,302,12,outline);
  float progress=last>first?(float)(replay_time_ms-first)/(float)(last-first):1.f;
- if(progress<0)progress=0;if(progress>1)progress=1;
+ if(progress<0)progress=0;
+  if(progress>1)progress=1;
  rect(9,92,302*progress,12,blue);
  for(int i=0;i<replay_mark_count;i++){
     float pos=last>first?(float)(replay_marks[i]-first)/(float)(last-first):0;
@@ -6544,7 +6545,8 @@ static void touch_input(void){touchPosition tp;hidTouchRead(&tp);
  if(ui_page==PAGE_LOG_BROWSER&&tp.py>=206){log_delete_request(selected);return;}
  if(tp.py<28){
     if(fault_active&&tp.px>265){fault_open_page();return;}
-    if(tp.px<40)back();return;
+    if(tp.px<40)back();
+     return;
  }
  if(ui_page==PAGE_SOUND_TEST){
     if(tp.py>=66 && tp.py<210){
@@ -6623,7 +6625,8 @@ static void touch_input(void){touchPosition tp;hidTouchRead(&tp);
     if(current_table>=0&&tables[current_table].curve){
        if(tp.py>=82&&tp.py<172){int n=cal[open_field].width*cal[open_field].height;
           int first=cell-2;if(first<0)first=0;
-          if(first+5>n)first=n-5;if(first<0)first=0;
+          if(first+5>n)first=n-5;
+           if(first<0)first=0;
           int hit=first+(tp.py-82)/18;if(hit>=0&&hit<n)cell=hit;
        }else if(tp.py>=176&&tp.py<205){
           if(tp.px<107){if(editor_loaded){if(staged)numeric_edit_prompt();else if(cal[open_field].readOnly)note("Read-only INI curve; view only");
@@ -6726,7 +6729,8 @@ static void touch_input(void){touchPosition tp;hidTouchRead(&tp);
  if(total>LIST_ROWS&&tp.px>=305&&tp.py>=LIST_ROW_Y&&tp.py<LIST_ROW_Y+LIST_ROWS*LIST_ROW_H){
     int last=total-LIST_ROWS;
     scroll_y=(int)(((float)(tp.py-LIST_ROW_Y)/(float)(LIST_ROWS*LIST_ROW_H))*last+.5f);
-    if(scroll_y<0)scroll_y=0;if(scroll_y>last)scroll_y=last;
+    if(scroll_y<0)scroll_y=0;
+     if(scroll_y>last)scroll_y=last;
     selected=scroll_y;return;
  }
  if(total&&tp.py>=LIST_ROW_Y&&tp.py<LIST_ROW_Y+LIST_ROWS*LIST_ROW_H){
@@ -7062,7 +7066,8 @@ static void handle_keys(u32 k){
  if(k&(KEY_DDOWN|KEY_CPAD_DOWN))move_cell(0,1);
  if(k&(KEY_DLEFT|KEY_CPAD_LEFT))move_cell(-1,0);
  if(k&(KEY_DRIGHT|KEY_CPAD_RIGHT))move_cell(1,0);
- if(k&KEY_L)step_index=(step_index+TUNE_STEP_COUNT-1)%TUNE_STEP_COUNT;if(k&KEY_R)step_index=(step_index+1)%TUNE_STEP_COUNT;
+ if(k&KEY_L)step_index=(step_index+TUNE_STEP_COUNT-1)%TUNE_STEP_COUNT;
+  if(k&KEY_R)step_index=(step_index+1)%TUNE_STEP_COUNT;
  if(k&KEY_A){
      if(confirm_write)request_burn();
      else if(cal[open_field].width*cal[open_field].height>1){
