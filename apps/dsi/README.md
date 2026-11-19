@@ -1,6 +1,6 @@
 # Brick Tuner Suite — DSi edition
 
-**Current release: [v30 — true flat 2D curves and top-down tables, with optional 3D surfaces](README_V30.md).**
+**Current release: [v31 — grouped dual-screen INI View live data and trends](README_V31.md).**
 
 This `DSi/` folder is a separate Nintendo DSi/DS build of Brick Tuner Suite. It coexists with the current **3DS** project: do **not** overwrite the root 3DS source, shared Makefile, or actively developed BrickOS ESP32 firmware.
 
@@ -30,3 +30,5 @@ For v28 larger tuning font, accelerated nested folder navigation, and real DSi s
 For v29 table link, Favorites, live indicator and noninteractive label/button UI fixes, see [README_V29.md](README_V29.md).
 
 For v30 strict flat 2D curve plots, default top-down table views, and explicit 3D toggling, see [README_V30.md](README_V30.md).
+
+For v31 combined live View panels, grouping, trends, and status indicators, see [README_V31.md](README_V31.md).

@@ -1,8 +1,8 @@
-/* Brick Tuner Suite DSi v2.8
+/* Brick Tuner Suite DSi v3.1
  * Native two-screen UI, sourced from the original 3DS v62 INI/BrickOS contract.
  * A DSi cannot use v62's Citro3D GPU API, but v28 adds a software 3D
  * shaded surface renderer for actual INI Z tables and retains a recognizable
- * dashboard / TunerStudio category tree / live channels / map and graph workflow.
+ * dashboard / TunerStudio category tree / grouped dual-screen INI View monitors.
  * INI-driven map edits are staged locally; protected writes use the same
  * verified v62 BrickOS bench-only transaction. 3DS files are untouched.
  */
@@ -139,6 +139,27 @@ static bool view_from_tree=false;
 static int active_ini_graph=-1, active_ini_graph_line=0;
 static char graph_from_dialog[64]="", graph_from_label[76]="";
 static bool graph_from_ini=false;
+/* v31: View menu entries are complete multi-graph INI dialogs, NOT folders
+ * full of unrelated buttons labelled 'Graph'. Each page displays four
+ * grouped sets of live readings over BOTH DSi screens (2 + 2). */
+#define BTS_MONITOR_PER_PAGE 4
+#define BTS_MONITOR_MAX_LINES (BTS_MONITOR_PER_PAGE*5)
+#define BTS_MONITOR_MAX_INDICATORS 350
+static char monitor_owner[64]="",monitor_label[76]="";
+static int monitor_graph_ids[BTS_MAX_INI_GRAPHS],monitor_graph_total=0;
+static int monitor_indicator_ids[BTS_MONITOR_MAX_INDICATORS],monitor_indicator_total=0;
+static int monitor_page=0,monitor_line_total=0;
+static char monitor_line_names[BTS_MONITOR_MAX_LINES][64];
+static char monitor_line_formulas[BTS_MONITOR_MAX_LINES][256];
+static bool monitor_line_formula_valid[BTS_MONITOR_MAX_LINES];
+#define BTS_MONITOR_HISTORY 40
+static float monitor_samples[BTS_MONITOR_MAX_LINES][BTS_MONITOR_HISTORY];
+static unsigned char monitor_sample_ok[BTS_MONITOR_MAX_LINES][BTS_MONITOR_HISTORY];
+static int monitor_sample_cursor=0,monitor_sample_count=0;
+static bool monitor_trends=false;
+static bool monitor_from_favorite=false;
+static int monitor_return_cat=0,monitor_return_group=-1,monitor_return_pick=0,
+           monitor_return_scroll=0,monitor_return_focus=1;
 static const BtMap* selected_map(void);
 static void load_favorites(void);
 static void toggle_favorite(const char *target,const char *label);
@@ -293,8 +314,8 @@ static const char *keypad_keys[16]={
     "1","2","3","SIGN", ".","0","OK","BACK"
 };
 
-enum {P_HOME,P_TUNE,P_LIVE,P_GRAPH,P_SOUNDS,P_LINK,P_FAV,P_COUNT};
-static const char *tabs[P_COUNT]={"HOME","TUNE","VIEW","GRAPH","SOUNDS","LINK","FAV"};
+enum {P_HOME,P_TUNE,P_LIVE,P_GRAPH,P_SOUNDS,P_LINK,P_FAV,P_MONITOR,P_COUNT};
+static const char *tabs[P_COUNT]={"HOME","TUNE","VIEW","GRAPH","SOUNDS","LINK","FAV","LIVE VIEW"};
 /* The graph and realtime channel screens live only behind the INI View menu. */
 static const int home_pages[4]={P_TUNE,P_FAV,P_SOUNDS,P_LINK};
 static const int home_icons[4]={5,8,6,7};
@@ -476,6 +497,11 @@ static bool get_value(const char*name,double*value){
     for(int i=0;i<8;i++)if(graph_list_valid[i]&&
        !strcasecmp(name,graph_list_names[i]))
         return bt_numeric_eval(graph_list_formulas[i],computed_value_lookup,NULL,value);
+    if(page==P_MONITOR){
+        for(int i=0;i<monitor_line_total;i++)
+            if(monitor_line_formula_valid[i]&&!strcasecmp(name,monitor_line_names[i]))
+                return bt_numeric_eval(monitor_line_formulas[i],computed_value_lookup,NULL,value);
+    }
     for(int i=0;i<2;i++){
         const BtMap*m=selected_map();
         const char *axis=m?(i==0?m->xchan:m->ychan):NULL;
@@ -1302,6 +1328,154 @@ static void top_tune(void){
         }
     }
 }
+/* v31: these four cards are the native [UserDefined] liveGraph groups.
+ * The INI gives each group a generic title of "Graph", but the channel
+ * membership and grouping are meaningful; draw that grouping directly. */
+static int monitor_graph_pages(void){
+    return (monitor_graph_total+BTS_MONITOR_PER_PAGE-1)/BTS_MONITOR_PER_PAGE;
+}
+static int monitor_status_pages(void){
+    return (monitor_indicator_total+15)/16;
+}
+static int monitor_page_total(void){
+    return monitor_graph_pages()+monitor_status_pages();
+}
+static bool monitor_status_mode(void){return monitor_page>=monitor_graph_pages();}
+static void monitor_card(uint16_t *screen,int graph_no,int y){
+    if(graph_no>=monitor_graph_total)return;
+    const BtIniGraph *g=&def.graphs[monitor_graph_ids[graph_no]];
+    round_fill(screen,5,y,246,75,5,PANEL);
+    fill(screen,6,y+2,3,71,CYAN);
+    char heading[44];
+    if(g->title[0]&&strcasecmp(g->title,"Graph"))
+        snprintf(heading,sizeof(heading),"%.38s",g->title);
+    else snprintf(heading,sizeof(heading),"DATA GROUP %d / %d",graph_no+1,monitor_graph_total);
+    tiny_fit(screen,13,y+4,heading,HIGHLIGHT,227);
+    for(int n=0;n<g->line_count&&n<5;n++){
+        int line_id=g->first_line+n;
+        if(line_id<0||line_id>=def.graph_line_count)continue;
+        const char *name=def.graph_lines[line_id].channel;
+        int row_y=y+16+n*11;
+        /* Show EVERY graphLine together; none of the channels is a sub-menu. */
+        tiny_fit(screen,13,row_y,name,WHITE,174);
+        double value=0;
+        if(get_value(name,&value)){
+            char b[28];number(value,b,sizeof(b));
+            tiny_fit(screen,188,row_y,b,GREEN,58);
+        }else tiny_text(screen,197,row_y,"--",MUTED,25);
+    }
+}
+static int monitor_line_slot(const char *name){
+    for(int i=0;i<monitor_line_total;i++)
+        if(!strcasecmp(name,monitor_line_names[i]))return i;
+    return -1;
+}
+static void monitor_trend_card(uint16_t *screen,int graph_no,int y){
+    if(graph_no>=monitor_graph_total)return;
+    const BtIniGraph *g=&def.graphs[monitor_graph_ids[graph_no]];
+    round_fill(screen,5,y,246,75,5,PANEL);
+    fill(screen,6,y+2,3,71,CYAN);
+    char heading[44];
+    snprintf(heading,sizeof(heading),"GROUP %d/%d",graph_no+1,monitor_graph_total);
+    tiny_fit(screen,13,y+4,heading,HIGHLIGHT,228);
+    /* Each line is normalized independently to show its trend without
+     * implying that differently-scaled units share a common Y axis. */
+    fill(screen,13,y+19,170,1,EDGE);
+    fill(screen,13,y+45,170,1,EDGE);
+    fill(screen,13,y+66,170,1,EDGE);
+    const uint16_t series_colors[]={GREEN,CYAN,HIGHLIGHT,WHITE,RED};
+    for(int line=0;line<g->line_count&&line<5;line++){
+        const char*name=def.graph_lines[g->first_line+line].channel;
+        int slot=monitor_line_slot(name);
+        if(slot<0)continue;
+        uint16_t color=series_colors[line];
+        int last_x=0,last_y=0;bool last_valid=false;
+        float mi=1e30f,ma=-1e30f;
+        for(int j=0;j<monitor_sample_count;j++){
+            int index=(monitor_sample_cursor-monitor_sample_count+j+BTS_MONITOR_HISTORY)%BTS_MONITOR_HISTORY;
+            if(!monitor_sample_ok[slot][index])continue;
+            float v=monitor_samples[slot][index];
+            if(v<mi)mi=v;
+            if(v>ma)ma=v;
+        }
+        for(int j=0;j<monitor_sample_count;j++){
+            int index=(monitor_sample_cursor-monitor_sample_count+j+BTS_MONITOR_HISTORY)%BTS_MONITOR_HISTORY;
+            if(!monitor_sample_ok[slot][index]){last_valid=false;continue;}
+            float v=monitor_samples[slot][index];
+            float span=ma-mi;if(span<0.0001f)span=1.0f;
+            float fraction=(v-mi)/span;
+            int xp=13+j*169/(BTS_MONITOR_HISTORY-1);
+            int yp=y+65-(int)(fraction*44.f);
+            if(last_valid)ln(screen,last_x,last_y,xp,yp,color);
+            last_x=xp;last_y=yp;last_valid=true;
+        }
+        /* The right legend identifies every INI graphLine by its ordinal,
+         * and shows the live value while the adjacent trend plots it. */
+        char value[22],legend[28];double latest=0;
+        if(get_value(name,&latest))number(latest,value,sizeof(value));
+        else snprintf(value,sizeof(value),"--");
+        snprintf(legend,sizeof(legend),"%d %.12s",line+1,value);
+        fill(screen,189,y+20+line*10,3,8,color);
+        tiny_fit(screen,195,y+20+line*10,legend,color,53);
+    }
+    if(monitor_sample_count<2)tiny_fit(screen,22,y+42,"WAITING FOR LIVE DATA",MUTED,155);
+}
+static void monitor_collect_sample(void){
+    if(page!=P_MONITOR||monitor_status_mode())return;
+    for(int i=0;i<monitor_line_total;i++){
+        double v=0;
+        bool ok=get_value(monitor_line_names[i],&v)&&isfinite(v);
+        monitor_sample_ok[i][monitor_sample_cursor]=ok;
+        if(ok)monitor_samples[i][monitor_sample_cursor]=(float)v;
+    }
+    monitor_sample_cursor=(monitor_sample_cursor+1)%BTS_MONITOR_HISTORY;
+    if(monitor_sample_count<BTS_MONITOR_HISTORY)monitor_sample_count++;
+}
+static void monitor_status_screen(uint16_t *screen,int screen_no){
+    int first=(monitor_page-monitor_graph_pages())*16+screen_no*8;
+    round_fill(screen,5,26,246,153,5,PANEL);
+    tiny_fit(screen,12,30,screen_no?"STATUS / CONTINUED":"INI STATUS INDICATORS",HIGHLIGHT,234);
+    for(int row=0;row<8&&first+row<monitor_indicator_total;row++){
+        int ref=monitor_indicator_ids[first+row];
+        const BtDialogRef*r=&def.refs[ref];
+        double state=0;
+        bool valid=indicator_live_value(r->name,&state);
+        int y=48+row*16;
+        tiny_fit(screen,12,y,r->name,WHITE,174);
+        tiny_fit(screen,195,y,!valid?"--":state?"ON":"OFF",
+                 !valid?MUTED:state?GREEN:RED,50);
+    }
+}
+static void top_monitor(void){
+    draw_header(monitor_label);
+    if(monitor_status_mode()){
+        monitor_status_screen(top,0);
+    }else{
+        if(monitor_trends){
+            monitor_trend_card(top,monitor_page*BTS_MONITOR_PER_PAGE,28);
+            monitor_trend_card(top,monitor_page*BTS_MONITOR_PER_PAGE+1,107);
+        }else{
+            monitor_card(top,monitor_page*BTS_MONITOR_PER_PAGE,28);
+            monitor_card(top,monitor_page*BTS_MONITOR_PER_PAGE+1,107);
+        }
+    }
+}
+static void bottom_monitor(void){
+    if(monitor_status_mode())monitor_status_screen(bottom,1);
+    else{
+        if(monitor_trends){
+            monitor_trend_card(bottom,monitor_page*BTS_MONITOR_PER_PAGE+2,27);
+            monitor_trend_card(bottom,monitor_page*BTS_MONITOR_PER_PAGE+3,105);
+        }else{
+            monitor_card(bottom,monitor_page*BTS_MONITOR_PER_PAGE+2,27);
+            monitor_card(bottom,monitor_page*BTS_MONITOR_PER_PAGE+3,105);
+        }
+    }
+    int total=monitor_page_total();
+    char footer[72];
+    snprintf(footer,sizeof(footer),"X: %s  L/R PAGE %d/%d B:BACK",monitor_trends?"VALUES":"TRENDS",monitor_page+1,total?total:1);
+    tiny_fit(bottom,8,182,footer,CYAN,238);
+}
 static void top_graph(void){
     draw_header(graph_stats?"LIVE STATISTICS":"LIVE GRAPH");
     int slot=active_slot;const char*name=channel_names[slot];
@@ -1722,6 +1896,7 @@ static void render(void){
     else if(page==P_TUNE)top_tune();
     else if(page==P_LIVE)top_channels();
     else if(page==P_GRAPH)top_graph();
+    else if(page==P_MONITOR)top_monitor();
     else if(page==P_SOUNDS)top_sounds();
     else if(page==P_FAV && (cal_load.active||(chosen_map>=0&&table.valid)))map_top();
     else if(page==P_FAV){
@@ -1739,6 +1914,7 @@ static void render(void){
     else if(page==P_TUNE)bottom_tune();
     else if(page==P_LIVE)list_rows(def.channel_count);
     else if(page==P_GRAPH)bottom_graph();
+    else if(page==P_MONITOR)bottom_monitor();
     else if(page==P_SOUNDS)bottom_sounds();
     else if(page==P_FAV){if(cal_load.active||(chosen_map>=0&&table.valid)||keypad_open)bottom_tune();else bottom_favorites();}
     else bottom_link();
@@ -1771,6 +1947,7 @@ static void sample_hist(void){
         }
     }
     history_at=(history_at+1)%HISTORY;
+    monitor_collect_sample();
 }
 static void update_wifi(void){
     assoc_state=wifi_initialized?Wifi_AssocStatus():ASSOCSTATUS_DISCONNECTED;
@@ -1932,6 +2109,28 @@ static int live_length(void){
             length=expression_live_length(graph_formula[i],length);
         for(int i=0;i<8;i++)if(graph_list_valid[i])
             length=expression_live_length(graph_list_formulas[i],length);
+    }
+    if(page==P_MONITOR){
+        /* Subscribe enough bytes for every visible graphLine and its derived
+         * expression dependencies, not just the first two channels. */
+        for(int i=0;i<monitor_line_total;i++){
+            const BtField*f=bt_field(&def,monitor_line_names[i],true);
+            if(f&&f->scaled){
+                int end=f->offset+bt_type_size(f->type);
+                if(end>length&&end<=BTS_LIVE_CAP)length=end;
+            }else if(monitor_line_formula_valid[i])
+                length=expression_live_length(monitor_line_formulas[i],length);
+        }
+        if(monitor_status_mode()){
+            int from=(monitor_page-monitor_graph_pages())*16;
+            for(int i=from;i<from+16&&i<monitor_indicator_total;i++){
+                const BtField*f=bt_field(&def,def.refs[monitor_indicator_ids[i]].name,true);
+                if(f&&f->scaled){
+                    int end=f->offset+bt_type_size(f->type);
+                    if(end>length&&end<=BTS_LIVE_CAP)length=end;
+                }
+            }
+        }
     }
     /* TunerStudio dialog reference gauges require live bytes even when
      * the user has not selected those channels in the generic View tab. */
@@ -2504,8 +2703,79 @@ static bool is_ini_view_target(const char *target,const char *label){
            !strcasecmp(target,"std_runtime")||
            !strcasecmp(target,"std_liveGraph");
 }
+static void monitor_refresh_page(void){
+    monitor_line_total=0;
+    monitor_sample_cursor=monitor_sample_count=0;
+    memset(monitor_sample_ok,0,sizeof(monitor_sample_ok));
+    memset(monitor_line_formula_valid,0,sizeof(monitor_line_formula_valid));
+    if(monitor_status_mode())return;
+    int first=monitor_page*BTS_MONITOR_PER_PAGE;
+    for(int group=first;group<first+BTS_MONITOR_PER_PAGE&&group<monitor_graph_total;group++){
+        const BtIniGraph*g=&def.graphs[monitor_graph_ids[group]];
+        for(int i=0;i<g->line_count&&monitor_line_total<BTS_MONITOR_MAX_LINES;i++){
+            int line=g->first_line+i;
+            if(line<0||line>=def.graph_line_count)continue;
+            const char *name=def.graph_lines[line].channel;
+            int slot=monitor_line_total++;
+            snprintf(monitor_line_names[slot],sizeof(monitor_line_names[slot]),"%s",name);
+            if(sd_ready&&!bt_field(&def,name,true))
+                monitor_line_formula_valid[slot]=bt_ini_rhs(bt_sd_cache_path(),
+                    "OutputChannels",name,monitor_line_formulas[slot],
+                    sizeof(monitor_line_formulas[slot]));
+        }
+    }
+}
+static void monitor_collect_indicators(const char*owner,int depth){
+    if(depth>=5||monitor_indicator_total>=BTS_MONITOR_MAX_INDICATORS)return;
+    for(int i=owner_first(owner);i>=0;i=ref_chain[i]){
+        const BtDialogRef*r=&def.refs[i];
+        if(strcasecmp(r->owner,owner))continue;
+        if(r->kind==8){
+            if(monitor_indicator_total<BTS_MONITOR_MAX_INDICATORS)
+                monitor_indicator_ids[monitor_indicator_total++]=i;
+        }else if(r->kind==1&&strcasecmp(r->name,owner)){
+            monitor_collect_indicators(r->name,depth+1);
+        }
+    }
+}
+static bool monitor_has_target(const char *target){
+    for(int i=0;i<def.graph_count;i++)
+        if(!strcasecmp(def.graphs[i].owner,target))return true;
+    for(int i=owner_first(target);i>=0;i=ref_chain[i]){
+        const BtDialogRef*r=&def.refs[i];
+        if(!strcasecmp(r->owner,target)&&r->kind==1){
+            for(int j=owner_first(r->name);j>=0;j=ref_chain[j])
+                if(!strcasecmp(def.refs[j].owner,r->name)&&def.refs[j].kind==8)return true;
+        }
+    }
+    return false;
+}
+static void open_monitor(const char *target,const char *label){
+    int saved_cat=tune_cat,saved_group=tune_group,saved_pick=list_pick,
+        saved_scroll=list_scroll,saved_focus=tune_focus;
+    bool from_fav=favorite_return;
+    goto_page(P_MONITOR);
+    snprintf(monitor_owner,sizeof(monitor_owner),"%s",target);
+    snprintf(monitor_label,sizeof(monitor_label),"%s",label&&*label?label:target);
+    monitor_graph_total=monitor_indicator_total=monitor_page=0;
+    monitor_trends=false;
+    for(int i=0;i<def.graph_count&&monitor_graph_total<BTS_MAX_INI_GRAPHS;i++)
+        if(!strcasecmp(def.graphs[i].owner,target))monitor_graph_ids[monitor_graph_total++]=i;
+    monitor_collect_indicators(target,0);
+    monitor_from_favorite=from_fav;
+    monitor_return_cat=saved_cat;monitor_return_group=saved_group;
+    monitor_return_pick=saved_pick;monitor_return_scroll=saved_scroll;
+    monitor_return_focus=saved_focus;
+    monitor_refresh_page();
+    view_from_tree=true;
+}
 static void open_target(const char *target,const char *label,bool from_view){
     if(!target||!*target)return;
+    /* View links point to a complete read-only dashboard. Open all of its
+     * liveGraph groups together; never build a submenu of "Graph" buttons. */
+    if(from_view&&monitor_has_target(target)){
+        open_monitor(target,label);return;
+    }
     int map=map_for_target(target);
     if(map>=0){editor_readonly=false;open_map(map);return;}
     for(int i=owner_first(target);i>=0;i=ref_chain[i])
@@ -2788,6 +3058,26 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
                 if(sd_ready)(void)bt_sd_gauges_save((const char (*)[64])channel_names);
             }
         }
+    }else if(page==P_MONITOR){
+        if(down&KEY_X)monitor_trends=!monitor_trends;
+        if(down&KEY_B){
+            if(monitor_from_favorite){goto_page(P_FAV);return;}
+            goto_page(P_TUNE);
+            tune_cat=monitor_return_cat;tune_group=monitor_return_group;
+            tune_focus=monitor_return_focus;
+            list_pick=monitor_return_pick;list_scroll=monitor_return_scroll;
+            return;
+        }
+        int next=monitor_page;
+        int total=monitor_page_total();
+        if((down&(KEY_RIGHT|KEY_R|KEY_DOWN))&&next+1<total)next++;
+        if((down&(KEY_LEFT|KEY_L|KEY_UP))&&next>0)next--;
+        if((down&KEY_TOUCH)&&tp&&tp->py>=178){
+            if(tp->px>=128&&next+1<total)next++;
+            else if(tp->px<128&&next>0)next--;
+        }
+        if(next!=monitor_page){monitor_page=next;monitor_refresh_page();}
+        return;
     }else if(page==P_GRAPH){
         if(down&KEY_B){
             if(graph_from_ini && graph_from_dialog[0]){
