@@ -40,3 +40,9 @@ idf.py -p YOUR_PORT flash monitor
 ```
 
 Host tests are not ESP-IDF cross compilation or physical engine validation. Flash only onto a correctly configured ESP32-S3 board, not the ECU MCU. Check the correct partition sizes before shipping media-inclusive firmware.
+
+## Full Tour update — catalogue v1.1.0
+
+Seth's default Full Tour now follows the ten-stage sequence published in HP Academy's public Practical Standalone Tuning course outline, with explicit base-table discovery and physical-reference verification before the starting and idle chapters. This is a **read-only dialogue workflow**, not an operating procedure or ECU calibration algorithm. Quick Help, INI Atlas, the original manual editor, and existing DS network protocols remain unchanged.
+
+The canonical versioned dialogue is `web/guide-catalog.json`; every fixed response is documented in `docs/24-seth-complete-dialogue.md`, and the stage ordering plus future DS packet fields in `docs/27-hpa-master-tour.md`. Run `python tools/generate_web_assets.py` after changing source assets, or let the existing ESP-IDF configure step regenerate them. Hardware validation remains outstanding.
