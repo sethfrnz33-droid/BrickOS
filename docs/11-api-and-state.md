@@ -1,6 +1,8 @@
 # ESP authority and proposed device protocol
 
-## Existing baseline routes (observed in v4.12 documentation)
+> **Namespace/source correction (2026-11-19):** The `Existing baseline routes` section below documents **legacy v4.12 reference routes**, not verified routes on the unified repository's current ESP `main`. The active ESP serves `/api/status`, `/api/live`, `/api/ts`, and `/api/guide/v1/catalog`, among other legacy browser endpoints. The `guided/v1` namespace is only proposed. Do not build a new client around `/api/autotune/*` until it is implemented, release-versioned, and tested on this repository. See [current audit](35-full-system-gap-audit.md).
+
+## Historical v4.12 reference routes (NOT confirmed in current main)
 
 - `/api/autotune/status`, `/api/autotune/table`, `/api/autotune/config`
 - `/api/autotune/prepare`, `/api/autotune/start`, `/api/autotune/heartbeat`, `/api/autotune/stop`
