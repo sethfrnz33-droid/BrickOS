@@ -73,7 +73,7 @@
     "table_editor_entries": 116,
     "submenus": 218,
     "command_buttons": 124,
-    "sections": 23,
+    "sections": 24,
     "flags": "Parsed values are an inventory of declared entries, not enabled runtime features."
   },
   "primary_calibration": {
@@ -659,13 +659,13 @@
   "special_logger_definitions": [
     {
       "kind": "composite",
-      "line": 3224,
+      "line": 3223,
       "record_bytes": 8,
       "declared": true
     },
     {
       "kind": "tooth",
-      "line": 3284,
+      "line": 3282,
       "record_bytes": 8,
       "declared": true
     },
