@@ -12,6 +12,8 @@ assets = {
     'css': 'app.css',
     'js': 'app.js',
     'core': 'core.mjs',
+    'guided': 'guided.mjs',
+    'guided_ui': 'guided-ui.mjs',
 }
 header = root / 'main' / 'web_assets.h'
 source = root / 'main' / 'web_assets.c'
@@ -37,4 +39,4 @@ for name, file_name in assets.items():
 
 header.write_text(header_text, encoding='utf-8')
 source.write_text(source_text, encoding='utf-8')
-print('Generated web_assets.c from four web files:', source.stat().st_size, 'bytes')
+print('Generated web_assets.c from web files:', source.stat().st_size, 'bytes')

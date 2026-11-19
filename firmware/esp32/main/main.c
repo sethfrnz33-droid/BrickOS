@@ -144,6 +144,8 @@ static esp_err_t homepage(httpd_req_t *r){return asset(r,"text/html; charset=utf
 static esp_err_t csspage(httpd_req_t *r){return asset(r,"text/css; charset=utf-8",brick_asset_css,brick_asset_css_len);}
 static esp_err_t jspage(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_js,brick_asset_js_len);}
 static esp_err_t corepage(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_core,brick_asset_core_len);}
+static esp_err_t guidedpage(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guided,brick_asset_guided_len);}
+static esp_err_t guideduipage(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guided_ui,brick_asset_guided_ui_len);}
 static cJSON *read_request_json(httpd_req_t *r){
     if(r->content_len<1 || r->content_len>MAX_BODY)return NULL;
     char *s=calloc((size_t)r->content_len+1,1);if(!s)return NULL;
@@ -833,7 +835,7 @@ static void wifi_start(void){
     ESP_LOGI(TAG,"AP READY: SSID=brick, OPEN (no password), http://192.168.4.1/");
 }
 static void http_start(void){
-    httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=16384;cfg.max_uri_handlers=30;
+    httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=16384;cfg.max_uri_handlers=34;
     cfg.lru_purge_enable=true; cfg.recv_wait_timeout=8;cfg.send_wait_timeout=15;
     httpd_handle_t server=NULL;ESP_ERROR_CHECK(httpd_start(&server,&cfg));
     const httpd_uri_t routes[]={
@@ -841,6 +843,8 @@ static void http_start(void){
       {.uri="/app.css",.method=HTTP_GET,.handler=csspage},
       {.uri="/app.js",.method=HTTP_GET,.handler=jspage},
       {.uri="/core.mjs",.method=HTTP_GET,.handler=corepage},
+      {.uri="/guided.mjs",.method=HTTP_GET,.handler=guidedpage},
+      {.uri="/guided-ui.mjs",.method=HTTP_GET,.handler=guideduipage},
       {.uri="/api/status",.method=HTTP_GET,.handler=status_get},
       {.uri="/api/ts",.method=HTTP_POST,.handler=ts_post},
       {.uri="/api/live",.method=HTTP_GET,.handler=live_get},

@@ -9,3 +9,21 @@ idf_component_get_property(tusb_lib espressif__tinyusb COMPONENT_LIB)
 if(tusb_lib)
     target_include_directories(${tusb_lib} PUBLIC "${CMAKE_CURRENT_LIST_DIR}")
 endif()
+
+# Keep embedded web assets synchronized even when developers run idf.py build
+# directly without invoking the standalone generator first.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_LIST_DIR}/../web/index.html"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/app.css"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/app.js"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/core.mjs"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/guided.mjs"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/guided-ui.mjs")
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/../tools/generate_web_assets.py"
+  RESULT_VARIABLE guide_asset_result
+)
+if(NOT guide_asset_result EQUAL 0)
+  message(FATAL_ERROR "BrickOS embedded browser asset generation failed")
+endif()

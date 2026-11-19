@@ -1,4 +1,6 @@
 import {tunerStructure,iniUrlForSignature,matchingIni,parseIni,hex,unhex,le16,pageId,readArgs,outputArgs,writeArgs,burnArgs,getValue,putValue,relative,readBLog,TYPES,makePatch,validatePatch,decodeLiveFrame,calibrationWritePlan,crc32} from './core.mjs';
+import {GuidedAnalyzer,guideRequiredBytes} from './guided.mjs';
+import {renderGuide} from './guided-ui.mjs';
 
 const $=x=>document.querySelector(x);
 const escapeHTML=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -6,6 +8,7 @@ const cleanLabel=x=>String(x).replace(/([a-z])([A-Z])/g,'$1 $2').replace(/_/g,' 
 // Presentation names only. All data comes from the original INI field addresses.
 const channelTitle=n=>({RPMValue:'Engine RPM',MAPValue:'Manifold Pressure',TPSValue:'Throttle Position',coolant:'Coolant Temperature',intake:'Intake Temperature',VBatt:'Battery Voltage',lambdaValue:'Measured Lambda',AFRValue:'Measured AFR',vehicleSpeedKph:'Vehicle Speed'}[n]||cleanLabel(n));
 const format=x=>x===null||!Number.isFinite(x)?'—':(Math.abs(x)<20 && x!==Math.round(x)?x.toFixed(2):x.toFixed(Math.abs(x)>999?0:1));
+const GUIDE = new GuidedAnalyzer();
 const S={route:'overview',status:null,ecuSignature:'',connected:false,definition:null,rawIni:'',
         latest:null,latestMs:0,liveBusy:false,liveHz:20,liveMode:'fast',selectedChannel:'rpm',liveSeq:0,liveRttMs:0,liveFallback:false,liveFailureCount:0,liveRxCount:0,liveWindowMs:0,liveDisplayHz:0,liveThroughput:0,liveDurationMs:0,scopeChannels:['rpm','map','tps'],
         search:'',tableSearch:'',tsSelected:'',tsOpen:{},tsStructure:null,settingsCategory:'All',tableCategory:'All',editor:null,field:null,selectStart:0,selection:[0],
@@ -54,6 +57,7 @@ S.dashboardLayout=['split','gauges','scope'].includes(PREF.layout)?PREF.layout:'
 S.scopeNames=Array.isArray(PREF.scope)?PREF.scope.filter(x=>typeof x==='string').slice(0,3):[];
 S.tuneFavorites=Array.isArray(PREF.favorites)?PREF.favorites.filter(x=>typeof x==='string').slice(0,24):[];
 S.tuneRecent=Array.isArray(PREF.recent)?PREF.recent.filter(x=>typeof x==='string').slice(0,12):[];
+S.guideTab='next';S.guideSearch='';S.guideLastRender=0;S.guideMenuLinks={};
 S.tuneCategory='';S.tuneSearch='';S.tuneBrowserOpen=true;S.gaugeEdit=null;S.commandOpen=false;S.commandSearch='';
 function savePrefs(){try{localStorage.setItem(PREF_KEY,JSON.stringify({gauges:S.gaugeSlots,layout:S.dashboardLayout,scope:S.scopeNames,favorites:S.tuneFavorites,recent:S.tuneRecent}))}catch{toast('Device preference storage unavailable; layout may not persist',true)}}
 function navHighlight(){document.querySelectorAll('#nav [data-route]').forEach(b=>b.classList.toggle('active',b.dataset.route===(['tables','settings','tuner'].includes(S.route)?'tuning':S.route)))}
@@ -69,7 +73,7 @@ function hasDef(){return !!S.definition}
 function safeSignature(){return S.ecuSignature && S.definition && S.definition.signature && S.ecuSignature===S.definition.signature}
 function connected(){return S.connected && !!S.ecuSignature}
 
-function rebuildTs(){S.tsStructure=S.rawIni?tunerStructure(S.rawIni):null;drawTsTree()}
+function rebuildTs(){S.tsStructure=S.rawIni?tunerStructure(S.rawIni):null;refreshGuideLinks();drawTsTree()}
 function menuItems(cat){return cat.entries.flatMap(e=>e.kind==='item'?[e.value]:e.value.items)}
 function tuneCategoryDefault(){const cats=S.tsStructure?.categories||[];return cats.find(c=>/fuel/i.test(c.name))?.name||cats[0]?.name||''}
 function tuneItemRow(item,section){return `<div class="tune-result ${S.tsSelected===item.id?'selected':''}"><button class="tune-result-main" data-ts-item="${escapeHTML(item.id)}"><span class="result-icon">${/table|map|ve|spark|ignit|lambda/i.test(item.label)?'▦':'◫'}</span><span class="result-text"><strong>${escapeHTML(item.label)}</strong><small>${escapeHTML(item.group||section)}</small></span><span class="result-arrow">›</span></button><button class="tune-star ${S.tuneFavorites.includes(item.id)?'on':''}" data-tune-star="${escapeHTML(item.id)}" aria-label="${S.tuneFavorites.includes(item.id)?'Remove favorite':'Add favorite'}">${S.tuneFavorites.includes(item.id)?'★':'☆'}</button></div>`}
@@ -92,9 +96,9 @@ function drawTsTree(){
  root.innerHTML=top.join('')+`<div class="tune-list-label">${query?'SEARCH RESULTS':escapeHTML(S.tuneCategory)} <span>${entries.length}</span></div>`+
    (entries.length?entries.map(({item,section})=>tuneItemRow(item,section)).join(''):'<div class="tune-empty">No matching firmware menus. Try another system or search.</div>');
 }
-function chooseTsItem(id){if(!S.tsStructure?.itemById.has(id)||!confirmLeaveEditor())return;S.commandOpen=false;S.tsSelected=id;S.route='tuning';S.editor=null;S.field=null;S.tuneBrowserOpen=false;
+function chooseTsItem(id){if(!S.tsStructure?.itemById.has(id)||!confirmLeaveEditor())return;if(GUIDE.mode==='learn')GUIDE.setMode('paused');S.commandOpen=false;S.tsSelected=id;S.route='tuning';S.editor=null;S.field=null;S.tuneBrowserOpen=false;
  S.tuneRecent=[id,...S.tuneRecent.filter(x=>x!==id)].slice(0,12);savePrefs();render();window.scrollTo(0,0)}
-function commandResults(){const q=S.commandSearch.trim().toLowerCase();const routes=[['overview','Dashboard'],['tuning','Tuning library'],['gauges','Gauge studio'],['tables','All maps'],['settings','All parameters'],['logs','Logging and files'],['system','ECU diagnostics']];
+function commandResults(){const q=S.commandSearch.trim().toLowerCase();const routes=[['overview','Dashboard'],['guided','Guided Calibration'],['tuning','Tuning library'],['gauges','Gauge studio'],['tables','All maps'],['settings','All parameters'],['logs','Logging and files'],['system','ECU diagnostics']];
  const routeMatches=routes.filter(([key,label])=>!q||label.toLowerCase().includes(q)).map(([key,label])=>`<button data-command-route="${key}" class="command-result"><span>⌗</span><strong>${escapeHTML(label)}</strong><small>APP</small></button>`);
  const ts=S.tsStructure?.categories.flatMap(cat=>menuItems(cat).map(item=>({cat:cat.name,item})))||[];
  const items=ts.filter(({cat,item})=>!q?S.tuneFavorites.includes(item.id):(`${cat} ${item.label} ${item.id}`).toLowerCase().includes(q)).slice(0,50);
@@ -127,7 +131,7 @@ function markHeader(){
  if(hasDef()&&!S.tsStructure)rebuildTs();navHighlight();
  const tuneButton=$('#nav [data-route="tuning"]');if(tuneButton){const pending=staged().length;tuneButton.classList.toggle('has-staged',pending>0);tuneButton.dataset.pending=String(pending);tuneButton.title=pending?`${pending} unsaved tuning changes — Burn to save`:'ECU tuning';}
 }
-function navTo(route){if(!confirmLeaveEditor())return false;S.commandOpen=false;S.route=route;S.search='';S.editor=null;S.field=null;
+function navTo(route){if(!confirmLeaveEditor())return false;if(S.route==='guided'&&route!=='guided'&&GUIDE.mode==='learn')GUIDE.setMode('paused');S.commandOpen=false;S.route=route;S.search='';S.editor=null;S.field=null;
  if(route==='tuning'){S.tuneBrowserOpen=true;}else if(route!=='tables'&&route!=='settings')S.tsSelected='';
  render();window.scrollTo({top:0,behavior:'instant'});return true;
 }
@@ -323,7 +327,16 @@ function system(){const z=S.status;return pageHeader('06','Connection & diagnost
  <div class="rule"></div><p class="tiny">AP-only test build: internet downloads and STA mode are disabled. Import an INI from your phone if needed; USB detection does not require an INI.</p></div>
  <div class="section-label">USB CONNECTION</div><div class="panel"><h2>Connect Big Brick over USB</h2><div class="steps spaced"><div>Connect the STM32 USB device interface to the ESP32-S3 USB host interface using the same USB wiring as your proven working3wayhub firmware. USB host VBUS must be powered appropriately.</div><div>BrickOS speaks the rusEFI TunerStudio protocol directly to STM32 over USB; no TCP bridge or desktop TunerStudio connection is required.</div><div>Join the open <code>brick</code> Wi-Fi network and open <code>http://192.168.4.1/</code>.</div><div>BrickOS now attempts read-only ECU SD access over the STM32 USB Mass Storage interface (LUN1), if exposed by the installed firmware. Place a plain generated <code>rusefi.ini</code> on the card; it imports only when its signature matches the connected ECU. The ESP32 SPIFFS stores the verified copy. Existing USB CDC tuning remains active.</div></div></div>`;
 }
-function render(){const views={overview,gauges,tables,settings:allSettings,logs,system,tuning,tuner};page.innerHTML=(views[S.route]||overview)()+(S.commandOpen?commandPalette():'');markHeader();if(S.route==='tuning')drawTsTree();if(S.viewer)drawLogChart();drawTuneChart();if(S.route==='overview')drawLiveScope();drawBurnStatus();}
+function guided(){return renderGuide(GUIDE,{tab:S.guideTab,search:S.guideSearch,status:S.status,menuLinks:S.guideMenuLinks});}
+function refreshGuideLinks(){
+ S.guideMenuLinks={};const tree=S.tsStructure;if(!tree)return;
+ for(const item of tree.itemById.values()){
+  const resolved=tree.resolve(item.id);
+  for(const f of resolved.fields||[]){if(!S.guideMenuLinks[f.name])S.guideMenuLinks[f.name]=item.id;}
+  for(const t of resolved.tables||[]){for(const name of [t.z,t.x,t.y])if(name&&!S.guideMenuLinks[name])S.guideMenuLinks[name]=item.id;}
+ }
+}
+function render(){const views={overview,gauges,tables,settings:allSettings,logs,system,tuning,tuner,guided};page.innerHTML=(views[S.route]||overview)()+(S.commandOpen?commandPalette():'');markHeader();if(S.route==='tuning')drawTsTree();if(S.viewer)drawLogChart();drawTuneChart();if(S.route==='overview')drawLiveScope();drawBurnStatus();}
 
 function drawTuneChart(){
  const e=S.editor;if(!e||!e.field||e.field.kind!=='array')return;
@@ -397,7 +410,7 @@ async function requestPing(){
  // Each connection query must re-read the live ECU signature. A previous cached
  // definition is never presumed compatible with a newly attached ECU.
  if(staged().length&&!confirm('Reconnect will discard all locally staged calibration changes. Continue?'))return;
- S.connected=false;S.ecuSignature='';S.latest=null;clearCalibrationSession();S.iniResolveState='Checking ECU signature';render();
+ S.connected=false;S.ecuSignature='';S.latest=null;GUIDE.setMode('paused');clearCalibrationSession();S.iniResolveState='Checking ECU signature';render();
  try{
   const b=await ts('S','',4000);const signature=ascii(b);
   if(!signature.startsWith('rusEFI '))throw Error('Unexpected ECU signature');
@@ -415,12 +428,12 @@ async function resolveLiveIni(){
  try{
   const result=await fetch('/api/ini/file',{cache:'no-store'});
   if(result.ok){const text=await result.text();const def=matchingIni(text,signature,parseIni);
-   if(S.definition?.signature!==def.signature)clearCalibrationSession();S.rawIni=text;S.definition=def;rebuildTs();S.signatureMismatch=false;
+   if(S.definition?.signature!==def.signature)clearCalibrationSession();S.rawIni=text;S.definition=def;rebuildTs();GUIDE.attach(def,signature);S.signatureMismatch=false;
    S.iniResolveState='Verified cached INI against live ECU';return;
   }
  }catch(e){S.iniResolveState='Cached INI rejected: '+e.message}
  // Never allow stale offsets or scaling to remain active after a firmware change.
- S.definition=null;S.rawIni='';S.tsStructure=null;drawTsTree();S.latest=null;clearCalibrationSession();S.signatureMismatch=true;
+ S.definition=null;S.rawIni='';S.tsStructure=null;GUIDE.reset(true);refreshGuideLinks();drawTsTree();S.latest=null;clearCalibrationSession();S.signatureMismatch=true;
  if(!S.iniExpectedUrl){S.iniResolveState='Custom ECU signature: matching INI must be supplied manually';return}
  S.iniResolveState='AP-only: download disabled. Import exact INI manually when needed.';
 }
@@ -440,7 +453,7 @@ async function getStatus(){if(S.working)return;try{
  }
 
  if(wasReady&&!nowReady){
-  S.connected=false;S.ecuSignature='';S.latest=null;clearCalibrationSession();S.signatureMismatch=true;
+  S.connected=false;S.ecuSignature='';S.latest=null;GUIDE.setMode('paused');clearCalibrationSession();S.signatureMismatch=true;
   S.iniResolveState='ECU USB disconnected; waiting for re-enumeration';
  }
  markHeader();
@@ -451,6 +464,7 @@ async function getStatus(){if(S.working)return;try{
  if((S.route==='logs'||S.route==='system')&&!document.activeElement?.matches('input,select'))render();
  }catch(e){S.statusTransportError=e.message;S.status=null;S.connected=false;markHeader()}}
 function liveCaptureLength(){
+ if(S.route==='guided'&&safeSignature())return Math.max(4,Math.min(3072,GUIDE.def?guideRequiredBytes(GUIDE.def):S.definition.outputSize||3072));
  if(S.liveMode==='full')return Math.max(4,Math.min(3072,S.definition?.outputSize||3072));
  // Transfer only what visible instruments, scope and stationary-RPM checks need.
  // The 768-byte mode is a *maximum*, not a mandatory transfer length.
@@ -463,7 +477,7 @@ function liveCaptureLength(){
 async function startLive(){
  if(!safeSignature()||!connected()||S.liveBusy||S.working)return;
  const len=liveCaptureLength();
- const effectiveHz=(S.route==='overview'||S.route==='gauges')?S.liveHz:10;
+ const effectiveHz=(S.route==='overview'||S.route==='gauges'||S.route==='guided')?S.liveHz:10;
  S.liveBusy=true;
  try{
   let incoming=null,sequence=0,duration=0;
@@ -481,7 +495,8 @@ async function startLive(){
     incoming=new Uint8Array(len);for(let offset=0;offset<len;offset+=1024){let count=Math.min(1024,len-offset);let block=await ts('O',outputArgs(offset,count),2400);if(block.length!==count)throw Error('Legacy ECU output length mismatch');incoming.set(block,offset)}
     duration=performance.now()-since;
   }
-  S.latest=incoming;S.latestMs=Date.now();S.liveRttMs=performance.now()-since;
+  S.latest=incoming;S.latestMs=Date.now();
+  if(safeSignature()&&GUIDE.def){GUIDE.observe(incoming,S.latestMs,sequence);if(S.route==='guided'&&performance.now()-S.guideLastRender>900&&!document.activeElement?.matches('input,textarea,select')){S.guideLastRender=performance.now();render();}}S.liveRttMs=performance.now()-since;
   S.liveDurationMs=duration;S.liveFailureCount=0;
   S.liveRxCount++;
   if(!S.liveWindowMs)S.liveWindowMs=S.latestMs;
@@ -493,6 +508,7 @@ async function startLive(){
  }catch(e){
   S.liveFailureCount++;
   // An HTTP sample timeout is not an ECU disconnect; /api/status is authoritative.
+  if(GUIDE.mode==='learn'&&GUIDE.validMs&&Date.now()-GUIDE.validMs>3000){GUIDE.setMode('paused');if(S.route==='guided')render();}
   if(S.liveFailureCount===8 && !S.liveFallback)console.warn('Telemetry awaiting sample:',e.message);
   if(S.liveFallback && S.liveFailureCount>10)console.warn('Legacy USB polling:',e.message);
  }finally{S.liveBusy=false}
@@ -875,6 +891,17 @@ case 'reset-gauges':S.gaugeSlots=defaultGauges();S.gaugeEdit=null;savePrefs();re
  case 'export-csv':exportCsv();break;
  }}catch(e){toast(e.message,true)}}
 
+document.addEventListener('click',evt=>{
+ const tab=evt.target.closest('[data-guide-tab]');if(tab){S.guideTab=tab.dataset.guideTab;S.guideSearch='';if(S.route!=='guided')navTo('guided');else render();return;}
+ const stage=evt.target.closest('[data-guide-stage]');if(stage){S.guideTab='systems';render();document.querySelector('.guide-steps')?.scrollIntoView({block:'start'});return;}
+ const mode=evt.target.closest('[data-guide-mode]');if(mode){
+  try{if(mode.dataset.guideMode==='learn'&&(!connected()||!safeSignature()||!GUIDE.report().fresh))throw Error('Live verified telemetry required');
+   GUIDE.setMode(mode.dataset.guideMode);render();}catch(e){toast(e.message,true)}return;}
+ const open=evt.target.closest('[data-guide-manual]');if(open){const id=S.guideMenuLinks[open.dataset.guideManual];if(id)chooseTsItem(id);return;}
+ const save=evt.target.closest('[data-guide-save-filters]');if(save){const config={};document.querySelectorAll('[data-guide-filter]').forEach(el=>config[el.dataset.guideFilter]=el.value);
+  try{GUIDE.setFilters(config);render();toast('Analysis filters saved; observations reset');}catch(e){toast(e.message,true)}return;}
+ const exp=evt.target.closest('[data-guide-export]');if(exp){const report=GUIDE.report();saveFile('brickos_guided_review.json',new Blob([JSON.stringify({report,inventory:GUIDE.inventory},null,2)],{type:'application/json'}));return;}
+});
 document.addEventListener('click',async evt=>{
  if(evt.target.id==='command-backdrop'){S.commandOpen=false;render();return}
  const cmdRoute=evt.target.closest('[data-command-route]');if(cmdRoute){navTo(cmdRoute.dataset.commandRoute);return}
@@ -907,6 +934,7 @@ document.addEventListener('input',e=>{
   const raw=e.target.value,number=Number(raw);
   if(raw.trim()!==''&&Number.isFinite(number))stage([0],()=>number,S.editor,false);
  }
+ if(e.target.id==='guide-search'){S.guideSearch=e.target.value;const cursor=e.target.selectionStart;render();const el=$('#guide-search');if(el){el.focus();el.setSelectionRange(cursor,cursor)}return;}
  if(e.target.id==='command-search'){S.commandSearch=e.target.value;const root=$('#command-results');if(root)root.innerHTML=commandResults();}
  if(e.target.id==='tune-search'){S.tuneSearch=e.target.value;drawTsTree();}
  if(e.target.id==='channel-search'||e.target.id==='setting-search'){S.search=e.target.value;const id=e.target.id,cursor=e.target.selectionStart;render();let el=$('#'+id);if(el){el.focus();el.setSelectionRange(cursor,cursor)}}
@@ -961,7 +989,7 @@ async function activateIni(text){
  if(!def.channels.length||!def.cal.length)throw Error('Not a generated rusEFI definition');
  // An updated INI can change addresses or interpretation even with the same signature.
  if(S.rawIni!==text)clearCalibrationSession();
- S.rawIni=text;S.definition=def;rebuildTs();S.signatureMismatch=connected()&&!safeSignature();S.latest=null;
+ S.rawIni=text;S.definition=def;rebuildTs();GUIDE.attach(def,S.ecuSignature);S.signatureMismatch=connected()&&!safeSignature();S.latest=null;
  render();toast(`Loaded ${def.cal.length} calibration fields and ${def.channels.length} channels`);
 }
 async function loadCachedIni(showError=false){
