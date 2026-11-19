@@ -29,8 +29,16 @@ Use your verified ESP32 programming COM port in place of the **example** `COM7`.
 
 ## Guided Tuning
 
+### Current planning specifications (research/design, not implemented firmware)
+
+- [ESP autotune runtime, analysis filters, ownership and controller lease](docs/19-autotune-runtime-and-controls.md)
+- [Full INI-driven guided calibration journey and reasoning decisions](docs/20-guided-calibration-journey.md)
+- [3DS two-screen Guided Tuning navigation and wireframes](docs/21-3ds-guided-layouts.md)
+- [Phone browser Guided Tuning responsive layouts](docs/22-phone-guided-layouts.md)
+- [Earlier UX specification](docs/10-user-experience.md) and [calibration proposal / review transaction model](docs/18-transaction-and-review.md)
+
 Guided Tuning is a **separate, opt-in mode** designed to discover the active ECU/INI configuration, learn from valid telemetry, explain calibration dependencies, and make evidence-backed recommendations. It must never impede manual tuning or silently change ECU flash. The existing Python simulator under `prototype/` is not merged into the v4.8 ESP firmware; firmware capabilities should always be labeled by actual release.
 
 ## Source provenance
 
-The `firmware/esp32/` source is copied from `BrickOS-v48-TRIGGER-INI-FIX(2).zip` as supplied 2026-11-19; runtime source and embedded assets are unchanged. Its historical `README.md` (which referenced v4.2) is preserved as `README_LEGACY_V42.md` and replaced with the current setup README. Importing actual 3DS sources and integrating the Guided Tuning controller remain future tasks.
+The `firmware/esp32/` source is copied from `BrickOS-v48-TRIGGER-INI-FIX(2).zip` as supplied 2026-11-19; runtime source and embedded assets are unchanged. Its historical `README.md` (which referenced v4.2) is preserved as `README_LEGACY_V42.md` and replaced with the current setup README. The actual 3DS v6.3 and DSi v2.2 sources are now imported under `apps/`; integrating the proposed Guided Tuning controller into ESP firmware and client apps remains future work.
