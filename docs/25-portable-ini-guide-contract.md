@@ -74,3 +74,7 @@ Use the supplied portrait as one fixed sprite coordinate canvas: transparent upp
 - Phone and future DS receive equivalent IDs, choices, source revision and caveats.
 - Audio autoplay rejection or missing sprite does not block guide navigation.
 - Existing Manual Tune, TunerStudio bridge, 3DS/DSi software and write paths have no changes from mascot or guide code.
+
+## v1.2.0 chapter question packets
+
+The shared versioned catalogue now includes `chapter_checks` keyed by the ten HPA-ordered chapters. Its interpreter returns dynamic `check.<chapter>.<index>` dialogue nodes and accepts `answer.<chapter>.<index>.<reported|unknown>` review notes, plus `packet.check` and `packet.chapter_progress`. A report is **never** equivalent to sensor or physical verification. The phone currently stores notes only in its own browser, scoped to matched ECU signature plus INI fingerprint and catalogue version. Future DS/DSi portability requires moving this interpretation and cross-device state ownership onto the ESP, without embedding English dialogue or raw INI offsets in the console binary. [All 30 authored questions](28-seth-chapter-questions.md).
