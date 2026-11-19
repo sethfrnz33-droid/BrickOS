@@ -123,9 +123,11 @@ static bool bts_ini_numeric_impl(const char *src,const BtsIniFlags *flags,double
   if(*p=='(')nest++;
   else if(*p==')'){if(--nest<0)return false;}
   else if(nest==0&&*p=='?'){
-   if(question)return false;question=p;
+   if(question)return false;
+   question=p;
   }else if(nest==0&&*p==':'){
-   if(colon)return false;colon=p;
+   if(colon)return false;
+   colon=p;
   }
  }
  if(nest!=0)return false;
