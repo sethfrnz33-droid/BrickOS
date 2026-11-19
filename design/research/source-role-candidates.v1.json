@@ -1,0 +1,671 @@
+{
+  "schema": "brickos.research.role-candidates.v1",
+  "version": "1.0.0",
+  "status": "RESEARCH_ONLY_NOT_RUNTIME_BINDINGS",
+  "source_commit_scope": "Current BrickOS main + public rusEFI upstream checked 2026-11-19. Roles from current guided.mjs are candidate name lists only; added roles have source hints, not validated target channels.",
+  "rules": {
+    "never_auto_bind_by_fuzzy_label": true,
+    "requires_signature_match": true,
+    "requires_page_shape_and_unit_check": true,
+    "requires_active_condition_check": true,
+    "requires_sensor_validity_for_measurements": true,
+    "never_fabricate_missing_value": true,
+    "never_autoroute_special_command": true,
+    "never_treat_display_alias_as_separate_storage": true,
+    "gdi_fuel_guidance": "unsupported",
+    "writes": "not authorized"
+  },
+  "roles": [
+    {
+      "role": "rpm",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "RPMValue",
+        "rpm",
+        "engineRpm"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "tps",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "TPSValue",
+        "tps",
+        "throttlePosition"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "map",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "MAPValue",
+        "map",
+        "mapValue"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "clt",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "coolant",
+        "CLT",
+        "clt",
+        "coolantTemp"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "lambda",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "lambdaValue",
+        "lambda1",
+        "lambda",
+        "veAnalyzeAfrLambda1"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "target",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "targetLambda",
+        "lambdaTarget",
+        "targetMixtureFinalTarget"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "lambdaGood",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "lambdaCurrentlyGood"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "gego",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "Gego"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "stft1",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "stftCorrection1"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "stft2",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "stftCorrection2"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "ltft1",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "ltftCorrection1"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "ltft2",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "ltftCorrection2"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "battery",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "VBatt",
+        "batteryVoltage"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "spark",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "actualLastInjectionIgnitionAngle",
+        "ignitionAdvance",
+        "timingAdvance",
+        "actualIgnitionAdvance"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "knock",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "knockRetard",
+        "knockCount",
+        "knockRetardMax",
+        "m_knockCount",
+        "m_maximumRetard"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "idleTarget",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "idleTargetRpm",
+        "targetIdleRpm",
+        "idleTarget"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "idleCommand",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "idleAirValvePosition",
+        "idlePosition",
+        "currentIdlePosition"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "idleActive",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "isIdling"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "idleClosedLoop",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "isIdleClosedLoop"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "isCranking",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "isCranking"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "fuelCutReason",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "fuelCutReason"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "speed",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "vehicleSpeedKph"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "fuelPressure",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "fuelPressure"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "oilPressure",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "oilPressure"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "sync",
+      "kind": "observed_output_candidate",
+      "candidate_aliases": [
+        "triggerErrorCounter",
+        "triggerSynchronizationError",
+        "totalTriggerErrorCounter"
+      ],
+      "source_file": "firmware/esp32/web/guided.mjs",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "requires_checked_ini_runtime_and_active_strategy",
+      "freshness": "required",
+      "units": "from_matched_generated_ini",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "engineStateBits",
+      "kind": "reported_engine_state_bitmask",
+      "candidate_aliases": [],
+      "source_hint": "engine",
+      "source_url": "https://wiki.rusefi.com/Logging-Guide/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Decoded engine-state bitmask overlays; running/cranking/ASE/WUE/transient are not exclusive",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "triggerToothData",
+      "kind": "ecu_special_trigger_log",
+      "candidate_aliases": [],
+      "source_hint": "tooth logger",
+      "source_url": "https://wiki.rusefi.com/Trigger/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Requires ECU-specific special trigger logger; ordinary 100Hz output samples do not contain tooth edges",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "pumpMode",
+      "kind": "configured_calibration",
+      "candidate_aliases": [],
+      "source_hint": "fuelPumpMode",
+      "source_url": "https://wiki.rusefi.com/Fuel-Pump/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Pump relay/two-stage/PWM strategy may be unavailable depending on build",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "fuelPumpCommand",
+      "kind": "reported_output_candidate",
+      "candidate_aliases": [],
+      "source_hint": "fuelPumpDuty",
+      "source_url": "https://wiki.rusefi.com/Fuel-Pump/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Commanded pump output is not measured pressure",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "fuelPressureTarget",
+      "kind": "reported_output_candidate",
+      "candidate_aliases": [],
+      "source_hint": "fuelPressureTarget",
+      "source_url": "https://wiki.rusefi.com/Fuel-Pump/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Only if enabled PWM pressure-control and the verified target source exist",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "injectorPressureRef",
+      "kind": "configured_calibration",
+      "candidate_aliases": [],
+      "source_hint": "fuelReferencePressure",
+      "source_url": "https://wiki.rusefi.com/Fuel-System/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Reference for injector characterization; not physical sensor proof",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "pressureSensorMode",
+      "kind": "configured_calibration",
+      "candidate_aliases": [],
+      "source_hint": "fuelPressureSensorMode",
+      "source_url": "https://wiki.rusefi.com/Fuel-System/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Absolute, gauge and differential references cannot be conflated",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "injectorPressureComp",
+      "kind": "configured_calibration",
+      "candidate_aliases": [],
+      "source_hint": "injectorCompensationMode",
+      "source_url": "https://wiki.rusefi.com/Fuel-System/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Compensation strategy from actual enabled configuration",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "secondaryInjectorComp",
+      "kind": "configured_calibration",
+      "candidate_aliases": [],
+      "source_hint": "secondaryInjectorCompensationMode",
+      "source_url": "https://wiki.rusefi.com/Fuel-System/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Secondary injector strategy gated to actual enabled hardware",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "fuelPumpPin",
+      "kind": "configured_calibration",
+      "candidate_aliases": [],
+      "source_hint": "fuelPumpPin",
+      "source_url": "https://wiki.rusefi.com/Fuel-Pump/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Logical assignment is not verification of physical wiring or compatible driver",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "fuelPumpSecondPin",
+      "kind": "configured_calibration",
+      "candidate_aliases": [],
+      "source_hint": "fuelPump2Pin",
+      "source_url": "https://wiki.rusefi.com/Fuel-Pump/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Optional second relay channel; must be confirmed active",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "crankSyncReference",
+      "kind": "configured_calibration",
+      "candidate_aliases": [],
+      "source_hint": "globalTriggerAngleOffset",
+      "source_url": "https://wiki.rusefi.com/Trigger/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Configured trigger/TDC reference does not verify actual physical timing",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "targetMixtureDisplayAlias",
+      "kind": "unsaved_alias",
+      "candidate_aliases": [],
+      "source_hint": "wueAnalyzeTargetTable",
+      "source_url": "https://github.com/rusefi/rusefi/blob/master/firmware/tunerstudio/tunerstudio.template.ini",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Example noMsqSave alias may reference same ECU bytes as an original table",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "warmupDisplayAlias",
+      "kind": "unsaved_alias",
+      "candidate_aliases": [],
+      "source_hint": "wueAnalyzeCltFuelCorr",
+      "source_url": "https://github.com/rusefi/rusefi/blob/master/firmware/tunerstudio/tunerstudio.template.ini",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Example noMsqSave alias must not become a duplicate writable field",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "veAnalyzeDefinition",
+      "kind": "metadata_only",
+      "candidate_aliases": [],
+      "source_hint": "veAnalyzeMap",
+      "source_url": "https://github.com/rusefi/rusefi/blob/master/firmware/tunerstudio/tunerstudio.template.ini",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "TunerStudio analyzer definition is not proof that feature/target map is active",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "activeFuelAlgorithm",
+      "kind": "configuration_resolved",
+      "candidate_aliases": [],
+      "source_hint": "activeFuelAlgorithm",
+      "source_url": "https://wiki.rusefi.com/Fuel-Overview/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Resolve mode from actual engine configuration and verified rules, never assume MAP axes",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "activeVeTableAndAxes",
+      "kind": "configuration_resolved",
+      "candidate_aliases": [],
+      "source_hint": "activeVE",
+      "source_url": "https://www.tunerstudio.com/index.php/products/tuner-studio/tsarticles/140-configuring-dynamically-sized-tables-in-tunerstudio",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Resolve table dimensions, axes, direction and alternate maps from matching INI and mode",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "ecuFaultFlags",
+      "kind": "reported_output_candidate",
+      "candidate_aliases": [],
+      "source_hint": "reportedFaults",
+      "source_url": "https://wiki.rusefi.com/Diagnostics-and-Logging/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Requires ECU/firmware-specific code definitions; a bit value is not automatically a known diagnosis",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "ecuProtectionState",
+      "kind": "reported_output_candidate",
+      "candidate_aliases": [],
+      "source_hint": "reportedProtection",
+      "source_url": "https://wiki.rusefi.com/Diagnostics-and-Logging/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Documented ECU protection events take priority over optional learning",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "injectorModel",
+      "kind": "configuration_resolved",
+      "candidate_aliases": [],
+      "source_hint": "injectorFlow",
+      "source_url": "https://wiki.rusefi.com/Injectors/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Hardware model may have user-reported or independently documented provenance",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    },
+    {
+      "role": "actualMapSelection",
+      "kind": "metadata_only",
+      "candidate_aliases": [],
+      "source_hint": "mapSelection",
+      "source_url": "https://wiki.rusefi.com/Fuel-Overview/",
+      "binding_status": "unverified_on_target",
+      "role_semantics": "Capability must be verified before applying learner to any fuel strategy",
+      "freshness": "required_if_live_source",
+      "units": "requires_matching_ini_or_external_evidence",
+      "value_if_missing": null,
+      "permission": "read_only"
+    }
+  ]
+}
