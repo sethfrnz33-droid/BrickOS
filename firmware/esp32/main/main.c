@@ -486,6 +486,64 @@ static bool stim_read_u16(const brick_bench_u16_t *field, double *reading) {
     free(reply);
     return ok;
 }
+/* Capture-only TPS/PPS calibration: this is not a generic ControllerCommands
+ * executor. Allowed names and exact payloads are checked against the active
+ * ECU's signed session and matching INI. All other commands are rejected.
+ * Calibration mutates ECU settings, so the user must review and burn normally. */
+static esp_err_t sensor_capture_post(httpd_req_t *r){
+    cJSON *j=read_request_json(r);
+    if(!j)return error_reply(r,400,"Sensor capture requires JSON");
+    const char *requested=cJSON_GetStringValue(cJSON_GetObjectItem(j,"signature"));
+    const char *command=cJSON_GetStringValue(cJSON_GetObjectItem(j,"command"));
+    static const struct {const char *name;uint8_t selector;} allowed[]={
+        {"cmd_calibrate_pedal_up",0x06},
+        {"cmd_calibrate_pedal_down",0x07},
+        {"cmd_calibrate_tps_closed",0x20},
+        {"cmd_calibrate_tps_open",0x21}
+    };
+    int selected=-1;
+    if(command)for(unsigned i=0;i<sizeof(allowed)/sizeof(allowed[0]);i++){
+        if(!strcmp(command,allowed[i].name)){selected=(int)i;break;}
+    }
+    char active[160];
+    bool session=stim_session_match(requested,active,sizeof(active));
+    cJSON_Delete(j);
+    if(selected<0)return error_reply(r,403,"Only four TPS/pedal capture commands are allowed");
+    if(!session)return error_reply(r,403,"ECU signature mismatch or USB disconnected");
+    brick_ini_command_info_t info={0};
+    if(!ini_cache_command_info(active,allowed[selected].name,&info)||
+       !info.declared||!info.shown_as_button||!info.capture_payload_verified)
+        return error_reply(r,403,"Capture command does not match live ECU INI");
+    brick_bench_u16_t rpm_field={0},battery_field={0};
+    double rpm=0;
+    if(!stim_get_channels(active,&rpm_field,&battery_field)||
+       !stim_read_u16(&rpm_field,&rpm)||
+       !isfinite(rpm)||fabs(rpm)>0.1)
+        return error_reply(r,403,"Cannot confirm stopped ECU from fresh RPM reading");
+    char again[160];
+    if(!stim_session_match(requested,again,sizeof(again))||strcmp(again,active))
+        return error_reply(r,403,"ECU USB session changed during sensor preflight");
+    const uint8_t args[]={0x00,0x14,0x00,allowed[selected].selector};
+    ts_reply_t *reply=calloc(1,sizeof(*reply));
+    if(!reply)return error_reply(r,503,"No memory for sensor calibration reply");
+    brick_live_holdoff(1200);
+    esp_err_t err=ts_request('Z',args,sizeof(args),reply,4500);
+    bool ack=err==ESP_OK&&(reply->status==0||reply->status==4);
+    free(reply);
+    if(!ack)return error_reply(r,503,"ECU did not acknowledge sensor capture; state unknown");
+    cJSON *out=cJSON_CreateObject();
+    if(!out)return error_reply(r,503,"Unable to format sensor capture acknowledgement");
+    cJSON_AddBoolToObject(out,"ok",true);
+    cJSON_AddBoolToObject(out,"command_acknowledged",true);
+    cJSON_AddBoolToObject(out,"capture_verified_by_readback",false);
+    cJSON_AddStringToObject(out,"command",allowed[selected].name);
+    cJSON_AddStringToObject(out,"next_step","Reopen sensor settings, verify captured values, then burn");
+    char *json=cJSON_PrintUnformatted(out);
+    cJSON_Delete(out);
+    esp_err_t http=json_string(r,json?json:"{}",200);
+    free(json);
+    return http;
+}
 /* NULL means every requirement passed. This preserves independent fresh
  * RPM and battery checks while reporting the *actual* failed stage.
  * Never substitute a stale gauge reading for a failed USB request. */
@@ -928,6 +986,7 @@ static void http_start(void){
       {.uri="/api/live",.method=HTTP_GET,.handler=live_get},
       {.uri="/api/stim/stop",.method=HTTP_POST,.handler=stim_stop_post},
       {.uri="/api/test/abort",.method=HTTP_POST,.handler=test_abort_post},
+      {.uri="/api/sensors/capture",.method=HTTP_POST,.handler=sensor_capture_post},
       {.uri="/api/stim/preflight",.method=HTTP_POST,.handler=stim_preflight_post},
       {.uri="/api/stim/start",.method=HTTP_POST,.handler=stim_start_post},
       {.uri="/api/arm",.method=HTTP_POST,.handler=arm_post},
