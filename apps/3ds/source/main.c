@@ -7062,8 +7062,9 @@ static void touch_input(void){touchPosition tp;hidTouchRead(&tp);
  }
  if(ui_page==PAGE_DETAIL){
      if(tp.py>=58&&tp.py<208){
-        int group=config_group_of(selected),at=config_group_start(group);
-        int until=config_group_end(at);
+        bool spatial=bts_spatial_layout();
+        int at=spatial?0:config_group_start(config_group_of(selected));
+        int until=spatial?result_count:config_group_end(at);
         int hit=at+scroll_y+(tp.py-58)/25;
         if(hit>=at&&hit<until){
            if(selected==hit)enter_selected();else selected=hit;
@@ -7563,10 +7564,17 @@ static void handle_keys(u32 k){
     return;
  }
  if(ui_page==PAGE_DETAIL){
-    if(k&(KEY_L|KEY_DLEFT|KEY_CPAD_LEFT))config_group_shift(-1);
-    if(k&(KEY_R|KEY_DRIGHT|KEY_CPAD_RIGHT))config_group_shift(1);
-    int group=config_group_of(selected),at=config_group_start(group);
-    int end=config_group_end(at);
+    bool spatial=bts_spatial_layout();
+    if(spatial){
+       if(k&(KEY_L|KEY_DLEFT|KEY_CPAD_LEFT))selected=bts_next_region_field(-1);
+       if(k&(KEY_R|KEY_DRIGHT|KEY_CPAD_RIGHT))selected=bts_next_region_field(1);
+    }else{
+       if(k&(KEY_L|KEY_DLEFT|KEY_CPAD_LEFT))config_group_shift(-1);
+       if(k&(KEY_R|KEY_DRIGHT|KEY_CPAD_RIGHT))config_group_shift(1);
+    }
+    int group=config_group_of(selected);
+    int at=spatial?0:config_group_start(group);
+    int end=spatial?result_count:config_group_end(at);
     if(k&(KEY_DUP|KEY_CPAD_UP))if(selected>at)selected--;
     if(k&(KEY_DDOWN|KEY_CPAD_DOWN))if(selected<end-1)selected++;
     if(k&KEY_CSTICK_UP)selected=selected-5>=at?selected-5:at;
