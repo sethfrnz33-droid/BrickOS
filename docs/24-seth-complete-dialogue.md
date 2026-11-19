@@ -1,6 +1,6 @@
 # Seth — Complete Guided Tuning Dialogue Script
 
-**Source of truth:** `firmware/esp32/web/guide-catalog.json` (version **1.1.0**).
+**Source of truth:** `firmware/esp32/web/guide-catalog.json` (version **1.2.0**).
 
 **HP Academy-inspired structure:** The ten public curriculum stages determine the tour order; the dialogue and explanations are original BrickOS material, not republished course lessons.
 
@@ -1301,3 +1301,7 @@ Placeholders of the form `{{available:role|role}}` resolve to actual reported, c
 5. DS will consume future ESP-provided dialogue packets without compiling ECU-specific offsets into its app.
 
 **Scope:** Read-only guidance; not a calibration write or engine operating procedure.
+
+## 30 chapter-by-chapter question dialogues
+
+The complete current chapter question prompts, explanations, INI role bindings and response paths are in [Seth Chapter Questions](28-seth-chapter-questions.md). Edit the versioned catalogue, not this generated Markdown, to change the guide. User-reported answers are not independently verified calibration results.
