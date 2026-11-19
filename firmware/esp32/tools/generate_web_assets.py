@@ -15,6 +15,7 @@ assets = {
     'guided': 'guided.mjs',
     'guided_ui': 'guided-ui.mjs',
     'guide_story': 'guide-story.mjs',
+    'guide_reasoning': 'guide-reasoning.mjs',
     'guide_story_ui': 'guide-story-ui.mjs',
     'guide_voice': 'guide-voice.mjs',
     'guide_catalog': 'guide-catalog.json',

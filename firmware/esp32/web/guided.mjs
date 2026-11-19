@@ -28,10 +28,11 @@ const ALIASES={
  gego:['Gego'],stft1:['stftCorrection1'],stft2:['stftCorrection2'],
  ltft1:['ltftCorrection1'],ltft2:['ltftCorrection2'],
  battery:['VBatt','batteryVoltage'],spark:['actualLastInjectionIgnitionAngle','ignitionAdvance','timingAdvance','actualIgnitionAdvance'],
- knock:['knockRetard','knockCount','knockRetardMax'],
- idleTarget:['idleTargetRpm','targetIdleRpm'],idleCommand:['idleAirValvePosition','idlePosition'],
+ knock:['knockRetard','knockCount','knockRetardMax','m_knockCount','m_maximumRetard'],
+ idleTarget:['idleTargetRpm','targetIdleRpm','idleTarget'],idleCommand:['idleAirValvePosition','idlePosition','currentIdlePosition'],
+ idleActive:['isIdling'],idleClosedLoop:['isIdleClosedLoop'],isCranking:['isCranking'],fuelCutReason:['fuelCutReason'],
  speed:['vehicleSpeedKph'],fuelPressure:['fuelPressure'],oilPressure:['oilPressure'],
- sync:['triggerErrorCounter','triggerSynchronizationError']
+ sync:['triggerErrorCounter','triggerSynchronizationError','totalTriggerErrorCounter']
 };
 export const DEFAULT_FILTERS=Object.freeze({rpmMin:0,rpmMax:20000,tpsMin:0,tpsMax:100,loadMin:0,loadMax:500,cltMin:-40,cltMax:200,
   maxRpmChange:180,maxTpsChange:3,maxLoadChange:8,settleMs:1200,minVisits:6});
@@ -60,7 +61,7 @@ export class GuidedAnalyzer {
  }
  reset(forgetDefinition=false){if(forgetDefinition){this.def=null;this.signature='';this.fields={};this.inventory=[];}
   this.mode='observe';this.lastSeq=-1;this.last=null;this.values={};this.validMs=0;this.total=0;this.accepted=0;
-  this.rejections={};this.tiles=Array.from({length:64},()=>({hits:0,ratioSum:0,ratioSq:0}));this.events=[];this.settledSince=0;this.lastReason='Waiting for telemetry';}
+  this.rejections={};this.tiles=Array.from({length:64},()=>({hits:0,ratioSum:0,ratioSq:0}));this.events=[];this.settledSince=0;this.lastReason='Waiting for telemetry';this.recent=[];this.lastCaptureMs=0;}
  attach(def,signature){if(!def||!signature||def.signature!==signature){this.reset(true);return false;}
   if(this.signature!==signature||this.def!==def){this.reset(true);this.def=def;this.signature=signature;this.fields=guideFields(def,this.roleAliases);this.inventory=fieldInventory(def);this.record('definition','Matched ECU definition: '+signature)}
   return true;
@@ -74,6 +75,13 @@ export class GuidedAnalyzer {
    if(sequence!==null&&sequence===this.lastSeq)return;this.lastSeq=sequence;
    const values={};for(const [k,f] of Object.entries(this.fields)){const v=f?getValue(bytes,f,0,this.def.endianness):null;values[k]=finite(v)?v:null;}
    this.values=values;this.validMs=ms;this.total++;
+   // Bounded time-window history for read-only, explainable diagnostic reasoning.
+   // Keep the actual INI-resolved role values; avoid a second ECU poll for Seth.
+   if(!this.lastCaptureMs||ms-this.lastCaptureMs>=100){
+    if(this.lastCaptureMs&&ms<=this.lastCaptureMs)this.recent=[];
+    this.lastCaptureMs=ms;this.recent.push({ms,values:{...values}});
+    while(this.recent.length>160||this.recent.length&&ms-this.recent[0].ms>30000)this.recent.shift();
+   }
    const reasons=[];const cfg=this.filters;
    for(const name of ['rpm','tps','map','lambda','target'])if(values[name]===null)reasons.push(name+' unavailable');
    if(values.lambdaGood!==null&&values.lambdaGood===0)reasons.push('lambda sensor not ready');
@@ -126,6 +134,6 @@ export class GuidedAnalyzer {
    return {mode:this.mode,signature:this.signature,definitionCount:this.inventory.length,fresh,ageMs:this.validMs?now-this.validMs:null,values:{...v},stages,
      primary:prioritized[0],total:this.total,accepted:this.accepted,rejections:{...this.rejections},lastReason:this.lastReason,
      tiles:this.tiles.map((t,index)=>({index,hits:t.hits,meanRatio:t.hits?t.ratioSum/t.hits:null,confidence:t.hits>=this.filters.minVisits?'observed':'insufficient'})),
-     events:this.events.slice(0,35),filters:{...this.filters},requiredBytes:this.def?guideRequiredBytes(this.def):4};
+     events:this.events.slice(0,35),recent:this.recent.slice(),filters:{...this.filters},requiredBytes:this.def?guideRequiredBytes(this.def):4};
  }
 }

@@ -273,3 +273,12 @@ body{overflow-x:hidden}
 .seth-checkpoint strong{font-size:12px}.seth-checkpoint span,.seth-checkpoint small{font-size:11px;line-height:1.5;color:#b0c8d0}
 .seth-chapter-progress{display:block;padding:10px 12px;margin:7px 0 10px;border:1px solid #3a5362;border-radius:7px;color:#aac9cd;font-size:12px}
 .seth-chapter-progress strong{color:#ecf2ec}.seth-chapter-progress small{display:block;margin-top:4px;color:#91aab2}
+
+/* Seth's read-only inference trace: clearly separate ECU facts from hypotheses. */
+.seth-reasoning{margin:12px 0;padding:15px;border:1px solid #486d70;background:#12282b;border-radius:9px;line-height:1.5}
+.seth-reason-title{display:flex;gap:12px;align-items:center;justify-content:space-between;color:#e5f4ed}
+.seth-reason-title span{font-size:11px;color:#afcec8;text-transform:uppercase}
+.seth-reasoning p{margin:6px 0;color:#d1e3dd;overflow-wrap:anywhere}
+.seth-reason-sub{border-top:1px solid #314c50;padding:10px 0 4px}
+.seth-reason-sub strong{color:#f2f6eb}.seth-reason-sub small{display:block;color:#bbd0c7}
+@media(max-width:650px){.seth-reasoning{padding:12px}.seth-reason-title{align-items:flex-start;flex-direction:column;gap:3px}}

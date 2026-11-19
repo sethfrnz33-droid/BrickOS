@@ -62,3 +62,7 @@ The `firmware/esp32/` source is copied from `BrickOS-v48-TRIGGER-INI-FIX(2).zip`
 ## Full Guided Tour chapter questions
 
 Seth now has [30 INI-aware questions across the HP Academy-ordered ten-chapter tour](docs/28-seth-chapter-questions.md). The ESP-served catalogue is authoritative; phone currently records browser-local user-reported answers, **not** independent ECU verification. DS/DSi code and connection paths are unchanged.
+
+## Seth reasoning diagnostics — read-only browser feature
+
+Seth can now [investigate matched ECU telemetry and distinguish observations from competing hypotheses](docs/29-seth-evidence-reasoning-v1.md) during Full Tour or Quick Help. The portable packet includes facts, hypotheses, contradictions, missing INI channels, and the best next diagnostic question. This is **read-only browser-side inference**, not the ESP-resident calibration/autotune engine, not automatic ignition advance, and not physical verification. Current 3DS/DSi and manual tuning integrations are unchanged.

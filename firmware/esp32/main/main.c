@@ -149,6 +149,7 @@ static esp_err_t guideduipage(httpd_req_t *r){return asset(r,"application/javasc
 /* Versioned guide text + assets; intentionally static/read-only. DS clients can
  * fetch the SAME catalogue from the ESP later, without shipping new copy. */
 static esp_err_t guide_story_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_story,brick_asset_guide_story_len);}
+static esp_err_t guide_reasoning_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_reasoning,brick_asset_guide_reasoning_len);}
 static esp_err_t guide_story_ui_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_story_ui,brick_asset_guide_story_ui_len);}
 static esp_err_t guide_voice_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_voice,brick_asset_guide_voice_len);}
 static esp_err_t guide_catalog_get(httpd_req_t *r){return asset(r,"application/json; charset=utf-8",brick_asset_guide_catalog,brick_asset_guide_catalog_len);}
@@ -975,6 +976,7 @@ static void http_start(void){
       {.uri="/guided.mjs",.method=HTTP_GET,.handler=guidedpage},
       {.uri="/guided-ui.mjs",.method=HTTP_GET,.handler=guideduipage},
       {.uri="/guide-story.mjs",.method=HTTP_GET,.handler=guide_story_js},
+      {.uri="/guide-reasoning.mjs",.method=HTTP_GET,.handler=guide_reasoning_js},
       {.uri="/guide-story-ui.mjs",.method=HTTP_GET,.handler=guide_story_ui_js},
       {.uri="/guide-voice.mjs",.method=HTTP_GET,.handler=guide_voice_js},
       {.uri="/api/guide/v1/catalog",.method=HTTP_GET,.handler=guide_catalog_get},

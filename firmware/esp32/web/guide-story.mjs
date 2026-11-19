@@ -1,3 +1,5 @@
+import {analyzeSeth,sethReasoningSummary,normalizeReasoningStage} from './guide-reasoning.mjs';
+
 /* BrickOS portable Seth conversation interpreter — no DOM, no ECU writes.
  * Loaded from the ESP-served versioned JSON dialogue catalogue. Any future DS
  * client can render returned packets without embedding English dialogue or
@@ -61,7 +63,7 @@ export class GuideStory {
  isCheckNode(id){const m=/^check\.([a-z_]+)\.(\d+)$/.exec(id||'');return !!(m&&this.catalog?.chapter_checks?.[m[1]]?.[Number(m[2])]);}
  save(){if(!this.definitionKey||typeof localStorage==='undefined')return;try{localStorage.setItem('brickos.guide.state.'+this.definitionKey,JSON.stringify({version:this.catalog.version,lastVisited:this.lastVisited,answers:this.checkAnswers}));}catch{}}
  bindDefinition(key){const k=key||'';if(k!==this.definitionKey){this.definitionKey=k;this.nodeId=this.catalog?.entry||'welcome';this.stack=[];this.lastVisited='';this.history=[];this.checkAnswers={};
-   if(k&&typeof localStorage!=='undefined')try{const raw=JSON.parse(localStorage.getItem('brickos.guide.state.'+k)||'null');if(raw?.version===this.catalog?.version){if(has(this.catalog.nodes,raw.lastVisited)||this.isCheckNode(raw.lastVisited))this.lastVisited=raw.lastVisited;for(const [id,v] of Object.entries(raw.answers||{})){const m=/^([a-z_]+)\.([a-z0-9_]+)$/.exec(id);const q=this.catalog.chapter_checks?.[m?.[1]]?.find(x=>x.id===m?.[2]);if(q&&['reported','unknown'].includes(v))this.checkAnswers[id]=v;}}}catch{}
+   if(k&&typeof localStorage!=='undefined')try{const raw=JSON.parse(localStorage.getItem('brickos.guide.state.'+k)||'null');if(raw?.version===this.catalog?.version){if(has(this.catalog.nodes,raw.lastVisited)||this.isCheckNode(raw.lastVisited)||/^diagnosis\.(?:question\.)?[a-z_]+$/.test(raw.lastVisited))this.lastVisited=raw.lastVisited;for(const [id,v] of Object.entries(raw.answers||{})){const m=/^([a-z_]+)\.([a-z0-9_]+)$/.exec(id);const q=this.catalog.chapter_checks?.[m?.[1]]?.find(x=>x.id===m?.[2]);if(q&&['reported','unknown'].includes(v))this.checkAnswers[id]=v;}}}catch{}
   }return k;}
  canResume(){return !!this.lastVisited&&this.lastVisited!==this.catalog?.entry&&!!this.definitionKey;}
  go(id){if(!this.catalog)throw Error('Guide catalogue unavailable');
@@ -76,7 +78,7 @@ export class GuideStory {
   if(id.startsWith('workspace.'))return {type:'workspace',tab:id.slice(10)};
   if(id.startsWith('action.field.'))return {type:'manual_field',index:Number(id.slice(13))};
   if(id.startsWith('action.manual.'))return {type:'manual',stage:id.slice(14)};
-  if(!has(this.catalog.nodes,id)&&!/^field\.\d+$/.test(id)&&!this.isCheckNode(id)&&!/^why\.[a-z_]+\.\d+$/.test(id))throw Error('Unknown dialogue step');
+  if(!has(this.catalog.nodes,id)&&!/^field\.\d+$/.test(id)&&!this.isCheckNode(id)&&!/^why\.[a-z_]+\.\d+$/.test(id)&&!/^diagnosis\.(?:question\.)?[a-z_]+$/.test(id))throw Error('Unknown dialogue step');
   if(id!==this.nodeId&&this.stack.length<90)this.stack.push(this.nodeId);
   this.nodeId=id;
   if(id!=='welcome'&&id!=='resume'&&id!=='targeted'&&id!=='tour.start'&&id!=='tour.map')this.lastVisited=id;
@@ -127,6 +129,35 @@ export class GuideStory {
      {label:next?'Next question':'Back to this chapter',go:finish}
     ]};
   }
+  // Diagnostic insights are derived from INI-resolved telemetry and kept separate
+  // from catalogue story text. They never claim mechanical verification.
+  if(/^diagnosis\.(?:question\.)?[a-z_]+$/.test(this.nodeId)){
+   const asking=this.nodeId.startsWith('diagnosis.question.');
+   const raw=this.nodeId.replace(/^diagnosis\.(?:question\.)?/, '');
+   const key=normalizeReasoningStage(raw);
+   const reasoning=analyzeSeth(engine,{stage:key});
+   const question=reasoning.questions[0];
+   n={id:this.nodeId,speaker:'seth',tone:'thoughtful',tag:'SETH / REASONING',stage:key,
+    text:asking?(question?`${question.prompt} ${question.reason} If the ECU cannot answer it, we'll keep it unresolved.`:'I have no additional supported question right now. The missing evidence is listed below.')
+               :sethReasoningSummary(reasoning),
+    choices:[
+      {label:'Show my reasoning',go:'diagnosis.'+key},
+      {label:'What would distinguish the causes?',go:'diagnosis.question.'+key},
+      {label:'Inspect live evidence',go:'workspace.evidence'},
+      {label:'Open related original ECU setting',go:'action.manual.'+key},
+      {label:'Return to previous topic',go:'back'},
+      {label:'Guide home',go:'welcome'}
+    ],_reasoning:reasoning};
+  }
+  // Relevant dialogue pages expose an optional live reasoning branch.
+  // Full Tour and Quick Help both route into the same inference engine.
+  const inferred=/^(?:topics|issue)\.(start|idle|fuel|sensors|trigger|spark|warmup|trims|transients)(?:\.|$)/.exec(n.id||'');
+  const stageHint=n.stage||activeStep?.expert||(inferred?.[1]==='start'?'starting':inferred?.[1]);
+  if(stageHint&&!n._reasoning){
+   const key=normalizeReasoningStage(stageHint);
+   if(/^(identity|sensors|trigger|starting|warmup|idle|fuel|trims|transients|spark|advanced|validation)$/.test(key)&&!n.choices.some(c=>c.go==='diagnosis.'+key))
+    n={...n,choices:[...n.choices,{label:'Seth, investigate this using ECU evidence',go:'diagnosis.'+key}]};
+  }
   const r=engine?.report?.()||{};const fields=engine?.fields||{};const values=r.values||{};
   const available=roles=>roles.map(role=>{
    const field=fields[role];if(!field)return role+': not exposed by matched INI';
@@ -148,6 +179,6 @@ export class GuideStory {
    manual_target:target,field_id:n._field?.id||null,check:progress,chapter_progress:chapter?counts:null,can_back:this.stack.length>0,can_resume:this.canResume(),
    voice:this.catalog.character?.voice_asset||null,
    assets:{head:this.catalog.character?.sprite_head,jaw:this.catalog.character?.sprite_jaw,mouth:this.catalog.character?.sprite_mouth},
-   read_only:true};
+   reasoning:n._reasoning||null,read_only:true};
  }
 }
