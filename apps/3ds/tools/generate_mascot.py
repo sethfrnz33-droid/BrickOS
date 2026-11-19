@@ -82,3 +82,40 @@ for form,duration,pitch in syllables:
  voice.extend([0]*int(.018*sample_rate))
 (OUT/'art/mascot/voice.pcm').write_bytes(struct.pack('<%dh'%len(voice),*voice))
 print('Generated mascot layers, SMDH icon, HOME banner texture and',len(voice),'voice samples')
+
+# Real textured 2.5D GLB for the separate 3DS HOME Menu banner.
+# HOME Menu icon.png is the SMDH tile; the CGFX banner is independent.
+import json
+banner_png=(OUT/'home-banner/mascot_banner.png').read_bytes()
+verts=struct.pack('<12f',-1.0,-0.5,0, 1.0,-0.5,0, 1.0,0.5,0, -1.0,0.5,0)
+uvs=struct.pack('<8f',0.,1.,1.,1.,1.,0.,0.,0.)
+faces=struct.pack('<6H',0,1,2,0,2,3)
+payload=verts+uvs+faces
+while len(payload)%4:payload+=b'\0'
+image_offset=len(payload);payload+=banner_png
+while len(payload)%4:payload+=b'\0'
+scene={
+ 'asset':{'version':'2.0','generator':'Brick Tuner Suite mascot asset generator'},
+ 'scene':0,'scenes':[{'nodes':[0]}],
+ 'nodes':[{'name':'Brick ECU mascot','mesh':0,'rotation':[0,0,0,1]}],
+ 'meshes':[{'primitives':[{'attributes':{'POSITION':0,'TEXCOORD_0':1},'indices':2,'material':0,'mode':4}]}],
+ 'accessors':[
+  {'bufferView':0,'componentType':5126,'count':4,'type':'VEC3','min':[-1.,-.5,0.],'max':[1.,.5,0.]},
+  {'bufferView':1,'componentType':5126,'count':4,'type':'VEC2'},
+  {'bufferView':2,'componentType':5123,'count':6,'type':'SCALAR'}],
+ 'bufferViews':[{'buffer':0,'byteOffset':0,'byteLength':len(verts),'target':34962},
+                {'buffer':0,'byteOffset':len(verts),'byteLength':len(uvs),'target':34962},
+                {'buffer':0,'byteOffset':len(verts)+len(uvs),'byteLength':len(faces),'target':34963},
+                {'buffer':0,'byteOffset':image_offset,'byteLength':len(banner_png)}],
+ 'buffers':[{'byteLength':len(payload)}],
+ 'textures':[{'sampler':0,'source':0}],
+ 'samplers':[{'magFilter':9728,'minFilter':9728,'wrapS':33071,'wrapT':33071}],
+ 'images':[{'bufferView':3,'mimeType':'image/png'}],
+ 'materials':[{'name':'Transparent mascot','doubleSided':True,'alphaMode':'BLEND',
+               'pbrMetallicRoughness':{'baseColorTexture':{'index':0},'metallicFactor':0.,'roughnessFactor':1.}}]
+}
+js=json.dumps(scene,separators=(',',':')).encode('utf8');js+=b' '*((-len(js))%4)
+header=struct.pack('<4sII',b'glTF',2,12+8+len(js)+8+len(payload))
+glb=header+struct.pack('<I4s',len(js),b'JSON')+js+struct.pack('<I4s',len(payload),b'BIN\0')+payload
+(OUT/'home-banner/mascot_banner.glb').write_bytes(glb)
+print('Generated mascot 2.5D HOME GLB:',len(glb),'bytes')
