@@ -66,3 +66,14 @@ Seth now has [30 INI-aware questions across the HP Academy-ordered ten-chapter t
 ## Seth reasoning diagnostics — read-only browser feature
 
 Seth can now [investigate matched ECU telemetry and distinguish observations from competing hypotheses](docs/29-seth-evidence-reasoning-v1.md) during Full Tour or Quick Help. The portable packet includes facts, hypotheses, contradictions, missing INI channels, and the best next diagnostic question. This is **read-only browser-side inference**, not the ESP-resident calibration/autotune engine, not automatic ignition advance, and not physical verification. Current 3DS/DSi and manual tuning integrations are unchanged.
+
+## Seth Diagnostic Agent — high-rate event capture master plan
+
+**Planning and design registry only — not new deployed firmware functionality.** The current Seth reasoner is still browser-side and the ESP has no dedicated high-rate pre/post event recorder. Actual ECU data rate, buffer capacity and tooth-level capture support must be measured/verified before implementation. DS/DSi connections and existing Manual Tuning remain unchanged.
+
+- [Diagnostic agent master plan: Full Tour, Quick Help, current-state assessments and multi-cause investigations](docs/30-seth-diagnostic-agent-master-plan.md)
+- [High-rate event recorder: pre/post capture, ECU timestamp quality, buffer/storage, USB scheduling and faults](docs/31-seth-high-rate-capture-and-evidence-spec.md)
+- [Phone case UI, Seth dialogue flows, prompt parsing, portable output for future DS](docs/32-seth-diagnostic-case-ux-and-reasoning-flows.md)
+- [Machine-readable 57-case design registry — **not loaded by current firmware**](design/diagnostics/scenario-registry.v1.json)
+
+The proposed scenario registry and fallback policy have host-side validation under `firmware/esp32/tests/seth-scenario-registry.test.mjs`; **unit tests do not validate a physical ECU diagnosis**. All future sensor-role bindings must derive from the active verified INI, ECU configuration and verified expert rules. The guide must never replace a qualified external check with a guessed value or treat a momentary "on target" lambda as proof an entire engine is optimal.
