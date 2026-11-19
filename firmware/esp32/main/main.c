@@ -286,6 +286,8 @@ static esp_err_t status_get(httpd_req_t *r){
     cJSON_AddStringToObject(j,"storage_error",storage_error());
     cJSON_AddBoolToObject(j,"ini_cached",ini_cache_present());
     cJSON_AddNumberToObject(j,"ini_size",ini_cache_size());
+    cJSON_AddBoolToObject(j,"ts_command_inspection_available",true);
+    cJSON_AddBoolToObject(j,"ts_physical_output_tests_enabled",false);
     cJSON_AddStringToObject(j,"ecu_sd_ini_state",brick_sd_ini_state());
     cJSON_AddNumberToObject(j,"ecu_sd_ini_attempts",brick_sd_ini_attempts());
     cJSON_AddNumberToObject(j,"ecu_sd_ini_imports",brick_sd_ini_imports());
@@ -351,6 +353,35 @@ static esp_err_t live_get(httpd_req_t *r) {
     return result;
 }
 
+/* Inspect a ControllerCommands entry from the exact active ECU INI.
+ * No command payload is decoded, returned or sent to USB. */
+static esp_err_t ts_inspect_get(httpd_req_t *r) {
+    char query[128]={0},name[64]={0},signature[160]={0};
+    if (httpd_req_get_url_query_str(r,query,sizeof(query))!=ESP_OK ||
+        httpd_query_key_value(query,"name",name,sizeof(name))!=ESP_OK)
+        return error_reply(r,400,"Supply a named ControllerCommands entry");
+    brick_ecu_signature_copy(signature,sizeof(signature));
+    if (!vcp_gateway_usb_ready()||!signature[0])
+        return error_reply(r,503,"No verified live ECU session");
+    brick_ini_command_info_t info={0};
+    if (!ini_cache_command_info(signature,name,&info))
+        return error_reply(r,503,"Matching ECU INI unavailable or command name invalid");
+    cJSON *j=cJSON_CreateObject();
+    if (!j)return error_reply(r,503,"No memory for INI inspection");
+    cJSON_AddBoolToObject(j,"ok",true);
+    cJSON_AddStringToObject(j,"name",name);
+    cJSON_AddBoolToObject(j,"declared_in_ini",info.declared);
+    cJSON_AddBoolToObject(j,"shown_as_button",info.shown_as_button);
+    cJSON_AddStringToObject(j,"label",info.label);
+    cJSON_AddStringToObject(j,"mode","INSPECTION_ONLY");
+    cJSON_AddBoolToObject(j,"ecu_command_sent",false);
+    cJSON_AddBoolToObject(j,"hardware_actuation_supported",false);
+    char *result=cJSON_PrintUnformatted(j);
+    cJSON_Delete(j);
+    esp_err_t err=json_string(r,result?result:"{}",200);
+    free(result);
+    return err;
+}
 static esp_err_t ts_post(httpd_req_t *r){
     g_query_magic = BRICK_QUERY_MAGIC;
     ++g_query_count;
@@ -865,6 +896,7 @@ static void http_start(void){
       {.uri="/guide/voice.mp3",.method=HTTP_GET,.handler=guide_voice_get},
       {.uri="/api/status",.method=HTTP_GET,.handler=status_get},
       {.uri="/api/ts",.method=HTTP_POST,.handler=ts_post},
+      {.uri="/api/ts/inspect",.method=HTTP_GET,.handler=ts_inspect_get},
       {.uri="/api/live",.method=HTTP_GET,.handler=live_get},
       {.uri="/api/stim/stop",.method=HTTP_POST,.handler=stim_stop_post},
       {.uri="/api/stim/preflight",.method=HTTP_POST,.handler=stim_preflight_post},
