@@ -1,0 +1,403 @@
+tests/test_v21_gauge_contract.py rc=0
+PASS: main app title
+PASS: Home Menu title
+PASS: CIA metadata title
+PASS: new DS diagnostic version
+PASS: retains last valid each packet
+PASS: long outage never clears gauge
+PASS: shows held sample instead of live
+PASS: channel reassignment invalidates old value
+PASS: cached settings retained
+PASS: legacy logs remain visible
+PASS: new logs branded
+PASS: live ECU stim guarded by preflight
+
+
+tests/test_v21_trigger_ui.py rc=0
+PASS: INI trigger buttons do not falsely open offline viewer
+PASS: separate offline page reachable from views
+PASS: GUI uses offline generated crank and cam
+PASS: trace is animated via local clock
+PASS: user can pause and adjust RPM and wheel
+PASS: separate ECU readings, not simulator values
+PASS: extended telemetry requested only for view
+PASS: real ECU command gated by server
+PASS: no electrical output methods in model
+PASS: no false ECU-stimulator activation message
+PASS: new diagnostic build number
+
+
+tests/test_v23_nav_graph.py rc=0
+PASS true INI-order menu, hierarchy, bookmark restore
+PASS 9-gauge graph paging, 6 INI traces, semantic icons, 8-arg citro2d calls
+
+
+tests/test_v25_real_stim.py rc=0
+PASS: DS uses real preflight -> signed Start -> Stop commands in order
+PASS: rejected preflight never sends ECU Start
+
+
+tests/test_v26_faults.py rc=0
+,  int,  int)’
+ 2595 |  swkbdInit(&keyboard,SWKBD_TYPE_NORMAL,2,42);
+      |  ^~~~~~~~~
+/tmp/brick-faults-oed7s4yh/faults.c:7370:6: warning: conflicting types for ‘swkbdSetHintText’; have ‘void(void *, const char *)’
+ 7370 | void swkbdSetHintText(void*a,const char*b){(void)a;(void)b;}
+      |      ^~~~~~~~~~~~~~~~
+/tmp/brick-faults-oed7s4yh/faults.c:2596:2: note: previous implicit declaration of ‘swkbdSetHintText’ with type ‘void(void *, const char *)’
+ 2596 |  swkbdSetHintText(&keyboard,"Find a map or ECU setting");
+      |  ^~~~~~~~~~~~~~~~
+/tmp/brick-faults-oed7s4yh/faults.c:7371:6: warning: conflicting types for ‘swkbdSetInitialText’; have ‘void(void *, const char *)’
+ 7371 | void swkbdSetInitialText(void*a,const char*b){(void)a;(void)b;}
+      |      ^~~~~~~~~~~~~~~~~~~
+/tmp/brick-faults-oed7s4yh/faults.c:3187:2: note: previous implicit declaration of ‘swkbdSetInitialText’ with type ‘void(void *, const char *)’
+ 3187 |  swkbdSetInitialText(&kb,entry);
+      |  ^~~~~~~~~~~~~~~~~~~
+
+
+tests/test_v26_ini_autosync.py rc=0
+PASS: missing ESP32 INI auto-syncs 3DS SD cache then retries independent preflight
+PASS: v4.7 legacy generic INI error also attempts one matching SD transfer
+PASS: non-INI preflight rejection never uploads an INI or attempts Start
+
+
+tests/test_v30_tuning_ui.py rc=0
+PASS no model renderer in 3DS build
+PASS gauges drawn on every normal screen
+PASS map and graph still use dedicated upper screen
+PASS at least 5 digital gauge layouts; now 7
+PASS restored cycle L/R
+PASS large touchable list rows
+PASS list is not tiny 8 tile grid
+PASS semantic category icons
+PASS map consistent numbers
+PASS map cell size is limited to legible grid
+PASS real ECU write/burn path untouched
+PASS real ECU error reporting retained
+PASS read-length bounds checked
+PASS 13 semantic icon matches from actual source
+
+
+tests/test_v31_trace_undo.py rc=0
+PASS actual C trace IDs, valid-sample map coverage, undo branching and persistent log marks
+
+PASS UI/action integration source contracts
+
+
+tests/test_v32_integration.py rc=0
+PASS map tools menu has at least 15 real operations
+PASS map tools reachable by touch
+PASS map tools keyboard and cancel
+PASS all region operations isolated from real ECU
+PASS numeric out-of-range refuses entire edit
+PASS range edits saved as single undo history frame
+PASS baseline differences outlined on map
+PASS log replay opens analysis with start
+PASS analysis has 9-channel and timescope controls
+PASS analysis renders upper and lower screen
+PASS analysis is offline and read-only
+PASS events point to actual recorded samples
+PASS analysis uniquely numbered file export
+PASS dashboard peak hold and running means
+PASS gauge reset and mode buttons
+PASS recorded session carries ECU and INI identity
+PASS no unsafe writes added to analysis paths
+PASS old ECU burn tests still present
+PASS 3ds source includes complete benchmarked math modules
+PASS no 3d model viewer reintroduced
+
+
+tests/test_v33_integration.py rc=0
+PASS compare keeps original replay buffer
+PASS rejected reference is not installed
+PASS compare maps by true channel name
+PASS compares only real nearby timestamps
+PASS rendered overlay and controls
+PASS explicit guarded selection from replay
+PASS read only comparison report
+PASS explicit ECU identity warning
+PASS one and two gauge layouts
+PASS saved per gauge decimal places
+PASS quality never invents ECU faults
+PASS quality report view and offline export
+PASS bilinear map operation accessible
+PASS signed local snapshots never trigger ECU writes
+PASS existing burn path remains
+
+
+tests/test_v33_parser.py rc=0
+PASS real csv parser and 9-channel optional missing-value validation
+/tmp/tmpg0rt73i0/test.c:31:13: warning: ‘log_parse_header’ defined but not used [-Wunused-function]
+   31 | static bool log_parse_header(char *line){return log_parse_header_named(line,log_channel_names);}
+      |             ^~~~~~~~~~~~~~~~
+
+
+tests/test_v34_build_fix.py rc=0
+PASS: fixed module manifest and bounded-copy edge cases
+
+
+tests/test_v34_workspaces.py rc=0
+PASS workspace menu labels, ordering and bounds
+PASS launcher is the boot page
+PASS INI download does not throw user back to category list
+PASS main four modes directly routed
+PASS tune workspace routes only through categories
+PASS logs workspace has real files
+PASS analysis workspace has real functions
+PASS DS settings excludes tuning duplicates
+PASS replay touch actions
+PASS replay visibly labels 6 operations
+PASS map touch undo / burn without duplicate 3D toggle
+PASS map tools still local until write
+PASS map writes continue via guarded request
+PASS dashboard touchscreen actions
+PASS global SELECT quick jump to home
+PASS back bookmarks used
+PASS no new ECU protocol commands
+
+
+tests/test_v35_tune_workflow.py rc=0
+cle reminder only after verified burn
+PASS power cycle only ack by A
+PASS curve one-dimensional sequential cursor
+PASS New3DS C stick navigation
+PASS write path still guarded
+PASS explicit icon atlas in source manifest
+PASS host C syntax check (device compilation still needed)
+In file included from /mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:242:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h: In function ‘bts_audio_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h:74:19: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+   74 |  bts_audio_shared=(s16*)linearAlloc(bts_audio_capacity);
+      |                   ^
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c: In function ‘sfx_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:999:14: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+  999 |  sfx_samples=(s16*)linearAlloc(3*SFX_LENGTH*sizeof(s16));
+      |              ^
+
+
+tests/test_v36_split_screen.py rc=0
+rence gauges moved to top
+PASS existing ECU write safety preserved
+PASS power cycle reminder remains explicit A acknowledgment
+PASS stray game code cannot relink
+PASS root launch touch uses new 2x2 cards
+PASS full main.c host syntax; real 3DS compilation remains to be verified
+In file included from /mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:242:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h: In function ‘bts_audio_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h:74:19: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+   74 |  bts_audio_shared=(s16*)linearAlloc(bts_audio_capacity);
+      |                   ^
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c: In function ‘sfx_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:999:14: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+  999 |  sfx_samples=(s16*)linearAlloc(3*SFX_LENGTH*sizeof(s16));
+      |              ^
+
+
+tests/test_v37_tunerstudio_navigation.py rc=0
+ttings only 4 choices
+PASS DS gauge page no extra log/diagnostic tools
+PASS A-only power-cycle reminder intact
+PASS no altered ECU binary write framing
+PASS explicit build manifest including atlas
+PASS full-source host C syntax check; actual devkitARM hardware build unverified
+In file included from /mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:242:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h: In function ‘bts_audio_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h:74:19: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+   74 |  bts_audio_shared=(s16*)linearAlloc(bts_audio_capacity);
+      |                   ^
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c: In function ‘sfx_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:999:14: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+  999 |  sfx_samples=(s16*)linearAlloc(3*SFX_LENGTH*sizeof(s16));
+      |              ^
+
+
+tests/test_v38_interaction.py rc=0
+uous selected marker
+PASS fault requires two equal messages
+PASS invalid raw error bytes rejected
+PASS all ECU safety checks preserved
+PASS Idle icon is visible after recrop
+PASS no standalone map browser
+PASS host C syntax check; device build not available in this environment
+In file included from /mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:242:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h: In function ‘bts_audio_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h:74:19: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+   74 |  bts_audio_shared=(s16*)linearAlloc(bts_audio_capacity);
+      |                   ^
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c: In function ‘sfx_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:999:14: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+  999 |  sfx_samples=(s16*)linearAlloc(3*SFX_LENGTH*sizeof(s16));
+      |              ^
+
+
+tests/test_v39_3d_unique_idle.py rc=0
+PASS native: INI 3D/2D alias shares field; nonzero U16 4x4 table; idle gauge dedup
+PASS native 3D and idle selector tests + complete project host C syntax
+In file included from /mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:242:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h: In function ‘bts_audio_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h:74:19: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+   74 |  bts_audio_shared=(s16*)linearAlloc(bts_audio_capacity);
+      |                   ^
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c: In function ‘sfx_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:999:14: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+  999 |  sfx_samples=(s16*)linearAlloc(3*SFX_LENGTH*sizeof(s16));
+      |              ^
+
+
+tests/test_v41_real_surface_and_banner.py rc=0
+PASS: real U16 height contrast, per-cell colours, stereoscopic parallax, constant-table warning
+PASS: full host C syntax; actual 3DS compilation and 3D banner conversion unverified
+In file included from /mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:242:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h: In function ‘bts_audio_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h:74:19: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+   74 |  bts_audio_shared=(s16*)linearAlloc(bts_audio_capacity);
+      |                   ^
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c: In function ‘sfx_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:999:14: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+  999 |  sfx_samples=(s16*)linearAlloc(3*SFX_LENGTH*sizeof(s16));
+      |              ^
+
+
+tests/test_v42_banner_windows_python.py rc=0
+PASS: Windows Python launcher resolution and actionable missing-Python diagnostic
+
+
+tests/test_v43_dark_depth_surface.py rc=0
+readable labels
+PASS full width title band removed on other upper views
+PASS black neutral palette with tinted-but-readable labels
+PASS no screen transitions
+PASS burn and power cycle interlocks preserved
+PASS host C syntax; devkitARM/actual stereoscopic rendering not verified
+In file included from /mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:242:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h: In function ‘bts_audio_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h:74:19: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+   74 |  bts_audio_shared=(s16*)linearAlloc(bts_audio_capacity);
+      |                   ^
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c: In function ‘sfx_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:999:14: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+  999 |  sfx_samples=(s16*)linearAlloc(3*SFX_LENGTH*sizeof(s16));
+      |              ^
+
+
+tests/test_v44_forward_depth_and_pitch.py rc=0
+PASS: moderate front cards, attached text, recessed Tune gauges, overhead/underside camera
+PASS v4.4 source UI layout, rotation clamps, removed transition and write interlocks
+
+
+tests/test_v45_ui_and_burn.py rc=0
+card plane
+PASS 2D map focused cell drawn after grid with actual data
+PASS tiny labels never intentionally drawn at scale <0.43
+PASS map shows fewer, larger cells
+PASS burn planner used with independent original data
+PASS ECU burn and RPM interlocks retained
+PASS host C syntax
+In file included from /mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:242:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h: In function ‘bts_audio_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h:74:19: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+   74 |  bts_audio_shared=(s16*)linearAlloc(bts_audio_capacity);
+      |                   ^
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c: In function ‘sfx_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:999:14: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+  999 |  sfx_samples=(s16*)linearAlloc(3*SFX_LENGTH*sizeof(s16));
+      |              ^
+
+
+tests/test_v46_e46_banner.py rc=0
+PASS: E46 prepared GLB wired as the HOME Menu 3D banner model
+
+
+tests/test_v47_gutted_e46_banner.py rc=0
+PASS: 5,673 real original triangles retained; 8s rigid animation; no Blender; 512 KiB CGFX protection
+
+
+tests/test_v48_single_sided_banner.py rc=0
+PASS: same 5,673 triangles, geometry, images and animation; backface duplication disabled; CGFX size guarded
+
+
+tests/test_v49_e46_diorama.py rc=0
+PASS: larger E46, rotating 3DS+cable, stationary readable title, unchanged car geometry, protected CGFX conversion
+
+
+tests/test_v52_ini_help_and_stereo.py rc=0
+PASS native INI help decoding, casefold lookup, overwrite, 3D plane sign/spacing
+PASS v5.2 source integration and host syntax; 3DS display hardware unverified
+In file included from /mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:242:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h: In function ‘bts_audio_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h:74:19: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+   74 |  bts_audio_shared=(s16*)linearAlloc(bts_audio_capacity);
+      |                   ^
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c: In function ‘sfx_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:999:14: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+  999 |  sfx_samples=(s16*)linearAlloc(3*SFX_LENGTH*sizeof(s16));
+      |              ^
+
+
+tests/test_v53_sfx_events.py rc=0
+PASS: all cue rules, strict crossing and five-second coolant re-arm
+PASS: source wiring + native C event rules + host syntax
+In file included from /mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:242:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h: In function ‘bts_audio_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/bts_event_audio.h:74:19: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+   74 |  bts_audio_shared=(s16*)linearAlloc(bts_audio_capacity);
+      |                   ^
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c: In function ‘sfx_init’:
+/mnt/data/v62_work/BrickECU-3DS-Probe/source/main.c:999:14: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+  999 |  sfx_samples=(s16*)linearAlloc(3*SFX_LENGTH*sizeof(s16));
+      |              ^
+
+
+tests/test_v54_embedded_audio.py rc=0
+PASS: 14 embedded PCM assets; 3186900 bytes; assembler ranges valid; no SD installation required
+
+
+tests/test_v55_audio_output.py rc=0
+PASS: CH0 clip playback, buffer failure detection, 16KB linear memory, per-frame pump
+
+
+tests/test_v56_shared_audio.py rc=0
+PASS: NDSP buffer ownership, clip stream recycling, priority and native mock
+
+
+tests/test_v57_burn_audio_and_volume.py rc=0
+PASS: burn loop, verified/failure cues, and all 14 louder matched PCM loudness levels
+
+
+tests/test_v57_faults_and_tune_gauges.py rc=0
+PASS: fault reconnection rules + real INI target links + centered Tune gauges
+
+
+tests/test_v57_soundboard_undo.py rc=0
+PASS: 14-clip soundboard, single tap, A/Y/X controls, scalar/curve/map/choice undo
+
+
+tests/test_v58_embedded_new_cues.py rc=0
+PASS: word-matched Lambda and Cylinder interactions
+PASS: actual Undo implementation plays KidPix exactly on successful undo
+PASS: 14 assets, 3 actual uploads, soundboard, direct numeric and choice events
+
+
+tests/test_v59_streaming_audio.py rc=0
+PASS: 14 real PCM clips, all queued and drained, 16KB linear RAM, burn repeat/stop
+PASS: 3DS-style NDSP streaming mock and all cue data
+
+
+tests/test_v60_fault_session_and_log_delete.py rc=0
+PASS: disconnect keeps old fault; confirmed reconnect invalidates it and re-polls
+PASS: Y/A confirmed log deletion, path validation, sidecars, cache invalidation, KidPix once
+PASS: real UI and context trigger wiring
+
+
+tests/test_v60_no_intro.py rc=0
+PASS: app starts directly on the dashboard; no splash assets or input lock; HOME Menu banner retained
+
+
+tests/test_v61_event_sounds_open_only.py rc=0
+PASS: no sounds from highlighting; actual opens and value-choice events remain
+
+
+tests/test_v62_gravity_cards.py rc=0
+PASS: real accelerometer gravity, gyro spring impulse, bounded damping, fallback
+PASS: geometry, sensor enable/read/disable, single motion tick, crisp text, write interlocks
+

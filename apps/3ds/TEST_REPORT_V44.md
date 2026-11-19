@@ -1,0 +1,27 @@
+# Brick Tuner Suite v4.4 regression report
+
+- PASS `test_v19_write_contract.py` (0.94s)
+- PASS `tests/test_v21_gauge_contract.py` (1.2s)
+- PASS `tests/test_v21_trigger_ui.py` (1.26s)
+- PASS `tests/test_v23_nav_graph.py` (1.31s)
+- PASS `tests/test_v25_real_stim.py` (6.14s)
+- PASS `tests/test_v26_faults.py` (5.66s)
+- PASS `tests/test_v26_ini_autosync.py` (5.55s)
+- PASS `tests/test_v30_tuning_ui.py` (0.88s)
+- PASS `tests/test_v31_trace_undo.py` (1.1s)
+- PASS `tests/test_v32_integration.py` (0.93s)
+- PASS `tests/test_v33_integration.py` (0.86s)
+- PASS `tests/test_v33_parser.py` (1.01s)
+- PASS `tests/test_v34_build_fix.py` (0.89s)
+- PASS `tests/test_v34_workspaces.py` (0.93s)
+- PASS `tests/test_v35_tune_workflow.py` (1.27s)
+- PASS `tests/test_v36_split_screen.py` (1.26s)
+- PASS `tests/test_v37_tunerstudio_navigation.py` (1.2s)
+- PASS `tests/test_v38_interaction.py` (1.26s)
+- PASS `tests/test_v39_3d_unique_idle.py` (1.38s)
+- PASS `tests/test_v41_real_surface_and_banner.py` (1.35s)
+- PASS `tests/test_v42_banner_windows_python.py` (1.13s)
+- PASS `tests/test_v43_dark_depth_surface.py` (1.19s)
+- PASS `tests/test_v44_forward_depth_and_pitch.py` (1.03s)
+
+**23/23 regression scripts passed.** These are host-side checks; actual devkitARM compilation, stereoscopic appearance, and ECU operation require physical verification.

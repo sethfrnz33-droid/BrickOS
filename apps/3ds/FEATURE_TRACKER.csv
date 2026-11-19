@@ -1,0 +1,383 @@
+id,mode,priority,status,feature,hardware_verified,notes
+BTS-001,Platform and Main Modes,P0,IMPLEMENTED,Dashboard mode,NO,Source implementation; real 3DS/ECU not verified
+BTS-002,Platform and Main Modes,P0,IMPLEMENTED,Tune mode,NO,Source implementation; real 3DS/ECU not verified
+BTS-003,Platform and Main Modes,P0,IMPLEMENTED,Logging mode,NO,Source implementation; real 3DS/ECU not verified
+BTS-004,Platform and Main Modes,P0,IMPLEMENTED,Analysis mode,NO,Read-only on-device log histogram/quality/percentile analysis from saved CSV (v3.2); source/simulation only
+BTS-005,Platform and Main Modes,P0,IMPLEMENTED,Diagnostics mode,NO,Source implementation; real 3DS/ECU not verified
+BTS-006,Platform and Main Modes,P0,IMPLEMENTED,Configuration mode,NO,Source implementation; real 3DS/ECU not verified
+BTS-007,Platform and Main Modes,P0,TODO,Bench tools mode,NO,
+BTS-008,Platform and Main Modes,P0,TODO,Files and tune management mode,NO,
+BTS-009,Platform and Main Modes,P0,IMPLEMENTED,Connection and performance mode,NO,Source implementation; real 3DS/ECU not verified
+BTS-010,Platform and Main Modes,P0,IMPLEMENTED,Persistent global ECU status strip,NO,"Persistent REC/BURN/EDIT/HELD status, real link status (v3.2); source/simulation only"
+BTS-011,Platform and Main Modes,P0,PARTIAL,Consistent back navigation and selected-row restoration,NO,v3.4 restores workspace selection/scroll and selected parent route; deeper legacy INI flows remain PARTIAL and not hardware verified
+BTS-012,Platform and Main Modes,P0,IMPLEMENTED,Screen switching without blocking ECU polling,NO,Source implementation; real 3DS/ECU not verified
+BTS-013,Platform and Main Modes,P0,IMPLEMENTED,Separate high-rate acquisition from rendering,NO,Source implementation; real 3DS/ECU not verified
+BTS-014,Platform and Main Modes,P0,PARTIAL,Safe offline browsing with explicit offline labels,NO,Partial source functionality; not complete feature parity
+BTS-015,Dashboard and Gauges,P0,IMPLEMENTED,Digital-only instrument layouts,NO,Source implementation; real 3DS/ECU not verified
+BTS-016,Dashboard and Gauges,P0,IMPLEMENTED,2-gauge large display,NO,Two side-by-side enlarged digital gauges; layout saved and L/R cycling (v3.3); host/source-tested only
+BTS-017,Dashboard and Gauges,P0,IMPLEMENTED,4-gauge default display,NO,Source implementation; real 3DS/ECU not verified
+BTS-018,Dashboard and Gauges,P0,IMPLEMENTED,6-gauge dashboard,NO,Source implementation; real 3DS/ECU not verified
+BTS-019,Dashboard and Gauges,P0,IMPLEMENTED,9-channel overview,NO,Source implementation; real 3DS/ECU not verified
+BTS-020,Dashboard and Gauges,P0,IMPLEMENTED,1 large primary channel,NO,One dominant full-screen numeric gauge; layout saved and L/R cycling (v3.3); host/source-tested only
+BTS-021,Dashboard and Gauges,P0,PARTIAL,User-built gauge layouts,NO,Partial source functionality; not complete feature parity
+BTS-022,Dashboard and Gauges,P0,PARTIAL,Save multiple dashboard presets,NO,Partial source functionality; not complete feature parity
+BTS-023,Dashboard and Gauges,P0,IMPLEMENTED,Fast L/R gauge cycling,NO,Source/simulated only
+BTS-024,Dashboard and Gauges,P0,TODO,Stylus layout editing,NO,
+BTS-025,Dashboard and Gauges,P0,TODO,Choose channel by tapping gauge,NO,
+BTS-026,Dashboard and Gauges,P0,TODO,Configurable units,NO,
+BTS-027,Dashboard and Gauges,P0,IMPLEMENTED,Number precision per gauge,NO,"Per-gauge AUTO or fixed 0..3 decimal precision, persisted in SD config (v3.3); host/source-tested only"
+BTS-028,Dashboard and Gauges,P0,TODO,User-set min and max limits,NO,
+BTS-029,Dashboard and Gauges,P0,TODO,Color-coded warning thresholds,NO,
+BTS-030,Dashboard and Gauges,P0,TODO,Warning hysteresis,NO,
+BTS-031,Dashboard and Gauges,P0,IMPLEMENTED,Peak hold and reset,NO,"Dashboard MAX capture from actual valid data, resettable (v3.2); source/simulation only"
+BTS-032,Dashboard and Gauges,P0,IMPLEMENTED,Minimum/maximum capture,NO,"Dashboard MIN/MAX capture from actual valid data, resettable (v3.2); source/simulation only"
+BTS-033,Dashboard and Gauges,P0,IMPLEMENTED,Average gauge values,NO,Dashboard running arithmetic mean from actual valid data (v3.2); source/simulation only
+BTS-034,Dashboard and Gauges,P0,TODO,Small trend sparkline,NO,
+BTS-035,Dashboard and Gauges,P0,TODO,Full-screen trend by gauge,NO,
+BTS-036,Dashboard and Gauges,P0,PARTIAL,Live RPM and load labels,NO,Partial source functionality; not complete feature parity
+BTS-037,Dashboard and Gauges,P0,TODO,Coolant temperature warning,NO,
+BTS-038,Dashboard and Gauges,P0,TODO,Oil pressure warning,NO,
+BTS-039,Dashboard and Gauges,P0,TODO,Battery voltage warning,NO,
+BTS-040,Dashboard and Gauges,P0,TODO,Adjustable audible alarms,NO,
+BTS-041,Dashboard and Gauges,P0,TODO,Dedicated shift indication,NO,
+BTS-042,Dashboard and Gauges,P0,PARTIAL,Display actual packet age,NO,Partial source functionality; not complete feature parity
+BTS-043,Dashboard and Gauges,P0,IMPLEMENTED,Hold last valid sample on link loss,NO,Source/simulated only
+BTS-044,Dashboard and Gauges,P0,IMPLEMENTED,Clearly mark stale gauges,NO,Source/simulated only
+BTS-045,Dashboard and Gauges,P0,IMPLEMENTED,No fabricated values on missing samples,NO,Source implementation; real 3DS/ECU not verified
+BTS-046,Dashboard and Gauges,P0,IMPLEMENTED,Restore last dashboard after reboot,NO,Source implementation; real 3DS/ECU not verified
+BTS-047,Dashboard and Gauges,P0,TODO,Readable font-size selection,NO,
+BTS-048,Dashboard and Gauges,P0,TODO,Instantly inspect 30-second history,NO,
+BTS-049,Dashboard and Gauges,P0,TODO,Preset fuel/ignition/boost/thermal dashboards,NO,
+BTS-050,Tuning Tables and Map Editing,P1,PARTIAL,Full real INI-defined table browsing,NO,Supported INI types only; conditional dialogues incomplete
+BTS-051,Tuning Tables and Map Editing,P1,IMPLEMENTED,Two-dimensional value heatmap,NO,Source/simulated only
+BTS-052,Tuning Tables and Map Editing,P1,TODO,Optional three-dimensional value surface,NO,
+BTS-053,Tuning Tables and Map Editing,P1,PARTIAL,Correct X/Y units and scaling,NO,Partial source functionality; not complete feature parity
+BTS-054,Tuning Tables and Map Editing,P1,PARTIAL,Reverse displayed axes without changing storage,NO,Partial source functionality; not complete feature parity
+BTS-055,Tuning Tables and Map Editing,P1,IMPLEMENTED,D-pad cell selection,NO,Source/simulated only
+BTS-056,Tuning Tables and Map Editing,P1,TODO,Touchscreen cell selection,NO,
+BTS-057,Tuning Tables and Map Editing,P1,IMPLEMENTED,Rectangular multiselect,NO,"Map Tools: mark region corner, move cursor to opposite corner (v3.2); source/simulation only"
+BTS-058,Tuning Tables and Map Editing,P1,IMPLEMENTED,Multi-cell increment/decrement,NO,"Map Tools atomic range increment/decrement, single undo step (v3.2); source/simulation only"
+BTS-059,Tuning Tables and Map Editing,P1,IMPLEMENTED,Percent adjustment of selection,NO,Map Tools +/-5 percent adjustments (v3.2); source/simulation only
+BTS-060,Tuning Tables and Map Editing,P1,PARTIAL,Multiply selection by factor,NO,Partial source functionality; not complete feature parity
+BTS-061,Tuning Tables and Map Editing,P1,IMPLEMENTED,Horizontal interpolation,NO,Map Tools X interpolation over selected region (v3.2); source/simulation only
+BTS-062,Tuning Tables and Map Editing,P1,IMPLEMENTED,Vertical interpolation,NO,Map Tools Y interpolation over selected region (v3.2); source/simulation only
+BTS-063,Tuning Tables and Map Editing,P1,IMPLEMENTED,Bilinear interpolation,NO,"Bounded four-corner bilinear fill over selected map rectangle; one undo frame, full INI encoding checks (v3.3); host/source-tested only"
+BTS-064,Tuning Tables and Map Editing,P1,IMPLEMENTED,Smooth neighboring cells,NO,Map Tools smooth four neighbors from previous map state (v3.2); source/simulation only
+BTS-065,Tuning Tables and Map Editing,P1,IMPLEMENTED,Undo edits,NO,Source/simulated only
+BTS-066,Tuning Tables and Map Editing,P1,IMPLEMENTED,Redo edits,NO,Source/simulated only
+BTS-067,Tuning Tables and Map Editing,P1,IMPLEMENTED,Copy selected cells,NO,Map Tools copy selected region (v3.2); source/simulation only
+BTS-068,Tuning Tables and Map Editing,P1,IMPLEMENTED,Paste cells and ranges,NO,Map Tools bounded local paste and atomic validation (v3.2); source/simulation only
+BTS-069,Tuning Tables and Map Editing,P1,IMPLEMENTED,Compare each cell to baseline,NO,Map Tools toggles comparison with original ECU-loaded bytes (v3.2); source/simulation only
+BTS-070,Tuning Tables and Map Editing,P1,IMPLEMENTED,Modified-cell outline,NO,"Changed cells have a contrast outline, original baseline in memory (v3.2); source/simulation only"
+BTS-071,Tuning Tables and Map Editing,P1,IMPLEMENTED,Consistent map text color,NO,Source/simulated only
+BTS-072,Tuning Tables and Map Editing,P1,IMPLEMENTED,Heatmap only changes cell fill,NO,Source/simulated only
+BTS-073,Tuning Tables and Map Editing,P1,PARTIAL,Zoom and pan map,NO,Partial source functionality; not complete feature parity
+BTS-074,Tuning Tables and Map Editing,P1,IMPLEMENTED,Keep cursor in comfortable viewport,NO,Map viewport follows selected cell; source/simulation only
+BTS-075,Tuning Tables and Map Editing,P1,IMPLEMENTED,Edit X-axis bins,NO,Source/simulated only
+BTS-076,Tuning Tables and Map Editing,P1,IMPLEMENTED,Edit Y-axis bins,NO,Source/simulated only
+BTS-077,Tuning Tables and Map Editing,P1,IMPLEMENTED,Respect read-only axes,NO,Source/simulated only
+BTS-078,Tuning Tables and Map Editing,P1,IMPLEMENTED,Verify allowed numeric ranges,NO,set_number validates INI min/max and encoded integer limits; source/simulation only
+BTS-079,Tuning Tables and Map Editing,P1,IMPLEMENTED,Choose adjustment step with L/R,NO,L/R edit step chooser; source/simulation only
+BTS-080,Tuning Tables and Map Editing,P1,IMPLEMENTED,Show live operating-point cursor,NO,Source implementation; real 3DS/ECU not verified
+BTS-081,Tuning Tables and Map Editing,P1,TODO,Interpolate the active four cells,NO,
+BTS-082,Tuning Tables and Map Editing,P1,PARTIAL,Display current RPM and load with table,NO,Partial source functionality; not complete feature parity
+BTS-083,Tuning Tables and Map Editing,P1,TODO,Display measured vs target lambda where supported,NO,
+BTS-084,Tuning Tables and Map Editing,P1,TODO,Display ignition correction breakdown where supported,NO,
+BTS-085,Tuning Tables and Map Editing,P1,TODO,Pin comparison map,NO,
+BTS-086,Tuning Tables and Map Editing,P1,PARTIAL,Jump to particular RPM/load location,NO,Partial source functionality; not complete feature parity
+BTS-087,Tuning Tables and Map Editing,P1,PARTIAL,Quick list of favorite maps,NO,Partial source functionality; not complete feature parity
+BTS-088,Tuning Tables and Map Editing,P1,TODO,Search tables from INI,NO,
+BTS-089,Tuning Tables and Map Editing,P1,IMPLEMENTED,Show pending unburned changes,NO,Unburned changes indicator and Back confirmation; source/simulation only
+BTS-090,Tuning Tables and Map Editing,P1,PARTIAL,One deliberate burn-and-verify action,NO,Partial source functionality; not complete feature parity
+BTS-091,Tuning Tables and Map Editing,P1,PARTIAL,Show real burn progress and result,NO,Partial source functionality; not complete feature parity
+BTS-092,Tuning Tables and Map Editing,P1,IMPLEMENTED,Verify ECU readback after writing,NO,Signed write uses ECU readback verification (native mock test); source/simulation only
+BTS-093,Tuning Tables and Map Editing,P1,IMPLEMENTED,Backup full page before writing,NO,Complete page backed up to ESP32 and receipt checked before sending writes (native mock test); source/simulation only
+BTS-094,Tuning Tables and Map Editing,P1,TODO,Preserve edits through app interruptions,NO,
+BTS-095,Tuning Tables and Map Editing,P1,IMPLEMENTED,Warn before leaving with unsaved edits,NO,"Two-step discard confirmation, source contract tested"
+BTS-096,Tuning Tables and Map Editing,P1,IMPLEMENTED,Highlight power-cycle-required changes,NO,Source implementation; real 3DS/ECU not verified
+BTS-097,Tuning Tables and Map Editing,P1,IMPLEMENTED,Prevent writes from old ECU signature,NO,Source implementation; real 3DS/ECU not verified
+BTS-098,Tuning Tables and Map Editing,P1,IMPLEMENTED,No automatic blind write retries,NO,Source implementation; real 3DS/ECU not verified
+BTS-099,Tuning Tables and Map Editing,P1,IMPLEMENTED,Revert individual cells,NO,Restore selected region from original loaded calibration (v3.2); source/simulation only
+BTS-100,Tuning Tables and Map Editing,P1,PARTIAL,Restore saved table region,NO,Partial source functionality; not complete feature parity
+BTS-101,Tuning Tables and Map Editing,P1,PARTIAL,Offline edits to stored tune file,NO,Partial source functionality; not complete feature parity
+BTS-102,Tuning Tables and Map Editing,P1,TODO,Calibration compare and merge,NO,
+BTS-103,Tuning Tables and Map Editing,P1,TODO,Table generator and interpolation preview,NO,
+BTS-104,Fuel and Ignition Workspaces,P2,TODO,VE table direct shortcut,NO,
+BTS-105,Fuel and Ignition Workspaces,P2,TODO,Target lambda direct shortcut,NO,
+BTS-106,Fuel and Ignition Workspaces,P2,TODO,Injector characterization viewer,NO,
+BTS-107,Fuel and Ignition Workspaces,P2,TODO,Fuel pressure monitor,NO,
+BTS-108,Fuel and Ignition Workspaces,P2,TODO,Differential fuel pressure calculation with valid sensors,NO,
+BTS-109,Fuel and Ignition Workspaces,P2,TODO,Fuel trim monitor,NO,
+BTS-110,Fuel and Ignition Workspaces,P2,TODO,Long-term and short-term trims where exposed,NO,
+BTS-111,Fuel and Ignition Workspaces,P2,TODO,Fuel correction sources breakdown,NO,
+BTS-112,Fuel and Ignition Workspaces,P2,TODO,Warm-up enrichment workspace,NO,
+BTS-113,Fuel and Ignition Workspaces,P2,TODO,Cranking enrichment view,NO,
+BTS-114,Fuel and Ignition Workspaces,P2,TODO,Afterstart enrichment view,NO,
+BTS-115,Fuel and Ignition Workspaces,P2,TODO,Acceleration enrichment view,NO,
+BTS-116,Fuel and Ignition Workspaces,P2,TODO,Deceleration and fuel-cut analysis,NO,
+BTS-117,Fuel and Ignition Workspaces,P2,TODO,Ignition advance main table shortcut,NO,
+BTS-118,Fuel and Ignition Workspaces,P2,TODO,Live actual ignition advance,NO,
+BTS-119,Fuel and Ignition Workspaces,P2,TODO,Ignition correction sources breakdown,NO,
+BTS-120,Fuel and Ignition Workspaces,P2,TODO,Knock-level viewer,NO,
+BTS-121,Fuel and Ignition Workspaces,P2,TODO,Knock retard and count history,NO,
+BTS-122,Fuel and Ignition Workspaces,P2,TODO,Per-cylinder trim view where ECU supports,NO,
+BTS-123,Fuel and Ignition Workspaces,P2,TODO,Idle ignition workspace,NO,
+BTS-124,Fuel and Ignition Workspaces,P2,TODO,Ignition temperature correction viewer,NO,
+BTS-125,Fuel and Ignition Workspaces,P2,TODO,Boost-related timing correction viewer,NO,
+BTS-126,Fuel and Ignition Workspaces,P2,TODO,Target/actual lambda synchronized chart,NO,
+BTS-127,Fuel and Ignition Workspaces,P2,TODO,Correction activation indicators,NO,
+BTS-128,Fuel and Ignition Workspaces,P2,TODO,Fuel and spark session workspace presets,NO,
+BTS-129,Logging and Replay,P1,IMPLEMENTED,One-button start/stop logging,NO,A one-button logging start/stop; source/simulation only
+BTS-130,Logging and Replay,P1,IMPLEMENTED,Record status on both screens,NO,Live REC status on toolbar (v3.2); source/simulation only
+BTS-131,Logging and Replay,P1,IMPLEMENTED,Recording elapsed timer,NO,Elapsed minutes/seconds while recording (v3.2); source/simulation only
+BTS-132,Logging and Replay,P1,IMPLEMENTED,Actual sample-rate indicator,NO,Measured incoming sample rate rather than desired configured rate; source/simulation only
+BTS-133,Logging and Replay,P1,IMPLEMENTED,RAM recording with bounded memory,NO,"RAM cap of 8192 samples, recorder stops at limit; source/simulation only"
+BTS-134,Logging and Replay,P1,PARTIAL,SD export of full recorded samples,NO,"Up to 8192 RAM samples, not unlimited"
+BTS-135,Logging and Replay,P1,IMPLEMENTED,CSV export and import,NO,Source/simulated only
+BTS-136,Logging and Replay,P1,PARTIAL,Log name and session metadata,NO,CSV sidecar records ECU/INI signature and ESP32 build captured at start (v3.2); limited metadata; source/simulation only
+BTS-137,Logging and Replay,P1,TODO,SD free space display,NO,
+BTS-138,Logging and Replay,P1,PARTIAL,Log channel selection,NO,Partial source functionality; not complete feature parity
+BTS-139,Logging and Replay,P1,TODO,Log channel preset groups,NO,
+BTS-140,Logging and Replay,P1,PARTIAL,Event-triggered start,NO,Partial source functionality; not complete feature parity
+BTS-141,Logging and Replay,P1,TODO,Pretrigger recording buffer,NO,
+BTS-142,Logging and Replay,P1,IMPLEMENTED,Logging duration limit,NO,"RAM cap of 8192 samples, stops before overflow; source/simulation only"
+BTS-143,Logging and Replay,P1,IMPLEMENTED,Live scrolling graph,NO,Source/simulated only
+BTS-144,Logging and Replay,P1,PARTIAL,Up to four traces per graph page,NO,Partial source functionality; not complete feature parity
+BTS-145,Logging and Replay,P1,PARTIAL,More channel pages,NO,Partial source functionality; not complete feature parity
+BTS-146,Logging and Replay,P1,TODO,Per-channel trace colors,NO,
+BTS-147,Logging and Replay,P1,PARTIAL,Independent Y scales,NO,Partial source functionality; not complete feature parity
+BTS-148,Logging and Replay,P1,TODO,Shared Y-scale option,NO,
+BTS-149,Logging and Replay,P1,PARTIAL,Zoom time range,NO,Partial source functionality; not complete feature parity
+BTS-150,Logging and Replay,P1,PARTIAL,Vertical zoom,NO,Partial source functionality; not complete feature parity
+BTS-151,Logging and Replay,P1,IMPLEMENTED,Touchscreen timeline scrubbing,NO,Replay touch timeline scrub; source/simulation only
+BTS-152,Logging and Replay,P1,PARTIAL,D-pad sample-by-sample scrub,NO,Current seek is 1000ms not sample-by-sample
+BTS-153,Logging and Replay,P1,IMPLEMENTED,Playback speed selection,NO,Source/simulated only
+BTS-154,Logging and Replay,P1,IMPLEMENTED,Pause/resume/replay,NO,Source implementation; real 3DS/ECU not verified
+BTS-155,Logging and Replay,P1,IMPLEMENTED,Exact cursor sample values,NO,Source/simulated only
+BTS-156,Logging and Replay,P1,IMPLEMENTED,Minimum/maximum markers,NO,Saved-log numeric statistics + percentiles (v3.2); source/simulation only
+BTS-157,Logging and Replay,P1,IMPLEMENTED,Persistent log bookmarks,NO,Source/simulated only
+BTS-158,Logging and Replay,P1,IMPLEMENTED,Jump to next/previous bookmark,NO,Source/simulated only
+BTS-159,Logging and Replay,P1,PARTIAL,Automatic ECU-fault bookmarks,NO,Partial source functionality; not complete feature parity
+BTS-160,Logging and Replay,P1,PARTIAL,Threshold-crossing search,NO,Search actual recorded percentile extremes (v3.2); no user threshold editor; source/simulation only
+BTS-161,Logging and Replay,P1,PARTIAL,Zoom to selected event,NO,Jump to actual largest observed sample gap (v3.2); no automatic plot zoom; source/simulation only
+BTS-162,Logging and Replay,P1,IMPLEMENTED,Compare two logs,NO,Two saved CSV logs aligned by relative timestamps and matching exact channel names; 500ms maximum pair gap (v3.3); host/source-tested only
+BTS-163,Logging and Replay,P1,PARTIAL,Overlay multiple saved traces,NO,"Two saved logs overlaid on common Y scale in A/B mode, not arbitrary number of overlays (v3.3); host/source-tested only"
+BTS-164,Logging and Replay,P1,TODO,Log channel view presets,NO,
+BTS-165,Logging and Replay,P1,TODO,ECU-resident SD log list and download,NO,
+BTS-166,Logging and Replay,P1,IMPLEMENTED,Log quality report,NO,Recorded data quality per channel with missing/long gap/unchanged-run reports and export; these are NOT ECU fault codes (v3.3); host/source-tested only
+BTS-167,Logging and Replay,P1,PARTIAL,Dropped-sample estimate,NO,Partial source functionality; not complete feature parity
+BTS-168,Logging and Replay,P1,PARTIAL,Exports including firmware signature,NO,Session sidecar records source ECU + INI signature and ESP32 build (v3.2); no firmware hash; source/simulation only
+BTS-169,Logging and Replay,P1,IMPLEMENTED,No invented sensor samples in replay,NO,Source implementation; real 3DS/ECU not verified
+BTS-170,Logging and Replay,P1,IMPLEMENTED,Replay after ECU disconnect,NO,Replay and A/B comparison available offline from SD after ECU disconnect (v3.3); host/source-tested only
+BTS-171,Logging and Replay,P1,TODO,Associated tune revision reference,NO,
+BTS-172,Trace and Analysis,P1,IMPLEMENTED,Log-to-map context linking,NO,Source/simulated only
+BTS-173,Trace and Analysis,P1,IMPLEMENTED,Only use explicitly mapped INI axis channels,NO,Source/simulated only
+BTS-174,Trace and Analysis,P1,IMPLEMENTED,Recorded RPM/load point on actual table,NO,Source/simulated only
+BTS-175,Trace and Analysis,P1,IMPLEMENTED,Interactive log-cursor tracking,NO,Timeline cursor drives linked map trace; source/simulation only
+BTS-176,Trace and Analysis,P1,IMPLEMENTED,Jump to map from selected log moment,NO,Source/simulated only
+BTS-177,Trace and Analysis,P1,IMPLEMENTED,Map coverage counts by cell,NO,Incremental log coverage count per matching INI map cell; source/simulation only
+BTS-178,Trace and Analysis,P1,IMPLEMENTED,Heatmap of sampled operating regions,NO,Map coverage view of sample counts; source/simulation only
+BTS-179,Trace and Analysis,P1,TODO,RPM/load scatter plot,NO,
+BTS-180,Trace and Analysis,P1,TODO,XY plot mode,NO,
+BTS-181,Trace and Analysis,P1,IMPLEMENTED,Histogram of selected channel,NO,12-bin histogram from valid saved samples (v3.2); source/simulation only
+BTS-182,Trace and Analysis,P1,TODO,Lambda error heatmap,NO,
+BTS-183,Trace and Analysis,P1,TODO,Mean lambda error by table cell,NO,
+BTS-184,Trace and Analysis,P1,TODO,Median lambda error by table cell,NO,
+BTS-185,Trace and Analysis,P1,TODO,Minimum/maximum error by cell,NO,
+BTS-186,Trace and Analysis,P1,TODO,Error standard deviation,NO,
+BTS-187,Trace and Analysis,P1,PARTIAL,Sample count and confidence visibility,NO,Observed valid/missing counts shown; confidence estimation not implemented; source/simulation only
+BTS-188,Trace and Analysis,P1,TODO,Separate transient and steady-state samples,NO,
+BTS-189,Trace and Analysis,P1,TODO,Exclude fuel-cut samples,NO,
+BTS-190,Trace and Analysis,P1,TODO,Exclude invalid wideband readings,NO,
+BTS-191,Trace and Analysis,P1,TODO,Exclude warmup samples by coolant,NO,
+BTS-192,Trace and Analysis,P1,TODO,Filter sample range by TPS,NO,
+BTS-193,Trace and Analysis,P1,TODO,Filter by RPM range,NO,
+BTS-194,Trace and Analysis,P1,TODO,Filter by load range,NO,
+BTS-195,Trace and Analysis,P1,IMPLEMENTED,Time window selection,NO,Whole / 10 s / 30 s / 60 s-to-cursor filter (v3.2); source/simulation only
+BTS-196,Trace and Analysis,P1,PARTIAL,Summary of highly sampled regions,NO,Partial source functionality; not complete feature parity
+BTS-197,Trace and Analysis,P1,PARTIAL,Summary of unsampled regions,NO,Partial source functionality; not complete feature parity
+BTS-198,Trace and Analysis,P1,TODO,Correct measured-vs-target units,NO,
+BTS-199,Trace and Analysis,P1,TODO,Reviewable proposed fuel corrections,NO,
+BTS-200,Trace and Analysis,P1,TODO,Compare suggested and current cell values,NO,
+BTS-201,Trace and Analysis,P1,TODO,Accept/reject individual suggestions,NO,
+BTS-202,Trace and Analysis,P1,TODO,Preview table smoothing,NO,
+BTS-203,Trace and Analysis,P1,IMPLEMENTED,No unattended automatic ECU writes,NO,Log analysis cannot issue ECU writes; source/simulation only
+BTS-204,Trace and Analysis,P1,PARTIAL,Versioned trace analysis report,NO,Partial source functionality; not complete feature parity
+BTS-205,Trace and Analysis,P1,IMPLEMENTED,Export analyzed results,NO,Saved-log analysis exported to unique SD .txt report (v3.2); source/simulation only
+BTS-206,Trace and Analysis,P1,PARTIAL,Tune before/after comparison,NO,Partial source functionality; not complete feature parity
+BTS-207,Trace and Analysis,P1,IMPLEMENTED,Original sensor-value provenance,NO,"Report cites exact imported CSV and channel, missing data not inferred (v3.2); source/simulation only"
+BTS-208,Diagnostics and Faults,P1,IMPLEMENTED,Display actual ECU-reported faults only,NO,Source implementation; real 3DS/ECU not verified
+BTS-209,Diagnostics and Faults,P1,IMPLEMENTED,Never treat malformed protocol bytes as faults,NO,Source implementation; real 3DS/ECU not verified
+BTS-210,Diagnostics and Faults,P1,IMPLEMENTED,Distinct transport errors vs ECU faults,NO,Source implementation; real 3DS/ECU not verified
+BTS-211,Diagnostics and Faults,P1,IMPLEMENTED,Persistent confirmed-fault banner,NO,Source implementation; real 3DS/ECU not verified
+BTS-212,Diagnostics and Faults,P1,IMPLEMENTED,Clear only when ECU reports clear,NO,Source implementation; real 3DS/ECU not verified
+BTS-213,Diagnostics and Faults,P1,TODO,Show original ECU fault text,NO,
+BTS-214,Diagnostics and Faults,P1,PARTIAL,Multiple independently reported fault records when available,NO,Partial source functionality; not complete feature parity
+BTS-215,Diagnostics and Faults,P1,IMPLEMENTED,Conflict field A shortcut,NO,Source implementation; real 3DS/ECU not verified
+BTS-216,Diagnostics and Faults,P1,IMPLEMENTED,Conflict field B shortcut,NO,Source implementation; real 3DS/ECU not verified
+BTS-217,Diagnostics and Faults,P1,TODO,Open exact loaded INI parameter,NO,
+BTS-218,Diagnostics and Faults,P1,PARTIAL,Show ECU pin labels,NO,Partial source functionality; not complete feature parity
+BTS-219,Diagnostics and Faults,P1,PARTIAL,Trigger synchronization status,NO,Partial source functionality; not complete feature parity
+BTS-220,Diagnostics and Faults,P1,PARTIAL,Trigger error history,NO,Partial source functionality; not complete feature parity
+BTS-221,Diagnostics and Faults,P1,PARTIAL,Battery voltage status,NO,Partial source functionality; not complete feature parity
+BTS-222,Diagnostics and Faults,P1,TODO,5 V reference status,NO,
+BTS-223,Diagnostics and Faults,P1,TODO,Sensor validity indicators,NO,
+BTS-224,Diagnostics and Faults,P1,TODO,Sensor range and wiring guidance,NO,
+BTS-225,Diagnostics and Faults,P1,PARTIAL,CAN interface status,NO,Partial source functionality; not complete feature parity
+BTS-226,Diagnostics and Faults,P1,PARTIAL,Wideband controller status,NO,Partial source functionality; not complete feature parity
+BTS-227,Diagnostics and Faults,P1,PARTIAL,Knock-system status,NO,Partial source functionality; not complete feature parity
+BTS-228,Diagnostics and Faults,P1,TODO,Connection fault timeline,NO,
+BTS-229,Diagnostics and Faults,P1,PARTIAL,Timestamp of fault observation,NO,Partial source functionality; not complete feature parity
+BTS-230,Diagnostics and Faults,P1,TODO,Fault occurrence counter where supported,NO,
+BTS-231,Diagnostics and Faults,P1,TODO,Configuration change correlation,NO,
+BTS-232,Diagnostics and Faults,P1,TODO,Export diagnostic report,NO,
+BTS-233,Diagnostics and Faults,P1,TODO,Read-only fault history,NO,
+BTS-234,Diagnostics and Faults,P1,PARTIAL,Error-resolution verification,NO,Partial source functionality; not complete feature parity
+BTS-235,Diagnostics and Faults,P1,TODO,Display INI/ECU signature mismatch clearly,NO,
+BTS-236,Diagnostics and Faults,P1,PARTIAL,Power-cycle warning after affected calibration,NO,Partial source functionality; not complete feature parity
+BTS-237,Diagnostics and Faults,P1,TODO,Fault-screen navigation back to prior position,NO,
+BTS-238,Configuration and INI Navigation,P1,PARTIAL,Fully parsed INI menu hierarchy,NO,Partial source functionality; not complete feature parity
+BTS-239,Configuration and INI Navigation,P1,IMPLEMENTED,Folders before individual settings,NO,Source implementation; real 3DS/ECU not verified
+BTS-240,Configuration and INI Navigation,P1,IMPLEMENTED,Semantic icons per subsystem,NO,Source implementation; real 3DS/ECU not verified
+BTS-241,Configuration and INI Navigation,P1,IMPLEMENTED,Setting favorites,NO,Source implementation; real 3DS/ECU not verified
+BTS-242,Configuration and INI Navigation,P1,PARTIAL,Recent settings list,NO,Partial source functionality; not complete feature parity
+BTS-243,Configuration and INI Navigation,P1,PARTIAL,Search by friendly label,NO,Partial source functionality; not complete feature parity
+BTS-244,Configuration and INI Navigation,P1,PARTIAL,Search by raw INI ID,NO,Partial source functionality; not complete feature parity
+BTS-245,Configuration and INI Navigation,P1,TODO,Search by unit or pin function,NO,
+BTS-246,Configuration and INI Navigation,P1,PARTIAL,Back stack and return scroll restoration,NO,Partial source functionality; not complete feature parity
+BTS-247,Configuration and INI Navigation,P1,IMPLEMENTED,Global quick jump to five-mode workspace launcher,NO,v3.4 replaces the hidden global MAPS jump with visible five-mode navigation; source-tested only
+BTS-248,Configuration and INI Navigation,P1,PARTIAL,Large numeric editor,NO,Partial source functionality; not complete feature parity
+BTS-249,Configuration and INI Navigation,P1,PARTIAL,Editable numeric step size,NO,Partial source functionality; not complete feature parity
+BTS-250,Configuration and INI Navigation,P1,PARTIAL,Valid numeric range display,NO,Partial source functionality; not complete feature parity
+BTS-251,Configuration and INI Navigation,P1,IMPLEMENTED,Enum option chooser,NO,Source implementation; real 3DS/ECU not verified
+BTS-252,Configuration and INI Navigation,P1,PARTIAL,Boolean toggle where supported,NO,Partial source functionality; not complete feature parity
+BTS-253,Configuration and INI Navigation,P1,IMPLEMENTED,INI units and scaling,NO,Source implementation; real 3DS/ECU not verified
+BTS-254,Configuration and INI Navigation,P1,PARTIAL,INI conditional fields,NO,Partial source functionality; not complete feature parity
+BTS-255,Configuration and INI Navigation,P1,TODO,INI dynamic visibility,NO,
+BTS-256,Configuration and INI Navigation,P1,TODO,Contextual setting help,NO,
+BTS-257,Configuration and INI Navigation,P1,PARTIAL,Display pin assignments,NO,Partial source functionality; not complete feature parity
+BTS-258,Configuration and INI Navigation,P1,PARTIAL,Detect overlapping pin assignments from ECU faults,NO,Partial source functionality; not complete feature parity
+BTS-259,Configuration and INI Navigation,P1,IMPLEMENTED,Highlight local pending changes,NO,Source implementation; real 3DS/ECU not verified
+BTS-260,Configuration and INI Navigation,P1,IMPLEMENTED,Power-cycle-required marker,NO,Source implementation; real 3DS/ECU not verified
+BTS-261,Configuration and INI Navigation,P1,TODO,Tune-revision comparison,NO,
+BTS-262,Configuration and INI Navigation,P1,TODO,Deprecated parameter warning,NO,
+BTS-263,Configuration and INI Navigation,P1,TODO,Expose unsupported controls honestly,NO,
+BTS-264,Configuration and INI Navigation,P1,IMPLEMENTED,Never fabricate unknown options,NO,Source implementation; real 3DS/ECU not verified
+BTS-265,Configuration and INI Navigation,P1,PARTIAL,Remember map viewport per table,NO,Partial source functionality; not complete feature parity
+BTS-266,Configuration and INI Navigation,P1,IMPLEMENTED,Keyboard controls as alternative to touch,NO,Source implementation; real 3DS/ECU not verified
+BTS-267,Configuration and INI Navigation,P1,PARTIAL,Font scaling and text accessibility,NO,Partial source functionality; not complete feature parity
+BTS-268,Configuration and INI Navigation,P1,TODO,Local category history,NO,
+BTS-269,Files and Tune Management,P2,PARTIAL,Complete ECU tune download,NO,Partial source functionality; not complete feature parity
+BTS-270,Files and Tune Management,P2,PARTIAL,SD calibration backup,NO,"Exact ECU-bound SD snapshot of ONE calibration field only (not full tune or axes), plus existing ECU backups (v3.3); host/source-tested only"
+BTS-271,Files and Tune Management,P2,PARTIAL,Load and preview saved calibration,NO,"Loads latest matching field snapshot into READ-ONLY map comparison, not a full offline tune editor (v3.3); host/source-tested only"
+BTS-272,Files and Tune Management,P2,PARTIAL,Compare two calibration versions,NO,"Current calibration field vs latest compatible SD field snapshot, not arbitrary full tune revision comparison (v3.3); host/source-tested only"
+BTS-273,Files and Tune Management,P2,PARTIAL,Changed parameter count,NO,Partial source functionality; not complete feature parity
+BTS-274,Files and Tune Management,P2,PARTIAL,Changed map heatmap,NO,Highlights changed Z-map cells against ECU original or latest matching SD field snapshot (v3.3); axes not snapshot (v3.3); host/source-tested only
+BTS-275,Files and Tune Management,P2,PARTIAL,Absolute and percent differences,NO,Partial source functionality; not complete feature parity
+BTS-276,Files and Tune Management,P2,TODO,Restore one parameter,NO,
+BTS-277,Files and Tune Management,P2,TODO,Restore selected cells,NO,
+BTS-278,Files and Tune Management,P2,IMPLEMENTED,Prewrite full-page backup,NO,Verified ESP32 pre-write full-page backup required; source/simulation only
+BTS-279,Files and Tune Management,P2,PARTIAL,Record backup timestamp and ECU identity,NO,Partial source functionality; not complete feature parity
+BTS-280,Files and Tune Management,P2,TODO,Name each tune revision,NO,
+BTS-281,Files and Tune Management,P2,TODO,Revision description/notes,NO,
+BTS-282,Files and Tune Management,P2,PARTIAL,ECU firmware signature saved with tune,NO,Full ECU signature serialized into checksum-protected per-field snapshot; full tune archive absent (v3.3); host/source-tested only
+BTS-283,Files and Tune Management,P2,PARTIAL,Associate logs with calibration revisions,NO,Partial source functionality; not complete feature parity
+BTS-284,Files and Tune Management,P2,IMPLEMENTED,Differentiate SD snapshot from ECU active tune,NO,Explicitly identifies a local field snapshot versus current ECU-loaded calibration; source/simulated only (v3.3)
+BTS-285,Files and Tune Management,P2,PARTIAL,Recover interrupted local editing state,NO,Partial source functionality; not complete feature parity
+BTS-286,Files and Tune Management,P2,IMPLEMENTED,Flash readback persistence verification,NO,Source implementation; real 3DS/ECU not verified
+BTS-287,Files and Tune Management,P2,TODO,Import supported calibration formats,NO,
+BTS-288,Files and Tune Management,P2,TODO,Export supported calibration formats,NO,
+BTS-289,Files and Tune Management,P2,TODO,Tune history browser,NO,
+BTS-290,Files and Tune Management,P2,TODO,Revision filter and search,NO,
+BTS-291,Files and Tune Management,P2,TODO,SD storage health and free space,NO,
+BTS-292,Files and Tune Management,P2,PARTIAL,Configuration checksum comparison,NO,Field snapshot checked with CRC32 and exact metadata; full tune and firmware checksum comparison not implemented (v3.3)
+BTS-293,Files and Tune Management,P2,TODO,Human-readable tune change report,NO,
+BTS-294,Files and Tune Management,P2,TODO,Conflict resolution before a merge,NO,
+BTS-295,Files and Tune Management,P2,TODO,Never silently overwrite tune backups,NO,
+BTS-296,Bench and Developer Tools,P3,PARTIAL,ECU identification and firmware report,NO,Partial source functionality; not complete feature parity
+BTS-297,Bench and Developer Tools,P3,PARTIAL,INI compatibility inspector,NO,Partial source functionality; not complete feature parity
+BTS-298,Bench and Developer Tools,P3,TODO,Sensor calibration wizard,NO,
+BTS-299,Bench and Developer Tools,P3,TODO,TPS calibration helper,NO,
+BTS-300,Bench and Developer Tools,P3,TODO,Temperature sensor calibration,NO,
+BTS-301,Bench and Developer Tools,P3,TODO,Analog channel scaling,NO,
+BTS-302,Bench and Developer Tools,P3,TODO,CAN bus status,NO,
+BTS-303,Bench and Developer Tools,P3,PARTIAL,Input/output assignment report,NO,Partial source functionality; not complete feature parity
+BTS-304,Bench and Developer Tools,P3,PARTIAL,Trigger pattern diagnostic graphs,NO,Partial source functionality; not complete feature parity
+BTS-305,Bench and Developer Tools,P3,TODO,Trigger waveform capture where exposed,NO,
+BTS-306,Bench and Developer Tools,P3,PARTIAL,Knock diagnostic data where exposed,NO,Partial source functionality; not complete feature parity
+BTS-307,Bench and Developer Tools,P3,PARTIAL,Guarded ECU bench commands only in supported environment,NO,Partial source functionality; not complete feature parity
+BTS-308,Bench and Developer Tools,P3,TODO,Dedicated Stop for tests,NO,
+BTS-309,Bench and Developer Tools,P3,PARTIAL,Bench command timeout display,NO,Partial source functionality; not complete feature parity
+BTS-310,Bench and Developer Tools,P3,PARTIAL,Show real ECU command acknowledgements,NO,Partial source functionality; not complete feature parity
+BTS-311,Bench and Developer Tools,P3,TODO,Export command trace,NO,
+BTS-312,Bench and Developer Tools,P3,TODO,Error code descriptions,NO,
+BTS-313,Bench and Developer Tools,P3,PARTIAL,Network request profiler,NO,Partial source functionality; not complete feature parity
+BTS-314,Bench and Developer Tools,P3,TODO,Report ECU console features not available,NO,
+BTS-315,Bench and Developer Tools,P3,TODO,Document hardware isolation test prerequisites,NO,
+BTS-316,Connectivity and Performance,P0,PARTIAL,Fast splash-to-live time,NO,Partial source functionality; not complete feature parity
+BTS-317,Connectivity and Performance,P0,IMPLEMENTED,Auto Wi-Fi reconnect,NO,Source implementation; real 3DS/ECU not verified
+BTS-318,Connectivity and Performance,P0,IMPLEMENTED,Manual reconnect control,NO,Source implementation; real 3DS/ECU not verified
+BTS-319,Connectivity and Performance,P0,IMPLEMENTED,Explicit disconnected state,NO,Source implementation; real 3DS/ECU not verified
+BTS-320,Connectivity and Performance,P0,IMPLEMENTED,Confirmed ECU signature match,NO,Source implementation; real 3DS/ECU not verified
+BTS-321,Connectivity and Performance,P0,IMPLEMENTED,Current firmware and cached INI version,NO,Source implementation; real 3DS/ECU not verified
+BTS-322,Connectivity and Performance,P0,IMPLEMENTED,Real measured telemetry frequency,NO,Source implementation; real 3DS/ECU not verified
+BTS-323,Connectivity and Performance,P0,PARTIAL,HTTP latency and operation duration,NO,Partial source functionality; not complete feature parity
+BTS-324,Connectivity and Performance,P0,TODO,Dropped response counter,NO,
+BTS-325,Connectivity and Performance,P0,TODO,Configurable polling interval,NO,
+BTS-326,Connectivity and Performance,P0,IMPLEMENTED,Separate GUI rendering and network thread,NO,Source/simulated only
+BTS-327,Connectivity and Performance,P0,IMPLEMENTED,Prioritize calibration reads/writes,NO,Source implementation; real 3DS/ECU not verified
+BTS-328,Connectivity and Performance,P0,TODO,Keepalive when supported,NO,
+BTS-329,Connectivity and Performance,P0,IMPLEMENTED,Bounded request timeout,NO,Source implementation; real 3DS/ECU not verified
+BTS-330,Connectivity and Performance,P0,IMPLEMENTED,Write uncertainty needs human verification,NO,Source implementation; real 3DS/ECU not verified
+BTS-331,Connectivity and Performance,P0,PARTIAL,Read retry without repeating burns,NO,Requires physical verification on target build
+BTS-332,Connectivity and Performance,P0,IMPLEMENTED,Field cache and map text cache,NO,Source implementation; real 3DS/ECU not verified
+BTS-333,Connectivity and Performance,P0,PARTIAL,Efficient redraw of changed assets,NO,Partial source functionality; not complete feature parity
+BTS-334,Connectivity and Performance,P0,TODO,Memory budget monitoring,NO,
+BTS-335,Connectivity and Performance,P0,IMPLEMENTED,Log memory limits stated,NO,Source implementation; real 3DS/ECU not verified
+BTS-336,Connectivity and Performance,P0,PARTIAL,Session state preserved across loss,NO,Partial source functionality; not complete feature parity
+BTS-337,Connectivity and Performance,P0,PARTIAL,Re-establish data freshness after reconnect,NO,Partial source functionality; not complete feature parity
+BTS-338,Connectivity and Performance,P0,TODO,Never claim that 100 Hz tuning equals file throughput,NO,
+BTS-339,Connectivity and Performance,P0,TODO,Frame rate profiling on real original 3DS,NO,
+BTS-340,Nintendo 3DS Interface,P0,IMPLEMENTED,Upper screen instruments by default,NO,Source implementation; real 3DS/ECU not verified
+BTS-341,Nintendo 3DS Interface,P0,IMPLEMENTED,Lower screen navigation and controls,NO,"v3.4 adds visible Dashboard, Tune, Logs, Analyze and Settings & Diagnostics launcher and on-screen Replay/Map actions; source-tested only"
+BTS-342,Nintendo 3DS Interface,P0,IMPLEMENTED,Top screen dedicated map in edit mode,NO,Source implementation; real 3DS/ECU not verified
+BTS-343,Nintendo 3DS Interface,P0,IMPLEMENTED,Top screen dedicated graph in analysis mode,NO,Source implementation; real 3DS/ECU not verified
+BTS-344,Nintendo 3DS Interface,P0,IMPLEMENTED,Stylus large touch targets,NO,Source implementation; real 3DS/ECU not verified
+BTS-345,Nintendo 3DS Interface,P0,IMPLEMENTED,D-pad precise map selection,NO,Source implementation; real 3DS/ECU not verified
+BTS-346,Nintendo 3DS Interface,P0,IMPLEMENTED,Button-only alternative workflow,NO,Source implementation; real 3DS/ECU not verified
+BTS-347,Nintendo 3DS Interface,P0,IMPLEMENTED,L/R gauge cycling,NO,Source implementation; real 3DS/ECU not verified
+BTS-348,Nintendo 3DS Interface,P0,PARTIAL,Circle Pad navigation acceleration,NO,Partial source functionality; not complete feature parity
+BTS-349,Nintendo 3DS Interface,P0,TODO,Hold-to-repeat navigation,NO,
+BTS-350,Nintendo 3DS Interface,P0,PARTIAL,Customizable quick actions,NO,Partial source functionality; not complete feature parity
+BTS-351,Nintendo 3DS Interface,P0,IMPLEMENTED,Native-size text and spacing,NO,Source implementation; real 3DS/ECU not verified
+BTS-352,Nintendo 3DS Interface,P0,IMPLEMENTED,Consistent dark contrast with rounded panels,NO,Source implementation; real 3DS/ECU not verified
+BTS-353,Nintendo 3DS Interface,P0,PARTIAL,Nonblocking short transitions,NO,Partial source functionality; not complete feature parity
+BTS-354,Nintendo 3DS Interface,P0,PARTIAL,Resume after sleep,NO,Partial source functionality; not complete feature parity
+BTS-355,Nintendo 3DS Interface,P0,PARTIAL,Connection refresh after wake,NO,Partial source functionality; not complete feature parity
+BTS-356,Nintendo 3DS Interface,P0,IMPLEMENTED,Review logs while offline,NO,Source implementation; real 3DS/ECU not verified
+BTS-357,Nintendo 3DS Interface,P0,PARTIAL,Compare tunes offline,NO,Partial source functionality; not complete feature parity
+BTS-358,Nintendo 3DS Interface,P0,TODO,SD screenshot option,NO,
+BTS-359,Nintendo 3DS Interface,P0,PARTIAL,Optional stereo graph visualization only if useful,NO,Partial source functionality; not complete feature parity
+BTS-360,Nintendo 3DS Interface,P0,IMPLEMENTED,Never obscure values behind decorations,NO,Source implementation; real 3DS/ECU not verified
+BTS-361,Nintendo 3DS Interface,P0,IMPLEMENTED,Scale font based on actual 400x240/320x240 displays,NO,Source implementation; real 3DS/ECU not verified
+BTS-362,Nintendo 3DS Interface,P0,IMPLEMENTED,No model viewer unrelated to tuning,NO,Source implementation; real 3DS/ECU not verified
+BTS-363,Advanced Analysis and Reporting,P4,IMPLEMENTED,Connected trace replay synchronization,NO,Source implementation; real 3DS/ECU not verified
+BTS-364,Advanced Analysis and Reporting,P4,IMPLEMENTED,Map utilization frequency analysis,NO,Source implementation; real 3DS/ECU not verified
+BTS-365,Advanced Analysis and Reporting,P4,TODO,Fuel correction scatter plots,NO,
+BTS-366,Advanced Analysis and Reporting,P4,TODO,Sensor correlation chart,NO,
+BTS-367,Advanced Analysis and Reporting,P4,TODO,Per-cylinder diagnostic overlays,NO,
+BTS-368,Advanced Analysis and Reporting,P4,TODO,Derived channel expression engine,NO,
+BTS-369,Advanced Analysis and Reporting,P4,TODO,Calculated channels based on verifiable formulas,NO,
+BTS-370,Advanced Analysis and Reporting,P4,TODO,Selectable log event markers,NO,
+BTS-371,Advanced Analysis and Reporting,P4,PARTIAL,Automated per-session summary,NO,Generated per-log read-only data-quality reports and A/B reports; not a complete automated session report (v3.3)
+BTS-372,Advanced Analysis and Reporting,P4,TODO,Workspace preset import/export,NO,
+BTS-373,Advanced Analysis and Reporting,P4,IMPLEMENTED,Historical log comparison,NO,"Historical A/B logs with exact name mapping, aligned recorded observations, overlay, delta metrics, report export (v3.3); host/source-tested only"
+BTS-374,Advanced Analysis and Reporting,P4,TODO,Search within logs and revisions,NO,
+BTS-375,Advanced Analysis and Reporting,P4,PARTIAL,Log sample quality score,NO,"Valid/missing counts, observed gaps, unchanged-run summary; no single subjective quality score (v3.3)"
+BTS-376,Advanced Analysis and Reporting,P4,TODO,Recommended next diagnostic checks based only on actual faults,NO,
+BTS-377,Advanced Analysis and Reporting,P4,IMPLEMENTED,No imagined ECU status indicators,NO,Source implementation; real 3DS/ECU not verified
+BTS-378,Advanced Analysis and Reporting,P4,TODO,Share tuning workspace layouts,NO,
+BTS-379,Advanced Analysis and Reporting,P4,IMPLEMENTED,Computer export without PC-required workflow,NO,Source implementation; real 3DS/ECU not verified
+BTS-380,Advanced Analysis and Reporting,P4,TODO,Portable JSON session metadata,NO,
+BTS-381,Advanced Analysis and Reporting,P4,TODO,Compare three or more saved tune versions,NO,
+BTS-382,Advanced Analysis and Reporting,P4,PARTIAL,Session notes and attachable evidence,NO,Partial source functionality; not complete feature parity

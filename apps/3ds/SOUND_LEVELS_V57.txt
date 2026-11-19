@@ -1,0 +1,14 @@
+Embedded event-audio loudness matching
+Target active RMS: -12.8 dBFS; maximum peak -0.54 dBFS
+
+00.pcm: 2.44s, active RMS -19.1 -> -12.8 dBFS, peak 0.874
+01.pcm: 1.89s, active RMS -19.3 -> -12.8 dBFS, peak 0.794
+02.pcm: 8.99s, active RMS -13.7 -> -12.8 dBFS, peak 0.871
+03.pcm: 1.25s, active RMS -9.9 -> -12.8 dBFS, peak 0.648
+04.pcm: 1.38s, active RMS -15.3 -> -12.8 dBFS, peak 0.634
+05.pcm: 2.39s, active RMS -26.3 -> -12.8 dBFS, peak 0.896
+06.pcm: 0.37s, active RMS -14.4 -> -12.8 dBFS, peak 0.767
+07.pcm: 1.68s, active RMS -21.1 -> -12.8 dBFS, peak 0.905
+08.pcm: 1.44s, active RMS -12.7 -> -12.8 dBFS, peak 0.859
+09.pcm: 3.20s, active RMS -11.1 -> -12.8 dBFS, peak 0.708
+10.pcm: 1.61s, active RMS -14.7 -> -12.8 dBFS, peak 0.734

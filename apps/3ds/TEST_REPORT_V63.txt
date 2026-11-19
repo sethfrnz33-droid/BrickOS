@@ -1,0 +1,249 @@
+test_v21_gauge_contract.py: PASS
+PASS: main app title
+PASS: Home Menu title
+PASS: CIA metadata title
+PASS: new DS diagnostic version
+PASS: retains last valid each packet
+PASS: long outage never clears gauge
+PASS: shows held sample instead of live
+PASS: channel reassignment invalidates old value
+PASS: cached settings retained
+PASS: legacy logs remain visible
+PASS: new logs branded
+PASS: live ECU stim guarded by preflight
+
+test_v21_trigger_ui.py: PASS
+s
+PASS: GUI uses offline generated crank and cam
+PASS: trace is animated via local clock
+PASS: user can pause and adjust RPM and wheel
+PASS: separate ECU readings, not simulator values
+PASS: extended telemetry requested only for view
+PASS: real ECU command gated by server
+PASS: no electrical output methods in model
+PASS: no false ECU-stimulator activation message
+PASS: new diagnostic build number
+
+test_v23_nav_graph.py: PASS
+PASS true INI-order menu, hierarchy, bookmark restore
+PASS 9-gauge graph paging, 6 INI traces, semantic icons, 8-arg citro2d calls
+
+test_v25_real_stim.py: PASS
+PASS: DS uses real preflight -> signed Start -> Stop commands in order
+PASS: rejected preflight never sends ECU Start
+
+test_v26_faults.py: PASS
+PASS rusEFI e transport; two matching reports; verified pin links; clear confirmation
+
+test_v26_ini_autosync.py: PASS
+PASS: missing ESP32 INI auto-syncs 3DS SD cache then retries independent preflight
+PASS: v4.7 legacy generic INI error also attempts one matching SD transfer
+PASS: non-INI preflight rejection never uploads an INI or attempts Start
+
+test_v30_tuning_ui.py: PASS
+en
+PASS at least 5 digital gauge layouts; now 7
+PASS restored cycle L/R
+PASS large touchable list rows
+PASS list is not tiny 8 tile grid
+PASS semantic category icons
+PASS map consistent numbers
+PASS map cell size is limited to legible grid
+PASS real ECU write/burn path untouched
+PASS real ECU error reporting retained
+PASS read-length bounds checked
+PASS 13 semantic icon matches from actual source
+
+test_v31_trace_undo.py: PASS
+PASS actual C trace IDs, valid-sample map coverage, undo branching and persistent log marks
+
+PASS UI/action integration source contracts
+
+test_v32_integration.py: PASS
+ly
+PASS events point to actual recorded samples
+PASS analysis uniquely numbered file export
+PASS dashboard peak hold and running means
+PASS gauge reset and mode buttons
+PASS recorded session carries ECU and INI identity
+PASS no unsafe writes added to analysis paths
+PASS old ECU burn tests still present
+PASS 3ds source includes complete benchmarked math modules
+PASS no 3d model viewer reintroduced
+
+test_v33_integration.py: PASS
+y and controls
+PASS explicit guarded selection from replay
+PASS read only comparison report
+PASS explicit ECU identity warning
+PASS one and two gauge layouts
+PASS saved per gauge decimal places
+PASS quality never invents ECU faults
+PASS quality report view and offline export
+PASS bilinear map operation accessible
+PASS signed local snapshots never trigger ECU writes
+PASS existing burn path remains
+
+test_v33_parser.py: PASS
+PASS real csv parser and 9-channel optional missing-value validation
+
+test_v34_build_fix.py: PASS
+PASS: fixed module manifest and bounded-copy edge cases
+
+test_v34_workspaces.py: PASS
+has real functions
+PASS DS settings excludes tuning duplicates
+PASS replay touch actions
+PASS replay visibly labels 6 operations
+PASS map touch undo / burn without duplicate 3D toggle
+PASS map tools still local until write
+PASS map writes continue via guarded request
+PASS dashboard touchscreen actions
+PASS global SELECT quick jump to home
+PASS back bookmarks used
+PASS no new ECU protocol commands
+
+test_v35_tune_workflow.py: PASS
+s independent of fault dialog
+PASS non modal compact fault strip
+PASS fault repair links and browse fallback
+PASS power cycle reminder only after verified burn
+PASS power cycle only ack by A
+PASS curve one-dimensional sequential cursor
+PASS New3DS C stick navigation
+PASS write path still guarded
+PASS explicit icon atlas in source manifest
+PASS host C syntax check (device compilation still needed)
+
+test_v36_split_screen.py: PASS
+nsfers cursor from category to bottom
+PASS top tree contains only ten base tabs
+PASS lower tune panel shows submenus; reference gauges moved to top
+PASS existing ECU write safety preserved
+PASS power cycle reminder remains explicit A acknowledgment
+PASS stray game code cannot relink
+PASS root launch touch uses new 2x2 cards
+PASS full main.c host syntax; real 3DS compilation remains to be verified
+
+test_v37_tunerstudio_navigation.py: PASS
+ected dialog on top
+PASS scalar editor on top too
+PASS no global X maps shortcut
+PASS no synthetic maps in View
+PASS DS Settings only 4 choices
+PASS DS gauge page no extra log/diagnostic tools
+PASS A-only power-cycle reminder intact
+PASS no altered ECU binary write framing
+PASS explicit build manifest including atlas
+PASS full-source host C syntax check; actual devkitARM hardware build unverified
+
+test_v38_interaction.py: PASS
+SS 10s idle gauges do not lose tree focus
+PASS stable curve Y scale from original ECU data
+PASS curve Y labels and conspicuous selected marker
+PASS fault requires two equal messages
+PASS invalid raw error bytes rejected
+PASS all ECU safety checks preserved
+PASS Idle icon is visible after recrop
+PASS no standalone map browser
+PASS host C syntax check; device build not available in this environment
+
+test_v39_3d_unique_idle.py: PASS
+PASS native: INI 3D/2D alias shares field; nonzero U16 4x4 table; idle gauge dedup
+PASS native 3D and idle selector tests + complete project host C syntax
+
+test_v41_real_surface_and_banner.py: PASS
+PASS: real U16 height contrast, per-cell colours, stereoscopic parallax, constant-table warning
+PASS: full host C syntax; actual 3DS compilation and 3D banner conversion unverified
+
+test_v42_banner_windows_python.py: PASS
+PASS: Windows Python launcher resolution and actionable missing-Python diagnostic
+
+test_v43_dark_depth_surface.py: PASS
+hind menu
+PASS highlighted tuning tile comes forward with text still attached
+PASS no wasted top Tune title bar, enlarged readable labels
+PASS full width title band removed on other upper views
+PASS black neutral palette with tinted-but-readable labels
+PASS no screen transitions
+PASS burn and power cycle interlocks preserved
+PASS host C syntax; devkitARM/actual stereoscopic rendering not verified
+
+test_v44_forward_depth_and_pitch.py: PASS
+PASS: moderate front cards, attached text, recessed Tune gauges, overhead/underside camera
+PASS v4.4 source UI layout, rotation clamps, removed transition and write interlocks
+
+test_v45_ui_and_burn.py: PASS
+PASS native verified-byte merging, no-op, span bounds and sparse writes
+PASS stereo menu glyphs share card plane
+PASS 2D map focused cell drawn after grid with actual data
+PASS tiny labels never intentionally drawn at scale <0.43
+PASS map shows fewer, larger cells
+PASS burn planner used with independent original data
+PASS ECU burn and RPM interlocks retained
+PASS host C syntax
+
+test_v46_e46_banner.py: PASS
+PASS: E46 prepared GLB wired as the HOME Menu 3D banner model
+
+test_v47_gutted_e46_banner.py: PASS
+PASS: 5,673 real original triangles retained; 8s rigid animation; no Blender; 512 KiB CGFX protection
+
+test_v48_single_sided_banner.py: PASS
+PASS: same 5,673 triangles, geometry, images and animation; backface duplication disabled; CGFX size guarded
+
+test_v49_e46_diorama.py: PASS
+PASS: larger E46, rotating 3DS+cable, stationary readable title, unchanged car geometry, protected CGFX conversion
+
+test_v52_ini_help_and_stereo.py: PASS
+PASS native INI help decoding, casefold lookup, overwrite, 3D plane sign/spacing
+PASS v5.2 source integration and host syntax; 3DS display hardware unverified
+
+test_v53_sfx_events.py: PASS
+PASS: all cue rules, strict crossing and five-second coolant re-arm
+PASS: source wiring + native C event rules + host syntax
+
+test_v54_embedded_audio.py: PASS
+PASS: 14 embedded PCM assets; 3186900 bytes; assembler ranges valid; no SD installation required
+
+test_v55_audio_output.py: PASS
+PASS: CH0 clip playback, buffer failure detection, 16KB linear memory, per-frame pump
+
+test_v56_shared_audio.py: PASS
+PASS: NDSP buffer ownership, clip stream recycling, priority and native mock
+
+test_v57_burn_audio_and_volume.py: PASS
+PASS: burn loop, verified/failure cues, and all 14 louder matched PCM loudness levels
+
+test_v57_faults_and_tune_gauges.py: PASS
+PASS: fault reconnection rules + real INI target links + centered Tune gauges
+
+test_v57_soundboard_undo.py: PASS
+PASS: 14-clip soundboard, single tap, A/Y/X controls, scalar/curve/map/choice undo
+
+test_v58_embedded_new_cues.py: PASS
+PASS: word-matched Lambda and Cylinder interactions
+PASS: actual Undo implementation plays KidPix exactly on successful undo
+PASS: 14 assets, 3 actual uploads, soundboard, direct numeric and choice events
+
+test_v59_streaming_audio.py: PASS
+PASS: 14 real PCM clips, all queued and drained, 16KB linear RAM, burn repeat/stop
+PASS: 3DS-style NDSP streaming mock and all cue data
+
+test_v60_fault_session_and_log_delete.py: PASS
+PASS: disconnect keeps old fault; confirmed reconnect invalidates it and re-polls
+PASS: Y/A confirmed log deletion, path validation, sidecars, cache invalidation, KidPix once
+PASS: real UI and context trigger wiring
+
+test_v60_no_intro.py: PASS
+PASS: app starts directly on the dashboard; no splash assets or input lock; HOME Menu banner retained
+
+test_v61_event_sounds_open_only.py: PASS
+PASS: no sounds from highlighting; actual opens and value-choice events remain
+
+test_v62_gravity_cards.py: PASS
+PASS: real accelerometer gravity, gyro spring impulse, bounded damping, fallback
+PASS: geometry, sensor enable/read/disable, single motion tick, crisp text, write interlocks
+
+test_v63_polar_map_projection.py: PASS
+PASS: square north/south polar map views, yaw-rotation shape and centred depth

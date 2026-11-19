@@ -1,0 +1,19 @@
+Embedded event-audio loudness matching
+Target active RMS: -12.8 dBFS; maximum peak -0.54 dBFS
+
+00.pcm: 2.44s, active RMS -19.1 -> -12.8 dBFS, peak 0.874
+01.pcm: 1.89s, active RMS -19.3 -> -12.8 dBFS, peak 0.794
+02.pcm: 8.99s, active RMS -13.7 -> -12.8 dBFS, peak 0.871
+03.pcm: 1.25s, active RMS -9.9 -> -12.8 dBFS, peak 0.648
+04.pcm: 1.38s, active RMS -15.3 -> -12.8 dBFS, peak 0.634
+05.pcm: 2.39s, active RMS -26.3 -> -12.8 dBFS, peak 0.896
+06.pcm: 0.37s, active RMS -14.4 -> -12.8 dBFS, peak 0.767
+07.pcm: 1.68s, active RMS -21.1 -> -12.8 dBFS, peak 0.905
+08.pcm: 1.44s, active RMS -12.7 -> -12.8 dBFS, peak 0.859
+09.pcm: 3.20s, active RMS -11.1 -> -12.8 dBFS, peak 0.708
+10.pcm: 1.61s, active RMS -14.7 -> -12.8 dBFS, peak 0.734
+
+Newly uploaded clips:
+11.pcm from shampoo-is-betta(1).mp3: 10.65s, active RMS -12.77 dBFS, peak 0.879, size 469592 bytes
+12.pcm from kidpix-i-made-a-boo-boo-yeah(1).mp3: 3.16s, active RMS -12.77 dBFS, peak 0.858, size 139392 bytes
+13.pcm from alex-jones-dracula(1).mp3: 3.02s, active RMS -12.78 dBFS, peak 0.773, size 133114 bytes
