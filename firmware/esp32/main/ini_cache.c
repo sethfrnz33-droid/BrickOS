@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include "esp_log.h"
 #include "esp_spiffs.h"
+#include "mbedtls/sha256.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -17,6 +18,32 @@
 static const char *TAG="brick.ini";
 static SemaphoreHandle_t lock;
 static bool initialized;
+static char s_ini_sha256[65] = "";
+/* SHA-256 identifies the actual saved definition across phone and ESP reboots.
+ * Regenerated only at boot or a successful cache change, never per HTTP poll. */
+static void ini_cache_rehash(void) {
+    s_ini_sha256[0]=0;
+    FILE *f=fopen(INI_PATH,"rb");
+    if(!f)return;
+    mbedtls_sha256_context sha;
+    mbedtls_sha256_init(&sha);
+    int e=mbedtls_sha256_starts(&sha,0);
+    unsigned char buf[2048],digest[32];size_t n;
+    while(e==0&&(n=fread(buf,1,sizeof(buf),f))>0)
+        e=mbedtls_sha256_update(&sha,buf,n);
+    if(ferror(f))e=-1;
+    if(e==0)e=mbedtls_sha256_finish(&sha,digest);
+    mbedtls_sha256_free(&sha);
+    fclose(f);
+    if(e!=0)return;
+    static const char hex[]="0123456789abcdef";
+    for(unsigned i=0;i<32;i++){
+        s_ini_sha256[i*2]=hex[digest[i]>>4];
+        s_ini_sha256[i*2+1]=hex[digest[i]&15];
+    }
+    s_ini_sha256[64]=0;
+}
+
 
 void ini_cache_init(void){
     lock=xSemaphoreCreateMutex();
@@ -28,12 +55,21 @@ void ini_cache_init(void){
 #else
     initialized=esp_spiffs_mounted("logs");
 #endif
+    if(initialized)ini_cache_rehash();
     ESP_LOGI(TAG,"INI cache SPIFFS %s",initialized?"ready":"unavailable");
 }
 static bool acquire(void){return initialized && lock && xSemaphoreTake(lock,pdMS_TO_TICKS(3000))==pdTRUE;}
 static bool get_size(size_t *size){struct stat st;if(stat(INI_PATH,&st)!=0 || st.st_size<=0)return false;*size=(size_t)st.st_size;return true;}
 bool ini_cache_present(void){size_t s;return initialized && get_size(&s);}
 size_t ini_cache_size(void){size_t s=0;if(initialized)get_size(&s);return s;}
+bool ini_cache_sha256(char out[65]) {
+    if(!out)return false;
+    out[0]=0;
+    if(!acquire())return false;
+    snprintf(out,65,"%s",s_ini_sha256);
+    xSemaphoreGive(lock);
+    return out[0]!=0;
+}
 static bool valid_definition(const char *path){
     FILE *f=fopen(path,"rb");if(!f)return false;
     char buf[4097];size_t n;bool constants=false,channels=false;
@@ -53,6 +89,7 @@ static esp_err_t commit_file(void){
     // Prefer a complete old version over any incomplete new version.
     // SPIFFS rename replaces a file in the same mount on ESP-IDF's VFS.
     if(rename(INI_TEMP,INI_PATH)!=0)return ESP_FAIL;
+    ini_cache_rehash();
     return ESP_OK;
 }
 esp_err_t ini_cache_upload(httpd_req_t *req){
@@ -95,6 +132,7 @@ esp_err_t ini_cache_serve(httpd_req_t *req){
 esp_err_t ini_cache_delete(void){
     if(!acquire())return ESP_ERR_INVALID_STATE;
     esp_err_t e=(remove(INI_PATH)==0)?ESP_OK:ESP_FAIL;
+    if(e==ESP_OK)s_ini_sha256[0]=0;
     xSemaphoreGive(lock);return e;
 }
 
