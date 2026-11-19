@@ -35,6 +35,7 @@ Use your verified ESP32 programming COM port in place of the **example** `COM7`.
 - [Full INI-driven guided calibration journey and reasoning decisions](docs/20-guided-calibration-journey.md)
 - [3DS two-screen Guided Tuning navigation and wireframes](docs/21-3ds-guided-layouts.md)
 - [Phone browser Guided Tuning responsive layouts](docs/22-phone-guided-layouts.md)
+- [Shared ESP/3DS/phone state contract and acceptance tests](docs/23-guided-tuning-protocol-and-acceptance.md)
 - [Earlier UX specification](docs/10-user-experience.md) and [calibration proposal / review transaction model](docs/18-transaction-and-review.md)
 
 Guided Tuning is a **separate, opt-in mode** designed to discover the active ECU/INI configuration, learn from valid telemetry, explain calibration dependencies, and make evidence-backed recommendations. It must never impede manual tuning or silently change ECU flash. The existing Python simulator under `prototype/` is not merged into the v4.8 ESP firmware; firmware capabilities should always be labeled by actual release.
