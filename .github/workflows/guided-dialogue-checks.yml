@@ -9,6 +9,10 @@ on:
       - 'design/engine-build/**'
       - 'design/education/**'
       - 'design/research/**'
+      - 'design/ini/**'
+      - 'tools/ini_research_scan.py'
+      - 'tools/tests/test_ini_research_scan.py'
+      - 'docs/42-proteus-f7-generated-ini-deep-audit.md'
       - 'docs/40-verified-external-source-ledger-and-rusefi-constraints.md'
       - 'docs/41-implementation-readiness-decisions-and-traceability.md'
       - 'prototype/esp_education_core.*'
@@ -34,6 +38,10 @@ on:
       - 'design/engine-build/**'
       - 'design/education/**'
       - 'design/research/**'
+      - 'design/ini/**'
+      - 'tools/ini_research_scan.py'
+      - 'tools/tests/test_ini_research_scan.py'
+      - 'docs/42-proteus-f7-generated-ini-deep-audit.md'
       - 'docs/40-verified-external-source-ledger-and-rusefi-constraints.md'
       - 'docs/41-implementation-readiness-decisions-and-traceability.md'
       - 'prototype/esp_education_core.*'
@@ -73,3 +81,5 @@ jobs:
         run: bash tests/run_assets_host.sh
       - name: Compile and test bounded ESP-compatible C education state
         run: bash tests/run_education_host.sh
+      - name: Test read-only generated INI research scanner
+        run: python3 -m unittest discover -s ../../tools/tests -p 'test_ini_research_scan.py'
