@@ -37,9 +37,16 @@ art/dreamfont.t3x: art/dreamfont.t3s $(wildcard art/type/*.png)
 	tex3ds -i art/dreamfont.t3s -o $@
 art/tsicons.t3x: art/tsicons.t3s $(wildcard art/tsicons/*.png)
 	tex3ds -i art/tsicons.t3s -o $@
-art/mascot.t3x: art/mascot.t3s art/mascot/seed.txt tools/generate_mascot.py
-	python3 tools/generate_mascot.py
+# The release includes generated mascot PNGs. A normal clean build does not
+# need Python. For seed-only checkouts, the missing PNGs can be generated
+# using the portable Python launcher (python/python3/Windows py.exe).
+art/mascot/head.png art/mascot/jaw.png art/mascot/mouth.png:
+	@bash tools/run_python.sh tools/generate_mascot.py
+art/mascot.t3x: art/mascot.t3s art/mascot/head.png art/mascot/jaw.png art/mascot/mouth.png
 	tex3ds -i art/mascot.t3s -o $@
+.PHONY: regenerate-mascot
+regenerate-mascot:
+	@bash tools/run_python.sh tools/generate_mascot.py
 $(BUILD):
 	@mkdir -p $@
 clean:
