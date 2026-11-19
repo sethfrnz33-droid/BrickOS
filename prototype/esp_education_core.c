@@ -45,7 +45,7 @@ bool brick_edu_confused(brick_edu_state_t *s,const char *id) {
     brick_edu_concept_t *r=brick_edu_find(s,id);
     if(!r)return false;
     r->understanding=BRICK_EDU_NEEDS_HELP;
-    r->requested_help++;
+    if(r->requested_help<UINT8_MAX)r->requested_help++;
     r->needs_revisit=true;
     s->event_sequence++;
     return true;
