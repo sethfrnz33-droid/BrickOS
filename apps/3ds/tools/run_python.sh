@@ -9,7 +9,7 @@ run_with() {
   if status=$("$@" -c 'import sys;print(int(sys.version_info >= (3, 8)))' 2>/dev/null) && [[ "$status" == 1 ]]; then
     echo "Using Python: $*"
     "$@" "$script" "${script_args[@]}"
-    return 0
+    exit $?  # Found a real interpreter; preserve generation errors verbatim.
   fi
   return 1
 }
