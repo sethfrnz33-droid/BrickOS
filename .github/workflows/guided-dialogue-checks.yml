@@ -5,6 +5,10 @@ on:
     paths:
       - 'firmware/esp32/web/**'
       - 'firmware/esp32/tests/**'
+      - 'design/diagnostics/**'
+      - 'docs/30-seth-diagnostic-agent-master-plan.md'
+      - 'docs/31-seth-high-rate-capture-and-evidence-spec.md'
+      - 'docs/32-seth-diagnostic-case-ux-and-reasoning-flows.md'
       - 'firmware/esp32/tools/**'
       - 'docs/24-seth-complete-dialogue.md'
       - 'docs/28-seth-chapter-questions.md'
@@ -13,6 +17,10 @@ on:
     paths:
       - 'firmware/esp32/web/**'
       - 'firmware/esp32/tests/**'
+      - 'design/diagnostics/**'
+      - 'docs/30-seth-diagnostic-agent-master-plan.md'
+      - 'docs/31-seth-high-rate-capture-and-evidence-spec.md'
+      - 'docs/32-seth-diagnostic-case-ux-and-reasoning-flows.md'
       - 'firmware/esp32/tools/**'
       - 'docs/24-seth-complete-dialogue.md'
       - 'docs/28-seth-chapter-questions.md'
