@@ -504,12 +504,46 @@ static float trace_interp_x=0,trace_interp_y=0;
 static bool trace_found=false;
 /* The UI never waits for HTTP; worker holds the shared HTTP response until
  * the main thread consumes its result. LightLock protects task handoff. */
-enum {TASK_IDLE,TASK_STATUS,TASK_INI,TASK_LIVE,TASK_CAL,TASK_AXIS_X,TASK_AXIS_Y,TASK_WRITE,TASK_RPM_LIMIT,TASK_INI_FLAGS,
+enum {TASK_IDLE,TASK_STATUS,TASK_INI,TASK_LIVE,TASK_CAL,TASK_PANEL_PREVIEW,TASK_AXIS_X,TASK_AXIS_Y,TASK_WRITE,TASK_RPM_LIMIT,TASK_INI_FLAGS,
       TASK_STIM_PREPARE,TASK_STIM_START,TASK_STIM_STOP,TASK_ERROR,TASK_COMMAND_INSPECT,TASK_TEST_ABORT,TASK_SENSOR_CAPTURE};
 static LightLock task_lock;
 static volatile int task_state=0; /* 0 free, 1 pending, 2 busy, 3 completed */
 static int task_type=TASK_IDLE,task_result=-1,task_page=0,task_offset=0,task_len=0,task_field=-1;
 static uint8_t task_calibration[EDIT_CAP];
+/* Up to three genuine ECU map/curve payloads, read-only and independent
+ * of staged tuning edits. Never invent cells before a successful USB read. */
+#define BTS_PANEL_PREVIEW_COUNT 3
+typedef struct {
+ int field,length,attempts;
+ bool ready;
+ uint8_t bytes[EDIT_CAP];
+} BtsPanelPreview;
+static BtsPanelPreview panel_previews[BTS_PANEL_PREVIEW_COUNT];
+static void bts_panel_preview_init(void){
+ for(int j=0;j<BTS_PANEL_PREVIEW_COUNT;j++){
+    panel_previews[j].field=-1;
+    panel_previews[j].length=0;
+    panel_previews[j].attempts=0;
+    panel_previews[j].ready=false;
+ }
+ for(int i=0;i<result_count;i++){
+    if(results[i].type!=1&&results[i].type!=5)continue;
+    int field=results[i].field;
+    if(field<0||field>=cal_count)continue;
+    const Field *f=&cal[field];
+    if(f->bytes<1||f->bytes>EDIT_CAP||f->kind!=K_ARRAY)continue;
+    bool exists=false;
+    for(int j=0;j<BTS_PANEL_PREVIEW_COUNT;j++)
+        if(panel_previews[j].field==field)exists=true;
+    if(exists)continue;
+    for(int j=0;j<BTS_PANEL_PREVIEW_COUNT;j++)
+        if(panel_previews[j].field<0){
+            panel_previews[j].field=field;
+            panel_previews[j].length=f->bytes;
+            break;
+        }
+ }
+}
 /* Metadata inspection only; no actuator commands or payload bytes. */
 static bool command_inspect_pending=false,command_inspect_defined=false,command_inspect_visible=false;
 static bool test_abort_pending=false;
@@ -3267,7 +3301,7 @@ static void config_group_shift(int direction){
 static void open_cal(int id,const char*label);
 static void open_ini_graph(int id,int returnpage,int returnselected);
 static void open_target(const char*target,const char*label){result_count=detail_sel=0;snprintf(open_title,sizeof(open_title),"%s",label);
- resolve_item(target,0);ui_page=PAGE_DETAIL;selected=scroll_y=0;
+ resolve_item(target,0);bts_panel_preview_init();ui_page=PAGE_DETAIL;selected=scroll_y=0;
  if(!result_count){note("INI view has no supported fields or graphs");return;}
  bts_context_named(label,target);
  if(result_count==1 && results[0].type==4){
@@ -7816,7 +7850,7 @@ static void net_thread(void *arg){
        else if(type==TASK_LIVE){
           char path[96];snprintf(path,sizeof(path),"/api/live?length=%d&hz=50",len);
           result=get_request(path);
-       }else if(type==TASK_CAL||type==TASK_AXIS_X||type==TASK_AXIS_Y){
+       }else if(type==TASK_CAL||type==TASK_AXIS_X||type==TASK_AXIS_Y||type==TASK_PANEL_PREVIEW){
           result=read_bytes(page,off,task_calibration,len);
 
        }
@@ -7929,6 +7963,16 @@ static void complete_task(void){
    }
    break;
  }
+ case TASK_PANEL_PREVIEW:
+   for(int j=0;j<BTS_PANEL_PREVIEW_COUNT;j++){
+       BtsPanelPreview *v=&panel_previews[j];
+       if(v->field==field&&v->length>0&&
+          result==v->length&&result<=EDIT_CAP&&ui_page==PAGE_DETAIL){
+          memcpy(v->bytes,task_calibration,(size_t)result);
+          v->ready=true;
+       }
+   }
+   break;
  case TASK_CAL:
    if(field==open_field && field>=0 && field<cal_count){
       Field *f=&cal[field];
@@ -8003,6 +8047,20 @@ static void run_scheduler(u64 now){
        cal_requested=false;pending_cal_field=-1;
     }
     return;
+ }
+ /* Populate composite TunerStudio screen widgets from genuine ECU reads.
+  * This task cannot stage edits or issue a physical output command. */
+ if(ui_page==PAGE_DETAIL&&bts_spatial_layout()&&menu_loaded&&ecu_session&&
+    ecu_signature[0]&&!strcmp(ini_signature,ecu_signature)){
+   for(int j=0;j<BTS_PANEL_PREVIEW_COUNT;j++){
+      BtsPanelPreview *v=&panel_previews[j];
+      if(v->field<0||v->ready||v->attempts>=2)continue;
+      const Field *f=&cal[v->field];
+      if(task_submit(TASK_PANEL_PREVIEW,f->page,f->offset,v->length,v->field)){
+         v->attempts++;
+         return;
+      }
+   }
  }
  if(ui_page==PAGE_FIELD&&editor_loaded&&current_table>=0){
     for(int a=0;a<2;a++)if(axis_field[a]>=0&&!axis_ready[a]&&axis_tries[a]<3){
