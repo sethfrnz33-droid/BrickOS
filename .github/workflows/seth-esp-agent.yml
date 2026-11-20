@@ -1,0 +1,34 @@
+name: Seth ESP Agent Read-only Integration
+on:
+  push:
+    branches: [feature/seth-esp-readonly-agent-v1]
+  pull_request:
+    paths:
+      - 'firmware/BrickOS/**'
+      - 'prototype/**'
+      - 'design/education/**'
+      - '.github/workflows/seth-esp-agent.yml'
+
+jobs:
+  host-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Standalone C agent tests
+        run: make -C prototype/seth-agent clean test
+      - name: ESP route and portable UI contract
+        run: node --test firmware/BrickOS/tests/seth-esp-http-contract.test.mjs
+      - name: Regenerate browser assets
+        run: python3 firmware/BrickOS/tools/generate_web_assets.py
+  esp-idf-compile:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.3.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native ESP32-S3 build
+        shell: bash
+        run: |
+          . /opt/esp/idf/export.sh
+          cd firmware/BrickOS
+          idf.py set-target esp32s3
+          idf.py build
