@@ -30,6 +30,7 @@
 #include "ini_cache.h"
 #include "usb_sd_ini.h"
 #include "telemetry.h"
+#include "seth_http.h"
 #include "stim_policy.h"
 
 #define MAX_BODY 3500
@@ -174,6 +175,7 @@ static esp_err_t guide_story_ui_js(httpd_req_t *r){return asset(r,"application/j
 static esp_err_t ini_fast_cache_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_ini_fast_cache,brick_asset_ini_fast_cache_len);}
 static esp_err_t guide_voice_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_voice,brick_asset_guide_voice_len);}
 static esp_err_t guide_catalog_get(httpd_req_t *r){return asset(r,"application/json; charset=utf-8",brick_asset_guide_catalog,brick_asset_guide_catalog_len);}
+static esp_err_t seth_page_get(httpd_req_t *r){return asset(r,"text/html; charset=utf-8",brick_asset_seth_page,brick_asset_seth_page_len);}
 static esp_err_t guide_head_get(httpd_req_t *r){return asset(r,"image/png",brick_asset_seth_head,brick_asset_seth_head_len);}
 static esp_err_t guide_jaw_get(httpd_req_t *r){return asset(r,"image/png",brick_asset_seth_jaw,brick_asset_seth_jaw_len);}
 static esp_err_t guide_mouth_get(httpd_req_t *r){return asset(r,"image/png",brick_asset_seth_mouth,brick_asset_seth_mouth_len);}
@@ -1220,7 +1222,7 @@ static void wifi_start(void){
     ESP_LOGI(TAG,"AP READY: SSID=brick, OPEN (no password), http://192.168.4.1/");
 }
 static void http_start(void){
-    httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=16384;cfg.max_uri_handlers=42;
+    httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=16384;cfg.max_uri_handlers=48;
     cfg.lru_purge_enable=true; cfg.recv_wait_timeout=8;cfg.send_wait_timeout=15;
     httpd_handle_t server=NULL;ESP_ERROR_CHECK(httpd_start(&server,&cfg));
     const httpd_uri_t routes[]={
@@ -1236,6 +1238,10 @@ static void http_start(void){
       {.uri="/guide-story-ui.mjs",.method=HTTP_GET,.handler=guide_story_ui_js},
       {.uri="/guide-voice.mjs",.method=HTTP_GET,.handler=guide_voice_js},
       {.uri="/api/guide/v1/catalog",.method=HTTP_GET,.handler=guide_catalog_get},
+      {.uri="/seth",.method=HTTP_GET,.handler=seth_page_get},
+      {.uri="/api/seth/v1/view",.method=HTTP_GET,.handler=seth_http_view},
+      {.uri="/api/seth/v1/lessons",.method=HTTP_GET,.handler=seth_http_lessons},
+      {.uri="/api/seth/v1/action",.method=HTTP_POST,.handler=seth_http_action},
       {.uri="/guide/seth-head.png",.method=HTTP_GET,.handler=guide_head_get},
       {.uri="/guide/seth-jaw.png",.method=HTTP_GET,.handler=guide_jaw_get},
       {.uri="/guide/seth-mouth.png",.method=HTTP_GET,.handler=guide_mouth_get},
@@ -1359,6 +1365,7 @@ void app_main(void){
         g_query_stage = 0;
     }
     ESP_LOGW(TAG,"BOOT_DIAG: boot=%lu reset_reason=%d, GPIO17 heartbeat HIGH-on, GPIO18 client HIGH-on",(unsigned long)g_boot_counter,esp_reset_reason());
+    seth_http_init(); /* Nonfatal; education-only endpoints fail closed on allocation error. */
     wifi_start();
     http_start();
     storage_init();

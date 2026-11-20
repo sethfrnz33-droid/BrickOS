@@ -93,7 +93,7 @@ Engine hardware facts are keyed to a local engine profile, **not** to a volatile
 
 ## Seth's ESP-resident educational master plan
 
-**Scope and status:** Planning, authored starter content and **host-tested pure-C state prototype**, not yet linked into the ESP-IDF firmware. The current browser dialogue remains phone-side; we have **not** shipped an ESP-side adaptive instructor, full engine archive, high-rate case recorder, authorized autotuner or DS guide.
+**Scope and status:** The original starter content and host-tested pure-C prototype are now linked into the ESP-IDF build **on the Seth v1 feature branch** as a shared, volatile education-only agent. This requires native ESP-IDF/board verification before deployment; there is still no ESP-owned authenticated engine archive, live sensor diagnosis, high-rate recorder, authorized autotuner, or DS client. The older browser-side Guide remains available separately.
 
 - [Complete product specification: adaptive teaching, HPA-ordered calibration guide and evidence separation](docs/36-seth-complete-teaching-and-tuning-master-spec.md)
 - [Full dialogue behavior, educational checks, onboarding, and phone/DS screen workflows](docs/37-seth-education-screen-and-dialogue-flows.md)
@@ -140,7 +140,7 @@ The existing 3DS/DSi tuners preserve a verified copy on **their own SD card**. F
 
 **Host-tested only:** no measured load-time improvement, real phone test, new ESP-IDF binary build, or physical ECU/MSC confirmation has been performed for this update. The new browser asset is regenerated automatically by ESP-IDF CMake configuration.
 
-## Seth standalone prototype V0.2 — no production integration
+## Seth standalone prototype V0.2 — basis for the read-only ESP service
 
 [Prototype source and build instructions](prototype/seth-agent/README.md) — a self-contained, **offline C11** agent prototype, not linked into `firmware/BrickOS/` or the phone/DS applications.
 

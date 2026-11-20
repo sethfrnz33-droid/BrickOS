@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ask Seth — ESP Agent | BrickOS</title>
+<style>
+:root{color-scheme:dark;--bg:#0d1215;--surface:#182126;--stroke:#34444a;--text:#e8efed;--muted:#a3b3b7;--accent:#bde8ad}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,Arial,sans-serif}
+a{color:var(--accent)}.shell{max-width:1050px;margin:auto;padding:18px 20px 60px}
+header{display:flex;gap:16px;justify-content:space-between;align-items:center;border-bottom:1px solid var(--stroke);padding-bottom:16px;flex-wrap:wrap}
+h1{font-size:clamp(24px,4vw,39px);letter-spacing:-1px;margin:8px 0}h2{font-size:19px;margin:4px 0 12px}p{margin:8px 0 14px}
+.eyebrow{color:var(--accent);text-transform:uppercase;letter-spacing:.16em;font-size:11px;font-weight:700}
+.muted,small{color:var(--muted)}.grid{display:grid;grid-template-columns:1.6fr 1fr;gap:18px;margin-top:22px}
+.panel{border:1px solid var(--stroke);background:var(--surface);border-radius:13px;padding:20px}
+.panel+.panel{margin-top:18px}.tile{padding:12px;border:1px solid var(--stroke);border-radius:8px;margin:10px 0;overflow-wrap:anywhere}
+.notice{background:#233026;border-left:3px solid var(--accent);padding:12px;margin-top:16px;border-radius:4px}
+button,select{font:inherit;border:1px solid #597079;border-radius:8px;background:#27343b;color:var(--text);padding:10px 12px;min-height:43px;max-width:100%}
+button{cursor:pointer;text-align:left}button:hover{border-color:var(--accent)}button:disabled{opacity:.5;cursor:wait}
+button.primary{background:var(--accent);border-color:var(--accent);color:#14201a;font-weight:700}button.secondary{background:#1c292f}
+button.active{border-color:var(--accent)}.actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.chapters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.choices{display:grid;gap:8px}.choices button{width:100%}
+label{display:block;font-size:13px;margin-top:12px;margin-bottom:5px;color:var(--muted)}
+select{width:100%}.source-line{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--stroke)}
+.source-line strong{text-align:right;max-width:68%;overflow-wrap:anywhere}.dim{font-size:12px;color:var(--muted)}
+.status{color:var(--accent)}.error{color:#ffbcae}
+@media(max-width:730px){.grid{grid-template-columns:1fr}.shell{padding:14px 12px 45px}.panel{padding:16px}.chapters{grid-template-columns:1fr}header{align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header>
+<div><div class="eyebrow">BrickOS / ESP32-S3 / Education only</div><h1>Ask Seth</h1><div class="muted">The same bounded C guide running on the ESP, with portable phone/3DS response packets.</div></div>
+<a href="/">Back to Manual Tune</a>
+</header>
+<div class="notice">This is a shared, temporary learning session on an open Wi-Fi access point. Do not enter private engine-build details. Seth cannot change calibration, command hardware, verify wiring, or diagnose an engine from these status flags.</div>
+<div id="error" class="notice" hidden role="alert"></div>
+<div class="grid">
+<div>
+<section class="panel" aria-live="polite">
+<div class="eyebrow" id="state">Connecting to the ESP agent</div>
+<h2 id="title">Loading lesson</h2>
+<p id="text"></p><p id="detail" class="muted"></p>
+<div id="task" class="tile" hidden></div>
+<div id="question" class="tile" hidden></div>
+<div id="choices" class="choices"></div>
+<div class="actions" id="context-actions"></div>
+<div class="actions">
+<button class="primary" data-action="full_tour">Full guided tour</button>
+<button class="secondary" data-action="home">Agent home</button>
+<button class="secondary" id="refresh">Refresh</button>
+</div>
+</section>
+<section class="panel">
+<div class="eyebrow">Ten chapter curriculum</div>
+<h2>Choose a chapter</h2>
+<div id="chapters" class="chapters"></div>
+</section>
+</div>
+<div>
+<section class="panel">
+<div class="eyebrow">Learning settings</div>
+<h2>How much detail?</h2>
+<label for="depth">Explanation length</label>
+<select id="depth">
+<option value="quick">Quick recommendation</option>
+<option value="guided" selected>Guided explanation</option>
+<option value="lesson">Full lesson</option>
+<option value="technical">Technical depth</option>
+</select>
+<label for="interaction">Teaching style</label>
+<select id="interaction">
+<option value="recommend">Recommend, don't quiz</option>
+<option value="optional_checks" selected>Optional checks</option>
+<option value="teach_as_we_go">Teach as we go</option>
+<option value="course">Course mode</option>
+</select>
+<label for="lesson">Find a concept</label>
+<select id="lesson"><option value="">Loading concept list…</option></select>
+<div class="actions"><button class="primary" id="open-lesson">Study concept</button></div>
+</section>
+<section class="panel">
+<div class="eyebrow">Source integrity</div>
+<h2>ECU evidence status</h2>
+<div id="source"></div>
+<p class="dim">Only USB connectivity, matching INI identity and sample timing are reported here. Sensor readings require separately verified field semantics and are not interpreted by this version.</p>
+</section>
+<section class="panel">
+<div class="eyebrow">Boundary</div>
+<p class="dim">No ECU writes. No profile persistence. No automated VE, spark, injector, throttle or engine control. A chapter or quiz is not evidence that the physical engine has been validated.</p>
+</section>
+</div>
+</div>
+</div>
+<script>
+(function(){
+"use strict";
+const by=id=>document.getElementById(id);
+let view=null, catalog=null, busy=false;
+function put(id,value){by(id).textContent=value==null?"":String(value)}
+function makeButton(label,action,value){const b=document.createElement("button");b.type="button";b.textContent=label;b.addEventListener("click",()=>act(action,value));return b}
+function render(){
+ if(!view)return;
+ const p=view.agent||{},s=view.source||{};
+ put("title",p.title||"Seth");
+ put("state",p.state||"education");
+ put("text",p.text);put("detail",p.detail);
+ const q=by("question");q.hidden=!p.question;put("question",p.question);
+ const task=by("task");task.hidden=!(p.task_reason||p.task_lesson_id);
+ task.replaceChildren();
+ if(!task.hidden){const reason=document.createElement("p");reason.textContent=p.task_reason||"";task.append(reason);
+  if(p.task_lesson_id)task.append(makeButton("Study recommended: "+p.task_lesson_id,"study_topic",p.task_lesson_id));}
+ const choices=by("choices");choices.replaceChildren();
+ if(p.state==="optional_education_check"&&Array.isArray(p.choices)){
+  p.choices.forEach((label,i)=>choices.append(makeButton(label,"check_answer",i===3?"skip":String(i))));}
+ const ctx=by("context-actions");ctx.replaceChildren();
+ if(p.state==="learning_only"){
+  ctx.append(makeButton("Explain differently","explain_alternate"));
+  ctx.append(makeButton("Check my understanding","check_start"));
+  ctx.append(makeButton("I understand this concept","i_understand"));
+  if(p.study_target)ctx.append(makeButton("Return toward "+p.study_target,"continue_topic"));}
+ if(catalog?.stages?.length)drawChapters();
+ by("source").replaceChildren();
+ const item=(name,value)=>{const r=document.createElement("div");r.className="source-line";const a=document.createElement("span"),b=document.createElement("strong");a.textContent=name;b.textContent=value;r.append(a,b);by("source").append(r)};
+ item("ECU connected",s.ecu_connected?"Reported":"Not connected");
+ item("INI matches ECU signature",s.ini_signature_matched?"Yes":"Not verified");
+ item("Telemetry fresh",s.telemetry_fresh?"Yes":"No");
+ item("Sample age",s.telemetry_age_ms>=0?s.telemetry_age_ms+" ms":"Unavailable");
+ item("Observed sampling rate",Number.isFinite(s.telemetry_actual_hz)?s.telemetry_actual_hz.toFixed(1)+" Hz":"Unavailable");
+ item("Cached INI",s.ini_cached?"Present":"Missing");
+ item("Role interpretation","Not verified");
+}
+function drawChapters(){
+ const el=by("chapters");el.replaceChildren();
+ for(const st of catalog.stages){const title=String(st.id).replace(/_/g," ");
+   const b=makeButton((st.number+1)+". "+title,"stage",String(st.number));
+   if(view?.agent?.stage===st.number&&view?.agent?.state==="chapter_open")b.classList.add("active");
+   el.append(b)}
+}
+async function getJson(path,options){
+ const response=await fetch(path,{cache:"no-store",...options});
+ const j=await response.json();
+ if(!response.ok||j.ok===false)throw Error(j.error||"HTTP "+response.status);
+ return j;
+}
+function fail(err){by("error").hidden=false;put("error",String(err?.message||err))}
+function clearError(){by("error").hidden=true;put("error","")}
+async function refresh(){
+ if(busy)return;busy=true;clearError();
+ try{view=await getJson("/api/seth/v1/view");render()}catch(e){fail(e)}finally{busy=false}
+}
+async function act(action,value=""){
+ if(busy)return;busy=true;clearError();
+ try{view=await getJson("/api/seth/v1/action",{
+ method:"POST",headers:{"Content-Type":"application/json"},
+ body:JSON.stringify({revision:view?.agent?.revision??0,action,value})});
+ render()
+ }catch(e){fail(e);try{view=await getJson("/api/seth/v1/view");render()}catch(_){}}
+ finally{busy=false}
+}
+async function start(){
+ try{catalog=await getJson("/api/seth/v1/lessons");
+  const select=by("lesson");select.replaceChildren();
+  for(const lesson of catalog.lessons){const o=document.createElement("option");o.value=lesson.id;o.textContent=lesson.chapter+" / "+lesson.title;select.append(o);}
+  drawChapters();
+ }catch(e){fail(e)}
+ await refresh();
+}
+by("refresh").addEventListener("click",refresh);
+by("open-lesson").addEventListener("click",()=>act("study_topic",by("lesson").value));
+by("depth").addEventListener("change",()=>act("depth",by("depth").value));
+by("interaction").addEventListener("change",()=>act("interaction",by("interaction").value));
+document.querySelectorAll("[data-action]").forEach(el=>el.addEventListener("click",()=>act(el.dataset.action)));
+start();
+})();
+</script>
+</body>
+</html>
