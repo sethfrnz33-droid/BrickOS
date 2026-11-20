@@ -1,3 +1,9 @@
+## GPIO8 harness-isolation output testing (source updated 2026-11-19)
+
+Output-test support is merged into `firmware/esp32/main/main.c` on `main`. No external firmware patch script is required. The board's **user-described** interlock uses **GPIO8 HIGH = harness 12 V isolated**; GPIO8 LOW, unstable or unconfigured means testing is blocked. The ESP32 checks this input (no internal pull-up), matching active INI, ECU USB session and fresh zero RPM before accepting a named output-test request. It exposes `/api/test/preflight`, `/api/test/start`, and `/api/test/abort`; a watchdog attempts Abort if the interlock becomes unsafe, connectivity is lost or the short timeout expires. Main/starter relay and arbitrary Z command selectors are excluded.
+
+**Validation:** Source-level checks passed; ESP-IDF cross-compilation, GPIO8 electrical isolation and actual ECU/3DS hardware testing have **not** been performed. Firmware cannot independently prove physical harness isolation. Do not use output testing until the board's power cutoff, GPIO8 bias and automatic Abort are validated in an isolated bench setup.
+
 # BrickOS ESP32-S3 firmware — v4.8 baseline
 
 This directory is the complete, original ESP-side v4.8 release uploaded as `BrickOS-v48-TRIGGER-INI-FIX(2).zip`. The code is for an **ESP32-S3**, not the STM32-based ECU; it is built using ESP-IDF, not Arduino IDE. Guided Tuning v4.9-v4.12 is **not merged into this v4.8 source**.
