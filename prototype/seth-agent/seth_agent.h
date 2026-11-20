@@ -64,6 +64,7 @@ typedef struct {
     unsigned choice_count;
     const char *state, *evidence, *next;
     unsigned stage;
+    uint32_t session_revision;
     bool read_only, tuning_verified, gdi_unsupported;
     const char *study_target; /* non-authoritative original topic breadcrumb */
 } seth_packet_t;
