@@ -1,0 +1,36 @@
+name: Seth standalone prototype validation
+
+on:
+  push:
+    paths:
+      - 'prototype/seth-agent/**'
+      - 'prototype/esp_education_core.c'
+      - 'prototype/esp_education_core.h'
+      - 'design/education/lesson-catalog.v1.json'
+      - '.github/workflows/seth-agent-prototype.yml'
+  pull_request:
+    paths:
+      - 'prototype/seth-agent/**'
+      - 'prototype/esp_education_core.c'
+      - 'prototype/esp_education_core.h'
+      - 'design/education/lesson-catalog.v1.json'
+      - '.github/workflows/seth-agent-prototype.yml'
+
+jobs:
+  read-only-host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile isolated C11 code and test all Seth helper paths
+        run: make -C prototype/seth-agent test
+      - name: Build and run the offline demonstration
+        run: |
+          make -C prototype/seth-agent
+          prototype/seth-agent/build/seth_demo
+      - name: Verify no firmware build sources reference the prototype
+        run: |
+          if grep -R -E 'seth_agent\.c|seth_agent\.h|seth_catalog\.c' firmware/BrickOS/main/CMakeLists.txt; then
+            echo "Seth prototype was linked into firmware unexpectedly"
+            exit 1
+          fi
+          echo "Standalone Seth prototype is not linked into production"
