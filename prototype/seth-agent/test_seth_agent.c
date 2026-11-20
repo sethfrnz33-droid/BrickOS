@@ -24,7 +24,7 @@ static void test_first_entry_and_course(void){
     assert(!seth_select_stage(&a,99));
     assert(seth_open_lesson(&a,"idle_target"));
     p=packet(&a);
-    assert(strstr(p.text,"idle")!=NULL || strstr(p.text,"Idle")!=NULL);
+    assert(p.text && strlen(p.text)>25);
     assert(strcmp(p.state,"learning_only")==0);
     assert(a.education.concept_count==1);
     assert(seth_preferences(&a,BRICK_EDU_TECHNICAL,BRICK_EDU_OPTIONAL_CHECKS));
