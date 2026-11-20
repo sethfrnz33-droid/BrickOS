@@ -9,6 +9,8 @@ bool ini_cache_present(void);
 size_t ini_cache_size(void);
 /* Stable SHA-256 of saved INI, regenerated at boot and after successful changes. */
 bool ini_cache_sha256(char out[65]);
+/* Read-only exact TunerStudio signature check under the INI cache lock. */
+bool ini_cache_matches_signature(const char *ecu_signature);
 esp_err_t ini_cache_upload(httpd_req_t *req);
 esp_err_t ini_cache_download(const char *url, const char *ssid, const char *password, char *error, size_t error_size);
 esp_err_t ini_cache_serve(httpd_req_t *req);
