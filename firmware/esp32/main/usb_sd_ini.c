@@ -127,8 +127,10 @@ static esp_err_t sd_copy_definition(const char *sig) {
     if (unmatched == 1) {
         esp_err_t result = ini_cache_import_sd_file(fallback);
         if (result == ESP_OK) {
-            snprintf(s_last_file,sizeof(s_last_file),"%s",strrchr(fallback,'/')?
-                strrchr(fallback,'/')+1:fallback);
+            const char *name = strrchr(fallback, '/');
+            name = name ? name + 1 : fallback;
+            snprintf(s_last_file, sizeof(s_last_file), "%.*s",
+                     (int)sizeof(s_last_file)-1, name);
             sd_status("Valid alternate ECU INI imported (read-only until signature matches)");
         }
         return result;
