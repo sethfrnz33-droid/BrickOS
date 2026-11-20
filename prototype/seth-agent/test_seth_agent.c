@@ -1,4 +1,5 @@
 #include "seth_agent.h"
+#include "seth_packet_json.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -103,6 +104,26 @@ static void test_diagnostic_is_a_hypothesis_without_sensor_input(void){
     assert(a.diagnostic_case==SETH_CASE_UNKNOWN);
     assert(strstr(packet(&a).text,"don't have enough context")!=NULL);
 }
+static void test_portable_json(void){
+    seth_agent_t a;seth_init(&a);
+    seth_open_lesson(&a,"ecu_vs_engine");
+    seth_packet_t p=packet(&a);
+    char out[8192];
+    size_t n=seth_packet_json(&p,out,sizeof(out));
+    assert(n>100 && n<sizeof(out));
+    assert(strstr(out,"\"schema\":\"brickos.seth.packet.v0\"")!=NULL);
+    assert(strstr(out,"\"read_only\":true")!=NULL);
+    assert(strstr(out,"\"tuning_verified\":false")!=NULL);
+    assert(strstr(out,"\"state\":\"learning_only\"")!=NULL);
+    char tiny[8];
+    assert(seth_packet_json(&p,tiny,sizeof(tiny))==0);
+    assert(tiny[0]==0);
+    p.title="quoted \"thing\"\nbackslash \\";
+    assert(seth_packet_json(&p,out,sizeof(out))>0);
+    assert(strstr(out,"quoted \\\"thing\\\"\\nbackslash \\\\")!=NULL);
+    p.choice_count=SETH_MAX_CHOICES+1;
+    assert(seth_packet_json(&p,out,sizeof(out))==0);
+}
 static void test_bounds(void){
     seth_agent_t a;seth_init(&a);
     assert(!seth_open_lesson(&a,"missing_concept"));
@@ -128,6 +149,7 @@ int main(void){
     test_build_architecture_without_assumptions();
     test_diagnostic_is_a_hypothesis_without_sensor_input();
     test_bounds();
+    test_portable_json();
     puts("Seth standalone prototype: all tests passed (read-only)");
     return 0;
 }
