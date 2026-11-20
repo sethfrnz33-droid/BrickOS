@@ -140,6 +140,27 @@ const char *bt_sd_message(void){return message;}
 size_t bt_sd_written(void){return written;}
 const char *bt_sd_cache_path(void){return ready?cached:"";}
 void bt_sd_abort(void){if(writer){fclose(writer);writer=NULL;}if(ready)remove(pending);}
+/* Clear only ECU-definition cache artifacts, not user favorites or SFX.
+ * Caller must stop the network INI job and SD parser before this runs. */
+bool bt_sd_delete_ini_cache(void){
+    if(!ready){note("SD NOT READY / CANNOT CLEAR INI");return false;}
+    if(writer){note("INI DOWNLOAD ACTIVE / CANCEL FIRST");return false;}
+    char meta[155],meta_tmp[155],unverified[155];
+    snprintf(meta,sizeof(meta),"%s/ecu.meta",folder);
+    snprintf(meta_tmp,sizeof(meta_tmp),"%s/ecu.meta.tmp",folder);
+    snprintf(unverified,sizeof(unverified),"%s/ecu-unverified.ini",folder);
+    /* Invalidate the snapshot before removing the raw INI. Even if an SD
+     * deletion fails partway, no snapshot can resurrect stale definitions. */
+    const char *paths[]={meta,meta_tmp,cached,pending,backup,unverified};
+    for(unsigned i=0;i<sizeof(paths)/sizeof(paths[0]);i++){
+        if(remove(paths[i])!=0 && errno!=ENOENT){
+            note("SD INI DELETE FAILED / CHECK CARD");
+            return false;
+        }
+    }
+    note("OLD ECU INI DELETED / FETCH NEW");
+    return true;
+}
 bool bt_sd_begin(void){
     if(!ready){note("SD NOT AVAILABLE");return false;}
     bt_sd_abort();

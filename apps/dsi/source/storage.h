@@ -24,6 +24,9 @@ bool bt_sd_end(void);
 FILE *bt_sd_open_pending(void);
 FILE *bt_sd_open_cached(void);
 bool bt_sd_commit(void);
+/* Remove the stored ECU INI and parsed metadata after user confirmation.
+ * Never touches favorites, audio, or unrelated files. */
+bool bt_sd_delete_ini_cache(void);
 void bt_sd_abort(void);
 /* Versioned on-SD parsed metadata, validated against raw ini checksum. */
 bool bt_sd_snapshot_save(const BtDefinition *d);

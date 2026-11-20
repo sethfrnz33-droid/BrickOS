@@ -111,6 +111,7 @@ static size_t ini_progress=0,ini_disk_bytes=0,ini_parsed_bytes=0,ini_expected_by
 static char client_ip[24]="-",gateway_ip[24]="-";
 static int page=0,list_pick=0,list_scroll=0,tune_cat=0,tune_focus=0,tune_group=-1;
 static int home_pick=0;
+static bool ini_replace_confirm=false;
 static bool favorite_return=false; /* B from a favorited panel returns to Favorites */
 /* UI font upgrade: 9x14 glyphs for browsable tuning folders and settings.
  * 6x9 stays reserved for map-cell numbers and footers. */
@@ -2060,6 +2061,19 @@ static void bottom_link(void){
         char b[64];snprintf(b,sizeof(b),"INI SIG: %.34s",def.signature);
         text(bottom,10,140,b,MUTED,34);
     }else text(bottom,10,140,"IP / DNS ARE LOCAL ONLY",MUTED,34);
+    text(bottom,10,169,"START: REPLACE STORED INI",HIGHLIGHT,27);
+}
+static void draw_ini_replace_confirmation(void){
+    /* Modal is rendered on the lower touchscreen, leaving ECU identity and
+     * connection status visible on the upper screen. No writes to ECU. */
+    round_fill(bottom,5,31,246,154,6,PANEL);
+    fill(bottom,9,35,238,1,HIGHLIGHT);
+    text(bottom,14,43,"DELETE SAVED ECU INI?",HIGHLIGHT,26);
+    text(bottom,14,67,"OLD INI + CACHE REMOVED",WHITE,26);
+    text(bottom,14,88,"THEN FETCH FROM ECU",WHITE,26);
+    text(bottom,14,109,"ECU SETTINGS UNCHANGED",GREEN,26);
+    text(bottom,14,139,"A: CONFIRM REPLACE",HIGHLIGHT,26);
+    text(bottom,14,160,"B: CANCEL",WHITE,26);
 }
 static void render(void){
     /* Never take over the UI while downloading. Touchscreen and navigation
@@ -2090,6 +2104,7 @@ static void render(void){
     else if(page==P_SOUNDS)bottom_sounds();
     else if(page==P_FAV){if(cal_load.active||(chosen_map>=0&&table.valid)||keypad_open)bottom_tune();else bottom_favorites();}
     else bottom_link();
+    if(page==P_LINK && ini_replace_confirm)draw_ini_replace_confirmation();
     if((loading_ini||loading_cache) && page!=P_LINK){
         char b[42];size_t bytes=loading_cache?bt_cache_bytes():bt_async_bytes();
         if(loading_cache)snprintf(b,sizeof(b),"CACHE PARSE: %lu B",(unsigned long)bytes);
@@ -2859,7 +2874,7 @@ static void commit_map(void){
 static void goto_page(int next){
     if(next<0||next>=P_COUNT)return;
     if(next!=P_TUNE)favorite_return=false;
-    page=next;chosen_map=-1;table.valid=false;table.confirm_burn=false;map_focus=0;bit_picker_open=false;bit_choice_count=bit_visible_count=0;list_pick=list_scroll=0;editor_readonly=false;
+    page=next;ini_replace_confirm=false;chosen_map=-1;table.valid=false;table.confirm_burn=false;map_focus=0;bit_picker_open=false;bit_choice_count=bit_visible_count=0;list_pick=list_scroll=0;editor_readonly=false;
     keypad_open=false;
     activity_frame=frame;idle_dashboard=false;
     dialog_name[0]=0;note[0]=0;dialog_depth=0;
@@ -2990,6 +3005,43 @@ static void open_tune_item(void){
     bool from_view=cat>=0&&!strcasecmp(def.menus[cat].label,"View");
     open_target(m->target,m->label,from_view);
 }
+static void replace_saved_ini(void){
+    /* No ECU write operation is allowed to be interrupted or restarted. */
+    if(bt_write_busy()||cal_load.active){
+        snprintf(status_msg,sizeof(status_msg),"INI REPLACE BLOCKED / ECU OPERATION BUSY");return;
+    }
+    /* Close the active INI parser/reader before removing its source file.
+     * Any incomplete HTTP transfer is discarded by bt_async_cancel(). */
+    bt_cache_cancel();
+    loading_cache=false;
+    bt_async_cancel();bt_async_forget_connection();
+    loading_ini=false;
+    bool cleared=bt_sd_delete_ini_cache();
+    if(!cleared){
+        snprintf(status_msg,sizeof(status_msg),"%.90s",bt_sd_message());
+        /* A partial removal invalidates the active definition as a safety
+         * measure, but does not start a new download against a broken SD. */
+    }else snprintf(status_msg,sizeof(status_msg),"INI DELETED / REQUESTING NEW DEFINITION");
+    bt_ini_reset(&def);reset_ref_index();set_compat();invalidate();
+    cache_loaded=false;
+    favorite_count=0;favorites_loaded=false;favorite_signature[0]=0;
+    chosen_map=-1;table.valid=false;table.dirty=false;table.confirm_burn=false;
+    map_count=0;list_pick=list_scroll=0;
+    dialog_name[0]=0;dialog_depth=0;dialog_visible_total=0;
+    tune_cat=tune_focus=0;tune_group=-1;
+    active_ini_graph=-1;graph_from_ini=false;graph_from_dialog[0]=0;
+    monitor_owner[0]=0;monitor_graph_total=monitor_indicator_total=monitor_line_total=0;
+    actual_sig[0]=0;
+    bt_async_expected_signature("");
+    ini_hash_mismatch=false;ini_retry_frame=0;
+    ini_progress=ini_disk_bytes=ini_parsed_bytes=ini_expected_bytes=0;
+    network_failure_count=0;network_resume_frame=0;last_socket_begin_frame=-1000;
+    live_failure_streak=0;live_resume_frame=0;
+    last_net_error[0]=0;last_response_line[0]=last_reject_body[0]=last_failed_path[0]=0;
+    /* Force a new ECU identity/status response before fetching the INI.
+     * The pending request survives if the ECU is temporarily disconnected. */
+    want_status=cleared;want_ini=cleared;network_poll=frame;
+}
 static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
     if(bt_write_busy()){
         if(down&KEY_B && bt_write_cancel()){
@@ -3003,6 +3055,11 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
     if(cal_load.active){
         if(down&KEY_B){cal_load.active=false;bt_async_cancel();chosen_map=-1;
             snprintf(note,sizeof(note),"ECU READ CANCELLED");}
+        return;
+    }
+    if(page==P_LINK && ini_replace_confirm){
+        if(down&KEY_B){ini_replace_confirm=false;return;}
+        if(down&KEY_A){ini_replace_confirm=false;replace_saved_ini();return;}
         return;
     }
     if(bit_picker_open){
@@ -3338,7 +3395,17 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
                 snprintf(note,sizeof(note),"%.85s",bts_sfx_status(sd_ready));
         }
     }else if(page==P_LINK){
-        if(down&KEY_B)goto_page(P_HOME);
+        if(down&KEY_B){goto_page(P_HOME);return;}
+        if((down&KEY_START)||((down&KEY_TOUCH)&&tp->py>=162&&tp->py<191)){
+            if(!sd_ready){
+                snprintf(status_msg,sizeof(status_msg),"MOUNT SD BEFORE REPLACING INI");
+            }else if(loading_ini||bt_write_busy()||cal_load.active){
+                snprintf(status_msg,sizeof(status_msg),"WAIT FOR ACTIVE ECU OPERATION");
+            }else{
+                ini_replace_confirm=true;
+            }
+            return;
+        }
         if(((down&KEY_A)||((down&KEY_TOUCH)&&tp->py>=55&&tp->py<84)) && !sd_ready){
             /* libfat mount is synchronous. This is a deliberate user action,
              * NEVER part of early boot. Draw the diagnostic stage BEFORE
