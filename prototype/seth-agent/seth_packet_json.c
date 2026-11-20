@@ -59,6 +59,7 @@ size_t seth_packet_json(const seth_packet_t *p,char *out,size_t cap){
         json_string(&b,p->choices[i]);
     }
     append(&b,"],\"stage\":");number(&b,p->stage);
+    append(&b,",\"revision\":");number(&b,p->session_revision);
     append(&b,",\"read_only\":");append(&b,p->read_only?"true":"false");
     append(&b,",\"tuning_verified\":");append(&b,p->tuning_verified?"true":"false");
     append(&b,",\"gdi_unsupported\":");append(&b,p->gdi_unsupported?"true":"false");
