@@ -24,6 +24,7 @@ static void base_packet(const seth_agent_t *s,seth_packet_t *p){
     p->gdi_unsupported=s->build.injection==SETH_INJ_GDI||
                        s->build.injection==SETH_INJ_MIXED;
     p->stage=s->stage;
+    p->study_target=s->study_target[0]?s->study_target:NULL;
     p->evidence="No verified live ECU evidence attached. Education and user-reported build facts only.";
 }
 static const seth_lesson_t *find_lesson(const char *id,size_t *index){
@@ -234,7 +235,8 @@ static void render_lesson(const seth_agent_t *s,seth_packet_t *p,bool check){
         p->next="A quiz result records understanding of this example only.";
     }else{
         p->text=lesson_variant(s,l);
-        p->next=s->alternate_explanation?"Try another explanation or return to the guide.":"Explain another way, ask a question, or start an optional understanding check.";
+        p->next=s->study_target[0] ? "Continue the prerequisite path when ready; the original topic is remembered." :
+            (s->alternate_explanation?"Try another explanation or return to the guide.":"Explain another way, ask a question, or start an optional understanding check.");
     }
 }
 void seth_render(const seth_agent_t *s,seth_packet_t *p){
