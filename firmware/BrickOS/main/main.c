@@ -1240,6 +1240,7 @@ static void http_start(void){
       {.uri="/api/guide/v1/catalog",.method=HTTP_GET,.handler=guide_catalog_get},
       {.uri="/seth",.method=HTTP_GET,.handler=seth_page_get},
       {.uri="/api/seth/v1/view",.method=HTTP_GET,.handler=seth_http_view},
+      {.uri="/api/seth/v1/lessons",.method=HTTP_GET,.handler=seth_http_lessons},
       {.uri="/api/seth/v1/action",.method=HTTP_POST,.handler=seth_http_action},
       {.uri="/guide/seth-head.png",.method=HTTP_GET,.handler=guide_head_get},
       {.uri="/guide/seth-jaw.png",.method=HTTP_GET,.handler=guide_jaw_get},
