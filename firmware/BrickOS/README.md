@@ -1,3 +1,10 @@
+
+## ECU Stim combined reads and GPIO8 bench isolation (2026-11-19)
+
+An ECU may have battery power for USB while the harness power is physically disconnected. The previous hard requirement for ECU-reported VBatt below 1 V prevented internal simulation even when the user-described independent GPIO8 harness interlock was HIGH. The new bench policy requires stable GPIO8 HIGH, a matching ECU signature, fresh valid RPM and VBatt readings, and zero RPM before the initial Start. GPIO8 LOW or unknown blocks Start; a watchdog attempts Stop if GPIO8 drops. This is **not** independently verified electrical isolation. Do not connect actuators until the hardware isolation and failure response have been validated.
+
+The high-priority ECU Stim path now reads RPM and VBatt in one USB output-channel snapshot when the INI offsets are close together, preserving fresh checks both before issuing a challenge and again before Start. The raw rusEFI command and other preflight checks are unchanged. No reductions to USB timeout or silent retries were made. Source-level verification is not an ESP-IDF or hardware speed benchmark.
+
 ## GPIO8 harness-isolation output testing (source updated 2026-11-19)
 
 Output-test support is merged into `firmware/BrickOS/main/main.c` on `main`. No external firmware patch script is required. The board's **user-described** interlock uses **GPIO8 HIGH = harness 12 V isolated**; GPIO8 LOW, unstable or unconfigured means testing is blocked. The ESP32 checks this input (no internal pull-up), matching active INI, ECU USB session and fresh zero RPM before accepting a named output-test request. It exposes `/api/test/preflight`, `/api/test/start`, and `/api/test/abort`; a watchdog attempts Abort if the interlock becomes unsafe, connectivity is lost or the short timeout expires. Main/starter relay and arbitrary Z command selectors are excluded.

@@ -515,6 +515,41 @@ static bool stim_read_u16(const brick_bench_u16_t *field, double *reading) {
     free(reply);
     return ok;
 }
+/*
+ * A single coherent output-channel snapshot replaces two separate USB O
+ * transactions (both in preflight and again immediately before Start).
+ * For arbitrary INI offsets too far apart, retain the original two-read path.
+ */
+static bool stim_read_bench_pair(const brick_bench_u16_t *rpm,
+                                 const brick_bench_u16_t *battery,
+                                 double *speed,double *voltage) {
+    if(!rpm||!battery||!speed||!voltage ||
+       rpm->offset>65533U||battery->offset>65533U)return false;
+    unsigned low=rpm->offset<battery->offset?rpm->offset:battery->offset;
+    unsigned high=rpm->offset>battery->offset?rpm->offset:battery->offset;
+    unsigned count=high-low+2U;
+    if(count>128U)
+        return stim_read_u16(rpm,speed) && stim_read_u16(battery,voltage);
+    uint8_t args[4]={(uint8_t)low,(uint8_t)(low>>8),
+                     (uint8_t)count,(uint8_t)(count>>8)};
+    ts_reply_t *reply=calloc(1,sizeof(*reply));
+    if(!reply)return false;
+    brick_live_holdoff(1000);
+    esp_err_t e=ts_request('O',args,sizeof(args),reply,3500);
+    bool ok=e==ESP_OK && reply->status==0 && reply->length==count;
+    if(ok){
+        unsigned ro=rpm->offset-low,bo=battery->offset-low;
+        uint16_t raw_rpm=(uint16_t)reply->bytes[ro] |
+                       ((uint16_t)reply->bytes[ro+1]<<8);
+        uint16_t raw_bat=(uint16_t)reply->bytes[bo] |
+                       ((uint16_t)reply->bytes[bo+1]<<8);
+        *speed=raw_rpm*rpm->scale+rpm->translate;
+        *voltage=raw_bat*battery->scale+battery->translate;
+        ok=isfinite(*speed)&&isfinite(*voltage);
+    }
+    free(reply);
+    return ok;
+}
 /* Capture-only TPS/PPS calibration: this is not a generic ControllerCommands
  * executor. Allowed names and exact payloads are checked against the active
  * ECU's signed session and matching INI. All other commands are rejected.
@@ -578,26 +613,29 @@ static esp_err_t sensor_capture_post(httpd_req_t *r){
 /* NULL means every requirement passed. This preserves independent fresh
  * RPM and battery checks while reporting the *actual* failed stage.
  * Never substitute a stale gauge reading for a failed USB request. */
+static bool brick_bench_interlock_stable_high(void); /* declared below */
 static const char *stim_bench_problem(const char *signature, bool require_zero_rpm,
                                       double *rpm_out, double *vbat_out) {
     brick_bench_u16_t rpm={0},battery={0};
     if (!stim_get_channels(signature,&rpm,&battery))
         return "No matching INI or built-in firmware channel profile";
+    /*
+     * The user-provided GPIO8 interlock reports HIGH only while the
+     * physically isolated external harness has no supply. Its electrical
+     * correctness must be verified on hardware before bench output tests.
+     * ECU VBatt may remain high: it powers the ECU/USB, not the harness.
+     */
+    if (!g_brick_bench_watchdog_ready ||
+        !brick_bench_interlock_stable_high())
+        return "GPIO8 not verified HIGH (harness isolation required)";
     double speed=0,voltage=0;
-    bool speed_fresh=stim_read_u16(&rpm,&speed);
-    bool voltage_fresh=stim_read_u16(&battery,&voltage);
-    if (!speed_fresh) return "ECU RPM USB read failed; cannot confirm stopped engine";
-    if (!voltage_fresh) return "ECU battery-voltage USB read failed";
-    if (!isfinite(speed) || speed < -0.1 || speed > 35000.0)
-        return "ECU reported invalid RPM";
-    if (!isfinite(voltage) || voltage < -0.1)
-        return "ECU reported invalid battery voltage";
-    if (voltage >= 1.0)
-        return "ECU reports battery voltage >= 1 V; bench Start blocked";
-    if (require_zero_rpm && fabs(speed)>0.1)
-        return "ECU reports nonzero RPM while internal stim is OFF";
-    if (!brick_stim_policy(!require_zero_rpm,true,speed,true,voltage))
-        return "ECU stim safety policy rejected fresh readings";
+    if (!stim_read_bench_pair(&rpm,&battery,&speed,&voltage))
+        return "Fresh ECU RPM/battery USB read failed";
+    if (!brick_stim_isolated_policy(!require_zero_rpm,true,speed,
+                                    true,voltage,true))
+        return "ECU stim bench checks rejected fresh RPM/battery or GPIO8";
+    if (!brick_bench_interlock_stable_high())
+        return "GPIO8 changed during ECU preflight";
     if (rpm_out)*rpm_out=speed;
     if (vbat_out)*vbat_out=voltage;
     return NULL;
@@ -659,6 +697,8 @@ static esp_err_t stim_start_post(httpd_req_t *r) {
     double rpm=0,voltage=0;
     const char *reason=stim_bench_problem(active,!already_on,&rpm,&voltage);
     if (reason) return error_reply(r,403,reason);
+    if (!brick_bench_interlock_stable_high())
+        return error_reply(r,403,"GPIO8 left isolated HIGH state before ECU Start");
     if (!already_on) {
         const uint8_t args[]={0x00,0x14,0x00,0x0d}; /* rusEFI TS_X14 enable */
         ts_reply_t *reply=calloc(1,sizeof(*reply));
@@ -668,6 +708,18 @@ static esp_err_t stim_start_post(httpd_req_t *r) {
         bool ok=err==ESP_OK && (reply->status==0 || reply->status==4);
         free(reply);
         if (!ok)return error_reply(r,503,"ECU did not acknowledge internal stim Start; state unknown");
+    }
+    /* A voltage-isolated interlock may change during the USB command;
+     * if so, issue Stop and retain retry state on any failed Stop ACK. */
+    if (!brick_bench_interlock_stable_high()) {
+        g_stim_active=true;
+        snprintf(g_stim_signature,sizeof(g_stim_signature),"%s",active);
+        g_stim_active_until=esp_timer_get_time()+BRICK_STIM_MAX_US;
+        bool stopped=stim_stop_command();
+        if(!stopped)g_stim_active_until=esp_timer_get_time();
+        return error_reply(r,503,stopped?
+            "GPIO8 changed during Start; Stop acknowledged":
+            "GPIO8 changed during Start; Stop unacknowledged, state unknown");
     }
     g_stim_active=true;
     snprintf(g_stim_signature,sizeof(g_stim_signature),"%s",active);
@@ -896,7 +948,8 @@ static void stim_watchdog_task(void *arg) {
                 if (g_wifi_connected_clients==0) {
                     if (!g_stim_no_clients_since)g_stim_no_clients_since=now;
                 } else g_stim_no_clients_since=0;
-                if (now>=g_stim_active_until ||
+                if (!brick_bench_interlock_safe_now() ||
+                    now>=g_stim_active_until ||
                     (g_stim_no_clients_since && now-g_stim_no_clients_since>5000000LL)) {
                     bool ok=stim_stop_command();
                     ESP_LOGW(TAG,"Automatic stim Stop %s",ok?"ACKNOWLEDGED":"NOT ACKNOWLEDGED");
@@ -904,7 +957,8 @@ static void stim_watchdog_task(void *arg) {
                 }
             }
         } else g_stim_no_clients_since=0;
-        vTaskDelay(pdMS_TO_TICKS(500)>0?pdMS_TO_TICKS(500):1);
+        int check_ms=g_stim_active?100:500;
+        vTaskDelay(pdMS_TO_TICKS(check_ms)>0?pdMS_TO_TICKS(check_ms):1);
     }
 }
 static esp_err_t arm_post(httpd_req_t *r){
