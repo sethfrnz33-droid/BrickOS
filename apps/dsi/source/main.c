@@ -112,6 +112,7 @@ static char client_ip[24]="-",gateway_ip[24]="-";
 static int page=0,list_pick=0,list_scroll=0,tune_cat=0,tune_focus=0,tune_group=-1;
 static int home_pick=0;
 static bool ini_replace_confirm=false;
+static bool ini_restoring_previous=false;
 static bool favorite_return=false; /* B from a favorited panel returns to Favorites */
 /* UI font upgrade: 9x14 glyphs for browsable tuning folders and settings.
  * 6x9 stays reserved for map-cell numbers and footers. */
@@ -2061,18 +2062,18 @@ static void bottom_link(void){
         char b[64];snprintf(b,sizeof(b),"INI SIG: %.34s",def.signature);
         text(bottom,10,140,b,MUTED,34);
     }else text(bottom,10,140,"IP / DNS ARE LOCAL ONLY",MUTED,34);
-    text(bottom,10,169,"START: REPLACE STORED INI",HIGHLIGHT,27);
+    text(bottom,10,169,"START: FETCH FRESH INI",HIGHLIGHT,27);
 }
 static void draw_ini_replace_confirmation(void){
     /* Modal is rendered on the lower touchscreen, leaving ECU identity and
      * connection status visible on the upper screen. No writes to ECU. */
     round_fill(bottom,5,31,246,154,6,PANEL);
     fill(bottom,9,35,238,1,HIGHLIGHT);
-    text(bottom,14,43,"DELETE SAVED ECU INI?",HIGHLIGHT,26);
-    text(bottom,14,67,"OLD INI + CACHE REMOVED",WHITE,26);
-    text(bottom,14,88,"THEN FETCH FROM ECU",WHITE,26);
+    text(bottom,14,43,"FETCH NEW ECU INI?",HIGHLIGHT,26);
+    text(bottom,14,67,"KEEP OLD INI UNTIL VALID",WHITE,26);
+    text(bottom,14,88,"FETCH / VERIFY NEW INI",WHITE,26);
     text(bottom,14,109,"ECU SETTINGS UNCHANGED",GREEN,26);
-    text(bottom,14,139,"A: CONFIRM REPLACE",HIGHLIGHT,26);
+    text(bottom,14,139,"A: CONFIRM REFRESH",HIGHLIGHT,26);
     text(bottom,14,160,"B: CANCEL",WHITE,26);
 }
 static void render(void){
@@ -2194,6 +2195,9 @@ static void check_status(const char*b){
         snprintf(status_msg,sizeof(status_msg),"BRICKOS OK / ECU USB CONNECTED");
     }else{
         if(previous)invalidate();
+        /* The bridge may still serve a cached INI while the ECU is offline.
+         * Fetching an INI never authorizes an ECU write. */
+        if(!def.valid)want_ini=true;
         snprintf(status_msg,sizeof(status_msg),"BRICKOS ONLINE / ECU USB OFFLINE");
     }
     set_compat();
@@ -2230,6 +2234,7 @@ static void network_finished(BtNetJob job,int result){
             ini_hash_mismatch=false;
             ini_retry_frame=frame+600;
             loading_cache=(!def.valid)&&bt_sd_ready()&&bt_cache_begin(&def);
+            ini_restoring_previous=loading_cache;
             snprintf(status_msg,sizeof(status_msg),loading_cache?
                 "INI FAILED / RESTORING SD CACHE":"INI TRANSFER FAILED / RETRY");
         }else if(job==BT_NET_LIVE){
@@ -2258,6 +2263,7 @@ static void network_finished(BtNetJob job,int result){
         check_status(bt_async_status_json());
     }else if(job==BT_NET_INI){
         ini_hash_mismatch=false;
+        ini_restoring_previous=false;
         cache_loaded=true;
         reset_ref_index();build_map_index();set_compat();ini_retry_frame=0;
         if(ini_ok) (void)bt_sd_snapshot_save(&def);
@@ -2376,8 +2382,10 @@ static void service_network(void){
             if(cache_loaded){
                 build_map_index();set_compat();
                 (void)bt_sd_snapshot_save(&def);
-                snprintf(status_msg,sizeof(status_msg),"SD INI READY / VERIFY ECU");
+                snprintf(status_msg,sizeof(status_msg),"%s",ini_restoring_previous?
+                    "NEW INI FAILED / OLD COPY RESTORED":"SD INI READY / VERIFY ECU");
             }else snprintf(status_msg,sizeof(status_msg),bt_cache_out_of_memory()?"INI CACHE OUT OF RAM":"INVALID SD INI / WILL RE-DOWNLOAD");
+            ini_restoring_previous=false;
             if(wifi_up)want_status=true;
         }
         return;
@@ -2404,7 +2412,7 @@ static void service_network(void){
         }
         return;
     }
-    if(ecu_up&&ini_retry_frame>0&&frame>=ini_retry_frame){
+    if(bridge_up&&ini_retry_frame>0&&frame>=ini_retry_frame){
         ini_retry_frame=0;want_ini=true;
     }
     /* Never spin on E12/ENOMEM, and never flood the tiny DSWiFi socket pool. */
@@ -2417,7 +2425,7 @@ static void service_network(void){
             bridge_up=false;ecu_status_known=false;want_status=true;
             network_failure();set_compat();bt_async_cancel();
         }else last_socket_begin_frame=frame;
-    }else if(want_ini&&sd_ready&&ecu_up&&actual_sig[0]){
+    }else if(want_ini&&sd_ready&&bridge_up){
         want_ini=false;loading_ini=true;ini_progress=ini_disk_bytes=ini_parsed_bytes=ini_expected_bytes=0;
         snprintf(status_msg,sizeof(status_msg),"DOWNLOADING ECU INI");
         bt_async_expected_signature(actual_sig);
@@ -3006,22 +3014,18 @@ static void open_tune_item(void){
     open_target(m->target,m->label,from_view);
 }
 static void replace_saved_ini(void){
-    /* No ECU write operation is allowed to be interrupted or restarted. */
-    if(bt_write_busy()||cal_load.active){
-        snprintf(status_msg,sizeof(status_msg),"INI REPLACE BLOCKED / ECU OPERATION BUSY");return;
+    /* In v35, this action deleted the last working INI before checking that
+     * the bridge could actually provide a replacement. Keep the verified
+     * raw INI/snapshot on SD until bt_sd_commit replaces them atomically. */
+    if(bt_write_busy()||cal_load.active||!sd_ready){
+        snprintf(status_msg,sizeof(status_msg),"INI REFRESH BLOCKED / SD OR ECU BUSY");return;
     }
-    /* Close the active INI parser/reader before removing its source file.
-     * Any incomplete HTTP transfer is discarded by bt_async_cancel(). */
     bt_cache_cancel();
-    loading_cache=false;
+    loading_cache=false;ini_restoring_previous=false;
     bt_async_cancel();bt_async_forget_connection();
     loading_ini=false;
-    bool cleared=bt_sd_delete_ini_cache();
-    if(!cleared){
-        snprintf(status_msg,sizeof(status_msg),"%.90s",bt_sd_message());
-        /* A partial removal invalidates the active definition as a safety
-         * measure, but does not start a new download against a broken SD. */
-    }else snprintf(status_msg,sizeof(status_msg),"INI DELETED / REQUESTING NEW DEFINITION");
+    /* Clear only in-memory references; the old disk copy remains available
+     * for automatic restoration when a transfer or validation fails. */
     bt_ini_reset(&def);reset_ref_index();set_compat();invalidate();
     cache_loaded=false;
     favorite_count=0;favorites_loaded=false;favorite_signature[0]=0;
@@ -3038,9 +3042,10 @@ static void replace_saved_ini(void){
     network_failure_count=0;network_resume_frame=0;last_socket_begin_frame=-1000;
     live_failure_streak=0;live_resume_frame=0;
     last_net_error[0]=0;last_response_line[0]=last_reject_body[0]=last_failed_path[0]=0;
-    /* Force a new ECU identity/status response before fetching the INI.
-     * The pending request survives if the ECU is temporarily disconnected. */
-    want_status=cleared;want_ini=cleared;network_poll=frame;
+    snprintf(status_msg,sizeof(status_msg),"FETCHING ECU INI / OLD COPY PROTECTED");
+    /* Ask the bridge for fresh identity before fetching. A missing optional
+     * signature must not block a read-only INI transfer. */
+    want_status=true;want_ini=true;network_poll=frame;
 }
 static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
     if(bt_write_busy()){
@@ -3443,7 +3448,7 @@ static void handle_buttons(uint32_t down,uint32_t held,touchPosition*tp){
             bt_async_cancel();bt_async_forget_connection();loading_ini=false;ini_hash_mismatch=false;ini_retry_frame=0;want_status=true;
             network_failure_count=0;network_resume_frame=0;last_socket_begin_frame=-1000;
         live_failure_streak=0;live_resume_frame=0;
-            if(ecu_up&&!def.valid)want_ini=true;
+            if(!def.valid)want_ini=true;
             last_net_error[0]=0;
         }
     }

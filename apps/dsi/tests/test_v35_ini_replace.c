@@ -51,15 +51,17 @@ int main(void){
     assert(def.channel_count==0 && def.constant_count==0 && def.map_count==0);
     assert(actual_sig[0]==0 && !favorites_loaded && favorite_count==0);
     assert(want_status&&want_ini && network_poll==135);
-    const char *deleted[]={"ecu.ini","ecu.meta","ecu.meta.tmp","ecu.bak",
+    const char *retained[]={"ecu.ini","ecu.meta","ecu.meta.tmp","ecu.bak",
        "ecu-unverified.ini","ecu.tmp"};
-    for(unsigned i=0;i<sizeof deleted/sizeof deleted[0];i++)assert(!exists(deleted[i]));
+    for(unsigned i=0;i<sizeof retained/sizeof retained[0];i++)assert(exists(retained[i]));
     assert(exists("dsi-favorites.cfg"));assert(exists("clutch-source.cfg"));
     assert(exists("nierniernier.pcm8"));
-    /* A newly placed valid INI remains usable after reset. */
-    make_ini_definition();assert(ini_ok);
+    /* The old explicit deletion API is still available for isolated host
+     * tests, but the refresh UI deliberately never uses it. */
     assert(bt_sd_delete_ini_cache());
-    puts("PASS v35: old INI and metadata removed, live definition reset, ECU refetch queued, favorites/audio retained, new INI parse works");
+    for(unsigned i=0;i<sizeof retained/sizeof retained[0];i++)assert(!exists(retained[i]));
+    make_ini_definition();assert(ini_ok);
+    puts("PASS v36: INI refresh preserves old cache; explicit deletion helper remains isolated; favorites/audio untouched");
     bt_ini_reset(&def);
     return 0;
 }

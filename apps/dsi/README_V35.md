@@ -1,3 +1,5 @@
+> **Superseded by [v36](README_V36.md):** v35 deleted the old INI before verifying a new download; do not use this workflow. v36 preserves the prior valid INI until replacement succeeds.
+
 # Brick Tuner Suite DSi v35 — clear and replace ECU INI
 
 ## On the Nintendo DSi
