@@ -19,6 +19,8 @@ typedef struct {
     const char *options[3];
     unsigned correct_index;
     uint32_t version;
+    const char *prerequisites[4];
+    unsigned prerequisite_count;
 } seth_lesson_t;
 
 /* A future build tool may put this generated const catalog in flash. */
@@ -53,6 +55,7 @@ typedef struct {
     char symptom[SETH_MAX_SYMPTOM];
     bool ecu_definition_matched; /* externally set; never set by a lesson */
     uint32_t session_revision;    /* local dialog actions only; not ECU authority */
+    char study_target[BRICK_EDU_ID_CAP]; /* optional original topic to return to */
 } seth_agent_t;
 
 typedef struct {
@@ -62,6 +65,7 @@ typedef struct {
     const char *state, *evidence, *next;
     unsigned stage;
     bool read_only, tuning_verified, gdi_unsupported;
+    const char *study_target; /* non-authoritative original topic breadcrumb */
 } seth_packet_t;
 
 /* All functions return state or human-readable packets. No ECU operations. */
