@@ -2,6 +2,7 @@
  * Source-specific observations will be added later behind a verified interface.
  */
 #include "seth_agent.h"
+#include "seth_coordinator.h"
 #include <ctype.h>
 #include <string.h>
 
@@ -257,6 +258,23 @@ void seth_render(const seth_agent_t *s,seth_packet_t *p){
         p->detail="Browse any chapter or open a matching concept. Completing a page never certifies the engine.";
         p->state="chapter_open";
         p->next="Select a chapter concept from the shared lesson catalogue.";
+        {
+            seth_task_plan_t plan;
+            if(seth_plan_current(s,&plan)){
+                p->task_id=plan.task_id;
+                p->task_reason=plan.reason;
+                p->task_lesson_id=plan.next_lesson_id;
+                p->task_question_field=plan.question_field;
+                if(plan.kind==SETH_TASK_UNSUPPORTED)
+                    p->next="Guided GDI fuel tuning is not supported.";
+                else if(plan.kind==SETH_TASK_BUILD_QUESTION)
+                    p->next="Answer the missing engine-build question, or choose Not sure.";
+                else if(plan.kind==SETH_TASK_LEARN)
+                    p->next="Continue to the next relevant concept lesson.";
+                else
+                    p->next="Learning is separate from externally validated engine evidence.";
+            }
+        }
         break;
     case SETH_LESSON:render_lesson(s,p,false);break;
     case SETH_CHECK:render_lesson(s,p,true);break;
