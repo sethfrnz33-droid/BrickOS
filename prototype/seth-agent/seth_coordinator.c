@@ -68,7 +68,11 @@ bool seth_plan_stage(const seth_agent_t *s,unsigned stage,seth_task_plan_t *p){
         const seth_lesson_t *l=&seth_lessons[i];
         if(strcmp(l->chapter,chapter)!=0)continue;
         if(!first)first=l;
-        brick_edu_concept_t *found=brick_edu_find((brick_edu_state_t *)&s->education,l->id);
+        const brick_edu_concept_t *found=NULL;
+        for(size_t j=0;j<s->education.concept_count;j++)
+            if(strcmp(s->education.concepts[j].concept_id,l->id)==0){
+                found=&s->education.concepts[j];break;
+            }
         if(!found){
             p->kind=SETH_TASK_LEARN;p->task_id="teach_concept";
             p->reason="This applicable educational concept has not been introduced yet.";
