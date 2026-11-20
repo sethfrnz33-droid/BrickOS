@@ -27,6 +27,9 @@ jobs:
         run: |
           make -C prototype/seth-agent
           prototype/seth-agent/build/seth_demo
+      - name: Validate portable packets as actual JSON
+        run: |
+          prototype/seth-agent/build/seth_demo --json | python3 -c 'import json,sys; packets=[json.loads(line) for line in sys.stdin]; assert len(packets)>=5; assert all(p["schema"]=="brickos.seth.packet.v0" and p["read_only"] and not p["tuning_verified"] for p in packets); assert any(p["state"]=="learning_only" for p in packets); print("All",len(packets),"portable Seth packets are valid and read-only")'
       - name: Verify no firmware build sources reference the prototype
         run: |
           if grep -R -E 'seth_agent\.c|seth_agent\.h|seth_catalog\.c' firmware/BrickOS/main/CMakeLists.txt; then
