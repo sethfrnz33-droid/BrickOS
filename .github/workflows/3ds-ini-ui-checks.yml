@@ -4,14 +4,14 @@ on:
   push:
     paths:
       - 'apps/3ds/**'
-      - 'firmware/esp32/tests/fixtures/proteus_f7_generated.ini'
-      - 'firmware/esp32/main/main.c'
+      - 'firmware/BrickOS/tests/fixtures/proteus_f7_generated.ini'
+      - 'firmware/BrickOS/main/main.c'
       - '.github/workflows/3ds-ini-ui-checks.yml'
   pull_request:
     paths:
       - 'apps/3ds/**'
-      - 'firmware/esp32/tests/fixtures/proteus_f7_generated.ini'
-      - 'firmware/esp32/main/main.c'
+      - 'firmware/BrickOS/tests/fixtures/proteus_f7_generated.ini'
+      - 'firmware/BrickOS/main/main.c'
       - '.github/workflows/3ds-ini-ui-checks.yml'
 
 jobs:

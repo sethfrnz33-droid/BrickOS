@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(brickos_s3_full)
+project(BrickOS)
 
 # The upstream espressif USB VCP C++ components use throw/catch. Existing
 # sdkconfig files may retain CONFIG_COMPILER_CXX_EXCEPTIONS=n, overriding

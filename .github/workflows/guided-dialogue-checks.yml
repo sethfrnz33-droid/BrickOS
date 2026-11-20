@@ -3,8 +3,8 @@ name: Guided dialogue validation
 on:
   push:
     paths:
-      - 'firmware/esp32/web/**'
-      - 'firmware/esp32/tests/**'
+      - 'firmware/BrickOS/web/**'
+      - 'firmware/BrickOS/tests/**'
       - 'design/diagnostics/**'
       - 'design/engine-build/**'
       - 'design/education/**'
@@ -26,14 +26,14 @@ on:
       - 'docs/30-seth-diagnostic-agent-master-plan.md'
       - 'docs/31-seth-high-rate-capture-and-evidence-spec.md'
       - 'docs/32-seth-diagnostic-case-ux-and-reasoning-flows.md'
-      - 'firmware/esp32/tools/**'
+      - 'firmware/BrickOS/tools/**'
       - 'docs/24-seth-complete-dialogue.md'
       - 'docs/28-seth-chapter-questions.md'
       - '.github/workflows/guided-dialogue-checks.yml'
   pull_request:
     paths:
-      - 'firmware/esp32/web/**'
-      - 'firmware/esp32/tests/**'
+      - 'firmware/BrickOS/web/**'
+      - 'firmware/BrickOS/tests/**'
       - 'design/diagnostics/**'
       - 'design/engine-build/**'
       - 'design/education/**'
@@ -55,7 +55,7 @@ on:
       - 'docs/30-seth-diagnostic-agent-master-plan.md'
       - 'docs/31-seth-high-rate-capture-and-evidence-spec.md'
       - 'docs/32-seth-diagnostic-case-ux-and-reasoning-flows.md'
-      - 'firmware/esp32/tools/**'
+      - 'firmware/BrickOS/tools/**'
       - 'docs/24-seth-complete-dialogue.md'
       - 'docs/28-seth-chapter-questions.md'
       - '.github/workflows/guided-dialogue-checks.yml'
@@ -65,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: firmware/esp32
+        working-directory: firmware/BrickOS
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

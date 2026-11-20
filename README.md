@@ -4,7 +4,7 @@
 
 | Location | Role | Current status |
 |---|---|---|
-| [`firmware/esp32/`](firmware/esp32/) | ESP32-S3 Wi-Fi/USB bridge and embedded browser tuner | **v4.8 runtime string / imported firmware lineage**, with later browser and calibration-command changes; ESP-IDF and physical ECU validation not established |
+| [`firmware/BrickOS/`](firmware/BrickOS/) | ESP32-S3 Wi-Fi/USB bridge and embedded browser tuner | **v4.8 runtime string / imported firmware lineage**, with later browser and calibration-command changes; ESP-IDF and physical ECU validation not established |
 | [`apps/3ds/`](apps/3ds/) | Brick Tuner Suite native Nintendo 3DS source (app README identifies v6.5), assets, build scripts and tests | **Imported**; host tests 42/42 pass; native build/hardware not yet verified |
 | [`apps/dsi/`](apps/dsi/) | Brick Tuner Suite Nintendo DSi source (app README identifies v29), tests and SD sound assets | **Imported and subsequently updated in repo**; host tests exist, native hardware verification outstanding |
 | [`prototype/`](prototype/) | Standalone Guided Tuning Python reference implementation | Existing read-only simulation, not deployable ESP firmware |
@@ -18,7 +18,7 @@ Start with **[ESP32 installation and hardware connections](docs/ESP32_INSTALL_AN
 ### Build on ESP-IDF 5.3.1
 
 ```powershell
-cd firmware\esp32
+cd firmware\BrickOS
 python tools/generate_web_assets.py
 idf.py set-target esp32s3
 idf.py build
@@ -43,20 +43,20 @@ Use your verified ESP32 programming COM port in place of the **example** `COM7`.
 - [Shared ESP/3DS/phone state contract and acceptance tests](docs/23-guided-tuning-protocol-and-acceptance.md)
 - [Earlier UX specification](docs/10-user-experience.md) and [calibration proposal / review transaction model](docs/18-transaction-and-review.md)
 
-Guided Tuning is a **separate, opt-in mode** designed to discover the active ECU/INI configuration, learn from valid telemetry, explain calibration dependencies, and make evidence-backed recommendations. It must never impede manual tuning or silently change ECU flash. The phone-first **read-only Guided Tuning** browser workspace is now integrated under `firmware/esp32/web/`, with [implementation notes](firmware/esp32/README_GUIDED_PHONE_V1.md). It uses the existing ESP USB live sampler and runs its learning decisions in the phone browser; the ESP-resident autonomous controller and automatic ECU changes remain unimplemented. The existing Python simulator under `prototype/` remains independent.
+Guided Tuning is a **separate, opt-in mode** designed to discover the active ECU/INI configuration, learn from valid telemetry, explain calibration dependencies, and make evidence-backed recommendations. It must never impede manual tuning or silently change ECU flash. The phone-first **read-only Guided Tuning** browser workspace is now integrated under `firmware/BrickOS/web/`, with [implementation notes](firmware/BrickOS/README_GUIDED_PHONE_V1.md). It uses the existing ESP USB live sampler and runs its learning decisions in the phone browser; the ESP-resident autonomous controller and automatic ECU changes remain unimplemented. The existing Python simulator under `prototype/` remains independent.
 
 ## Source provenance
 
-The `firmware/esp32/` source is copied from `BrickOS-v48-TRIGGER-INI-FIX(2).zip` as supplied 2026-11-19; runtime source and embedded assets are unchanged. Its historical `README.md` (which referenced v4.2) is preserved as `README_LEGACY_V42.md` and replaced with the current setup README. The actual 3DS v6.3 and DSi v2.2 sources are now imported under `apps/`; integrating the proposed Guided Tuning controller into ESP firmware and client apps remains future work.
+The `firmware/BrickOS/` source is copied from `BrickOS-v48-TRIGGER-INI-FIX(2).zip` as supplied 2026-11-19; runtime source and embedded assets are unchanged. Its historical `README.md` (which referenced v4.2) is preserved as `README_LEGACY_V42.md` and replaced with the current setup README. The actual 3DS v6.3 and DSi v2.2 sources are now imported under `apps/`; integrating the proposed Guided Tuning controller into ESP firmware and client apps remains future work.
 
 
 ## Seth's Guide — phone-first, INI-dependent
 
-**One guide data source, multiple future displays.** The phone now has a separately navigable **Ask Seth** experience (full ECU tour, targeted troubleshooting, field-by-field INI walkthrough), using the user's mascot portrait and gibberish audio. The story content lives in `firmware/esp32/web/guide-catalog.json` and is served by the ESP at **`GET /api/guide/v1/catalog`**. Seth is the lightly exasperated ECU-bound clone of the creator; he explains settings and diagnostics without interrupting Manual Tune.
+**One guide data source, multiple future displays.** The phone now has a separately navigable **Ask Seth** experience (full ECU tour, targeted troubleshooting, field-by-field INI walkthrough), using the user's mascot portrait and gibberish audio. The story content lives in `firmware/BrickOS/web/guide-catalog.json` and is served by the ESP at **`GET /api/guide/v1/catalog`**. Seth is the lightly exasperated ECU-bound clone of the creator; he explains settings and diagnostics without interrupting Manual Tune.
 
 - [Full authored Seth dialogue and branching choice script](docs/24-seth-complete-dialogue.md)
 - [INI-bound, portable phone/DS dialogue contract and explicit limitations](docs/25-portable-ini-guide-contract.md)
-- [Phone implementation, build, routes, media, and tests](firmware/esp32/README_SETH_GUIDE_V2.md)
+- [Phone implementation, build, routes, media, and tests](firmware/BrickOS/README_SETH_GUIDE_V2.md)
 
 **Compatibility:** No 3DS or DSi source or connection protocol was changed for this guide. A later ESP-hosted role/state service must produce resolved view packets for the DS, so changing the INI or Seth's lines does not require updating console code. The current phone resolves roles in the browser from the verified INI; this is a **read-only tutorial**, not ECU-resident automatic calibration or ignition tuning.
 
@@ -77,7 +77,7 @@ Seth can now [investigate matched ECU telemetry and distinguish observations fro
 - [Phone case UI, Seth dialogue flows, prompt parsing, portable output for future DS](docs/32-seth-diagnostic-case-ux-and-reasoning-flows.md)
 - [Machine-readable 57-case design registry — **not loaded by current firmware**](design/diagnostics/scenario-registry.v1.json)
 
-The proposed scenario registry and fallback policy have host-side validation under `firmware/esp32/tests/seth-scenario-registry.test.mjs`; **unit tests do not validate a physical ECU diagnosis**. All future sensor-role bindings must derive from the active verified INI, ECU configuration and verified expert rules. The guide must never replace a qualified external check with a guessed value or treat a momentary "on target" lambda as proof an entire engine is optimal.
+The proposed scenario registry and fallback policy have host-side validation under `firmware/BrickOS/tests/seth-scenario-registry.test.mjs`; **unit tests do not validate a physical ECU diagnosis**. All future sensor-role bindings must derive from the active verified INI, ECU configuration and verified expert rules. The guide must never replace a qualified external check with a guessed value or treat a momentary "on target" lambda as proof an entire engine is optimal.
 
 ## Unified Seth + Autotune architecture and engine archive
 
@@ -87,7 +87,7 @@ The proposed scenario registry and fallback policy have host-side validation und
 - [Progressive engine-build archive questions, phone layout, and Seth dialogue](docs/34-engine-build-archive-and-seth-intake.md)
 - [Versioned local engine archive data contract and PFI-only capability policy](design/engine-build/profile-contract.v1.json)
 - [Offline read-only engine profile policy prototype](prototype/engine-profile-policy.mjs)
-- [Profile policy regression tests](firmware/esp32/tests/engine-profile-policy.test.mjs)
+- [Profile policy regression tests](firmware/BrickOS/tests/engine-profile-policy.test.mjs)
 
 Engine hardware facts are keyed to a local engine profile, **not** to a volatile INI fingerprint; ECU layout changes require revalidation of dependent data without deleting reported build information. The prototype is purely explanatory and cannot write ECU RAM/flash or control a pump/engine. The open Wi-Fi AP is not an authenticated archive service; an ESP-owned persistent store would require a separately validated security and consent design.
 
@@ -101,7 +101,7 @@ Engine hardware facts are keyed to a local engine profile, **not** to a volatile
 - [28 end-to-end acceptance cases, release gates and beginner-to-advanced experience criteria](docs/39-seth-end-to-end-acceptance-and-coverage-gates.md)
 - [130-topic curriculum coverage audit](design/education/curriculum-coverage.v1.json): **22 authored seed lessons, 108 planned** (not yet written)
 - [22 original versioned lesson definitions, four explanation depths and optional conceptual checks](design/education/lesson-catalog.v1.json)
-- [Bounded, heap-free pure-C teaching-state prototype](prototype/esp_education_core.c) and [host regression test](firmware/esp32/tests/test_education_core_host.c)
+- [Bounded, heap-free pure-C teaching-state prototype](prototype/esp_education_core.c) and [host regression test](firmware/BrickOS/tests/test_education_core_host.c)
 
 The learner's `understanding`, the **engine's physical-hardware verification**, and the **calibration's evidence/validation** always remain independent states; a correct educational answer cannot authorize an ECU write or certify a vehicle as safe. Lessons and semantic roles are authored once for the ESP-owned packet architecture; a future DS client would render them without ECU-specific hardcoded settings. **No full language model is assumed to run on the 4 MB target**; the intended design is a deterministic rule engine and indexed flash-backed educational library with measured resource limits. A qualified, independent inspection/validation may still be necessary before engine/vehicle operation.
 
@@ -112,7 +112,7 @@ The learner's `understanding`, the **engine's physical-hardware verification**, 
 - [Verified rusEFI/TunerStudio/HPA/ESP-IDF research ledger](docs/40-verified-external-source-ledger-and-rusefi-constraints.md) — upstream facts versus what requires the matching generated INI or external proof
 - [Implementation readiness, 10-stage task ownership, semantics and unresolved hardware decisions](docs/41-implementation-readiness-decisions-and-traceability.md)
 - [46 unverified semantic-source candidates](design/research/source-role-candidates.v1.json) — 25 from the current browser code, plus 21 research hints; **none certified against a live Brick ECU**
-- [Source-ledger regression test](firmware/esp32/tests/seth-role-ledger.test.mjs) — catches accidental divergence from the current browser alias list
+- [Source-ledger regression test](firmware/BrickOS/tests/seth-role-ledger.test.mjs) — catches accidental divergence from the current browser alias list
 
 **Key findings:** The real rusEFI `engine` channel is a bitmask; generated INI page ordinals and optional pages can vary; display aliases may share one stored calibration value; specialized trigger capture is not ordinary 100 Hz output telemetry; PWM pump control does not imply a missing regulator or verified rail pressure; and the current 4 MB ESP partition plan has no dedicated profile/content storage or OTA slot. The exact live ECU INI, hardware flash/PSRAM, bus throughput and physical build facts remain **unverified** and must be checked before production claims.
 
@@ -124,7 +124,7 @@ A complete customer-supplied generated INI was analyzed **as a definition, not a
 
 - [Detailed generated-INI audit, role corrections, true table geometry and ten-stage guide mapping](docs/42-proteus-f7-generated-ini-deep-audit.md)
 - [Exact-source research metadata / selected canonical byte locations](design/ini/proteus-f7-2026-11-09-source-audit.v1.json)
-- [Reusable read-only INI research scanner](tools/ini_research_scan.py), with [synthetic parser tests](tools/tests/test_ini_research_scan.py) and [source-fact tests](firmware/esp32/tests/proteus-f7-ini-audit.test.mjs)
+- [Reusable read-only INI research scanner](tools/ini_research_scan.py), with [synthetic parser tests](tools/tests/test_ini_research_scan.py) and [source-fact tests](firmware/BrickOS/tests/proteus-f7-ini-audit.test.mjs)
 
 **Important:** This INI's declared identity has **not** been matched to a live ECU and supplies no actual tune values or physical engine facts. The browser Guide's current alias candidate for spark and low-pressure fuel sensing misses the correct output channels; the existing `sync` and `knock` aliases conflate counters with other quantities. **These are research findings, not runtime fixes.** Present primary/secondary/idle VE shapes are 16×16 / 16×16 / 4×4, and page 3 LTFT is explicitly read-only. GDI and mixed PFI/GDI Guided Fuel Tuning stay unsupported. Manual Tuning, ESP bridge and DS/DSi connection code were not modified.
 
@@ -135,7 +135,7 @@ A complete customer-supplied generated INI was analyzed **as a definition, not a
 The existing 3DS/DSi tuners preserve a verified copy on **their own SD card**. For the ESP-hosted phone, the existing path is **ECU SD via USB MSC LUN1 → ESP SPIFFS**, now enhanced with a **stable ESP SHA-256 fingerprint → browser IndexedDB parsed-definition cache**. Returning to the same ECU and unchanged ESP INI can reuse the parsed definition without a repeat ~944 KB transfer. The first load still uses the original ESP source; browser storage failure falls back to network; manual upload remains available. Neither DS connection code nor ECU commands were changed.
 
 - [Detailed support boundary, automatic load architecture and validation checklist](docs/43-supported-ini-scope-and-phone-sd-fastpath.md)
-- [Phone cache module and exact hash/signature fallback](firmware/esp32/web/ini-fast-cache.mjs)
-- [Cache regression tests](firmware/esp32/tests/ini-fast-cache.test.mjs)
+- [Phone cache module and exact hash/signature fallback](firmware/BrickOS/web/ini-fast-cache.mjs)
+- [Cache regression tests](firmware/BrickOS/tests/ini-fast-cache.test.mjs)
 
 **Host-tested only:** no measured load-time improvement, real phone test, new ESP-IDF binary build, or physical ECU/MSC confirmation has been performed for this update. The new browser asset is regenerated automatically by ESP-IDF CMake configuration.

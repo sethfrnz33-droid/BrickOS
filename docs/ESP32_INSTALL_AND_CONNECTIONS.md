@@ -36,7 +36,7 @@ Optional **ESP-attached SPI SD** for log storage is **disabled by default** (`CO
 ## Install firmware (Windows)
 
 1. Install **Espressif ESP-IDF v5.3.1** with the ESP32-S3 toolchain; launch the ESP-IDF PowerShell/command environment, not an ordinary terminal lacking `idf.py`.
-2. Download the repository and change into `firmware\esp32` (or extract the complete release ZIP and change to `BrickOS_v48`).
+2. Download the repository and change into `firmware\BrickOS` (or extract the complete release ZIP and change to `BrickOS_v48`).
 3. Connect the ESP32-S3 **programming interface** to the computer, and confirm its COM port using Device Manager. Do not guess a serial port.
 4. Regenerate the built-in browser UI and configure/build:
 
