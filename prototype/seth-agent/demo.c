@@ -1,10 +1,22 @@
 /* Desktop demonstration only. No USB, CAN, Wi-Fi or ECU operations. */
 #include "seth_agent.h"
+#include "seth_packet_json.h"
+#include <string.h>
 #include <stdio.h>
 
+static bool json_mode=false;
 static void display(const seth_agent_t *agent){
     seth_packet_t packet;
     seth_render(agent,&packet);
+    if(json_mode){
+        char buffer[8192];
+        if(!seth_packet_json(&packet,buffer,sizeof(buffer))){
+            fprintf(stderr,"Cannot encode Seth packet\n");
+            return;
+        }
+        puts(buffer);
+        return;
+    }
     printf("\nSETH / %s\n%s\n",packet.title?packet.title:"(untitled)",
         packet.text?packet.text:"(no text)");
     if(packet.detail)printf("%s\n",packet.detail);
@@ -13,7 +25,8 @@ static void display(const seth_agent_t *agent){
         printf("  %u. %s\n",i+1,packet.choices[i]);
     printf("State: %s | ECU write access: NONE\n",packet.state?packet.state:"unknown");
 }
-int main(void){
+int main(int argc,char **argv){
+    json_mode=argc>1&&strcmp(argv[1],"--json")==0;
     seth_agent_t agent;seth_init(&agent);
     display(&agent);
     seth_open_tour(&agent);seth_select_stage(&agent,6);
