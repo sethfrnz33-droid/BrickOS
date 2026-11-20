@@ -3,7 +3,7 @@ PYTHON ?= python3
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror -pedantic
 BUILD := build
 CATALOG := $(BUILD)/seth_catalog.c
-SOURCES := seth_agent.c seth_packet_json.c seth_coordinator.c seth_actions.c seth_checkpoint.c ../esp_education_core.c $(CATALOG)
+SOURCES := seth_agent.c seth_packet_json.c seth_coordinator.c seth_actions.c seth_checkpoint.c seth_learning_path.c ../esp_education_core.c $(CATALOG)
 
 .PHONY: all test clean
 all: $(BUILD)/seth_test $(BUILD)/seth_extended_test $(BUILD)/seth_demo
