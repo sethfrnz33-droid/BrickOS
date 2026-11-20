@@ -19,6 +19,7 @@ assets = {
     'guide_reasoning': 'guide-reasoning.mjs',
     'guide_story_ui': 'guide-story-ui.mjs',
     'guide_voice': 'guide-voice.mjs',
+    'seth_page': 'seth.html',
     'guide_catalog': 'guide-catalog.json',
     'seth_head': 'guide-assets/seth-head.png',
     'seth_jaw': 'guide-assets/seth-jaw.png',
