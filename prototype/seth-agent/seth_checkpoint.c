@@ -62,7 +62,7 @@ static const char *active_lesson_id(const seth_agent_t *s){
     return seth_lessons[s->lesson_index].id;
 }
 size_t seth_checkpoint_encode(const seth_agent_t *s,uint8_t *buffer,size_t cap){
-    if(!s||!buffer||cap<HEADER+32u||cap>SETH_CHECKPOINT_MAX_BYTES||
+    if(!s||!buffer||cap<HEADER+24u||cap>SETH_CHECKPOINT_MAX_BYTES||
        s->education.concept_count>BRICK_EDU_MAX_CONCEPTS||
        s->screen>SETH_REPORT||s->stage>=SETH_STAGE_COUNT||
        s->education.depth>BRICK_EDU_TECHNICAL||
@@ -111,7 +111,7 @@ size_t seth_checkpoint_encode(const seth_agent_t *s,uint8_t *buffer,size_t cap){
 }
 bool seth_checkpoint_restore(seth_agent_t *dst,seth_agent_t *scratch,
                              const uint8_t *blob,size_t len){
-    if(!dst||!scratch||!blob||dst==scratch||len<HEADER+32u||
+    if(!dst||!scratch||!blob||dst==scratch||len<HEADER+24u||
        len>SETH_CHECKPOINT_MAX_BYTES||memcmp(blob,MAGIC,sizeof(MAGIC))!=0)return false;
     reader_t header={blob,len,8,true};
     uint32_t payload=r32(&header),crc=r32(&header);
