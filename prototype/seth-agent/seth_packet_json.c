@@ -53,6 +53,10 @@ size_t seth_packet_json(const seth_packet_t *p,char *out,size_t cap){
     property(&b,"evidence",p->evidence);byte(&b,',');
     property(&b,"next",p->next);byte(&b,',');
     property(&b,"study_target",p->study_target);byte(&b,',');
+    property(&b,"task_id",p->task_id);byte(&b,',');
+    property(&b,"task_reason",p->task_reason);byte(&b,',');
+    property(&b,"task_lesson_id",p->task_lesson_id);byte(&b,',');
+    property(&b,"task_question_field",p->task_question_field);byte(&b,',');
     append(&b,"\"choices\":[");
     for(unsigned i=0;i<p->choice_count;i++){
         if(i)byte(&b,',');
