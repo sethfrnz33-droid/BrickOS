@@ -40,6 +40,27 @@ def build(source: Path, destination: Path):
     ids = {x.get("id") for x in lessons}
     if len(ids) != len(lessons) or not all(isinstance(x, str) and ID.fullmatch(x) for x in ids):
         raise ValueError("Invalid or duplicate lesson identifier")
+    index = {entry["id"]: entry for entry in lessons}
+    # Verify the complete graph before emitting any C initializer.
+    visiting, visited = set(), set()
+    def visit(concept):
+        if concept in visiting:
+            raise ValueError("Cyclic lesson prerequisite graph")
+        if concept in visited:
+            return
+        visiting.add(concept)
+        node = index[concept]
+        deps = node.get("prerequisites", [])
+        if not isinstance(deps, list) or len(deps) > 4 or len(set(deps)) != len(deps):
+            raise ValueError("Invalid lesson prerequisites")
+        for dep in deps:
+            if dep not in index:
+                raise ValueError("Unknown lesson prerequisite")
+            visit(dep)
+        visiting.remove(concept)
+        visited.add(concept)
+    for concept in index:
+        visit(concept)
     lines = [
         "/* GENERATED: build-only static text catalogue. Do not edit. */",
         '#include "seth_agent.h"',
@@ -79,7 +100,10 @@ def build(source: Path, destination: Path):
             "    {",
             *(f"      {field}," for field in fields),
             "      {" + ", ".join(cstr(v) for v in rotated) + "},",
-            f"      {answer}u, {version}u",
+            f"      {answer}u, {version}u,",
+            "      {" + ", ".join(cstr(p) if p else "NULL"
+                for p in (lesson["prerequisites"] + [None] * 4)[:4]) + "},",
+            f"      {len(lesson['prerequisites'])}u",
             "    },",
         ]
     lines += [
