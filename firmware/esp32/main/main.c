@@ -45,6 +45,26 @@ static const char *TAG="brick.main";
 /* Board diagnostics: both indicators are active HIGH, user-confirmed. */
 #define BRICK_LED_HEARTBEAT GPIO_NUM_17
 #define BRICK_LED_WIFI_CLIENT GPIO_NUM_18
+/*
+ * Board-specific, user-supplied harness-power interlock:
+ * GPIO8 HIGH = harness 12V isolated, LOW = connected/unsafe.
+ * Unknown, unconfigured, watchdog failure or unstable levels are BLOCKED.
+ * No internal pull-up: external hardware must provide a defined level.
+ */
+#define BRICK_BENCH_INTERLOCK GPIO_NUM_8
+static bool g_brick_bench_pin_configured = false;
+static volatile bool g_brick_bench_watchdog_ready = false;
+static volatile bool g_brick_test_active = false;
+static volatile int64_t g_brick_test_auto_stop_us = 0;
+static uint32_t g_brick_test_challenge = 0;
+static int64_t g_brick_test_challenge_until = 0;
+static char g_brick_test_sig[160] = "";
+static char g_brick_test_name[64] = "";
+static bool brick_bench_interlock_safe_now(void) {
+    return g_brick_bench_pin_configured &&
+           gpio_get_level(BRICK_BENCH_INTERLOCK) == 1;
+}
+
 #define BRICK_BOOT_MAGIC 0xB71C0A23U
 RTC_NOINIT_ATTR static uint32_t g_boot_magic;
 RTC_NOINIT_ATTR static uint32_t g_boot_counter;
@@ -291,7 +311,12 @@ static esp_err_t status_get(httpd_req_t *r){
     char ini_hash[65] = "";
     if(ini_cache_sha256(ini_hash))cJSON_AddStringToObject(j,"ini_sha256",ini_hash);
     cJSON_AddBoolToObject(j,"ts_command_inspection_available",true);
-    cJSON_AddBoolToObject(j,"ts_physical_output_tests_enabled",false);
+    cJSON_AddBoolToObject(j,"ts_physical_output_tests_enabled",
+        g_brick_bench_pin_configured && g_brick_bench_watchdog_ready);
+    cJSON_AddBoolToObject(j,"harness_disconnected",
+        brick_bench_interlock_safe_now());
+    cJSON_AddBoolToObject(j,"output_test_active",g_brick_test_active);
+    cJSON_AddStringToObject(j,"output_test_interlock","GPIO8 HIGH required; LOW/unknown blocks testing");
     cJSON_AddStringToObject(j,"ecu_sd_ini_state",brick_sd_ini_state());
     cJSON_AddNumberToObject(j,"ecu_sd_ini_attempts",brick_sd_ini_attempts());
     cJSON_AddNumberToObject(j,"ecu_sd_ini_imports",brick_sd_ini_imports());
@@ -656,6 +681,175 @@ static esp_err_t stim_start_post(httpd_req_t *r) {
  * Never accept an arbitrary raw Z payload, test type, or output selector.
  * This response confirms receipt by the ECU, NOT that outputs are physically
  * isolated or inactive. The user must independently verify hardware state. */
+
+/* ESP32-S3 output tests are strictly limited to named rusEFI INI command
+ * buttons with a fixed, audited protocol mapping. No raw or arbitrary Z API. */
+static bool brick_output_decode(const char *name,uint8_t *group,uint8_t *selector){
+    if (!name||!group||!selector)return false;
+    static const struct {const char *prefix;uint8_t group,min,max;} indexed[] = {
+        {"cmd_test_spk",0x12,1,12},{"cmd_test_inj",0x13,1,12},
+        {"cmd_test_sol",0x19,1,6},{"cmd_test_lua",0x20,1,8},
+        {"cmd_test_lua_command_",0x16,1,10}
+    };
+    for(size_t i=0;i<sizeof(indexed)/sizeof(indexed[0]);i++){
+        const char *prefix=indexed[i].prefix;
+        size_t len=strlen(prefix);
+        if(strncmp(name,prefix,len))continue;
+        const char *digits=name+len;
+        if(!*digits)continue;
+        char *end=NULL;
+        long index=strtol(digits,&end,10);
+        if(*end||index<indexed[i].min||index>indexed[i].max)continue;
+        *group=indexed[i].group;
+        *selector=(uint8_t)(!strcmp(prefix,"cmd_test_lua_command_")?
+                             0x20+index:index);
+        return true;
+    }
+    static const struct {const char *name;uint8_t selector;} aux[] = {
+        {"cmd_test_fuel_pump",0x01},{"cmd_test_ac_relay",0x06},
+        {"cmd_test_fan_1",0x04},{"cmd_test_fan_2",0x05},
+        {"cmd_test_check_engine_light",0x07},{"cmd_test_idle_valve",0x08},
+        {"cmd_test_second_idle_valve",0x0e},{"cmd_test_hpfp_valve",0x09},
+        {"cmd_test_acr_valve",0x1c},{"cmd_test_acr2_valve",0x1d},
+        {"cmd_test_vvt0_valve",0x10},{"cmd_test_vvt1_valve",0x11},
+        {"cmd_test_vvt2_valve",0x12},{"cmd_test_vvt3_valve",0x13}
+    };
+    for(size_t i=0;i<sizeof(aux)/sizeof(aux[0]);i++){
+        if(!strcmp(name,aux[i].name)){
+            *group=0x16; *selector=aux[i].selector; return true;
+        }
+    }
+    /* Deliberately deny starter, main relay and unidentified commands. */
+    return false;
+}
+static bool brick_bench_interlock_stable_high(void){
+    if(!g_brick_bench_pin_configured)return false;
+    for(int i=0;i<3;i++){
+        if(gpio_get_level(BRICK_BENCH_INTERLOCK)!=1)return false;
+        if(i<2)vTaskDelay(pdMS_TO_TICKS(5)>0?pdMS_TO_TICKS(5):1);
+    }
+    return true;
+}
+/* Require a fresh ECU RPM read, a matching INI and an unchanged USB session. */
+static const char *brick_bench_check(const char *signature,const char *name,
+                                     uint8_t *group,uint8_t *selector){
+    char active[160];
+    if(!g_brick_bench_watchdog_ready || !brick_bench_interlock_stable_high())
+        return "GPIO8 must be HIGH (harness isolated); LOW/unknown is blocked";
+    if(!stim_session_match(signature,active,sizeof(active)))
+        return "ECU disconnected or session signature changed";
+    if(g_stim_active || g_brick_test_active)
+        return "Another output test or internal stim is already active";
+    if(!brick_output_decode(name,group,selector))
+        return "Command is not an allowed bench output test";
+    brick_ini_command_info_t info={0};
+    if(!ini_cache_command_info(active,name,&info)||!info.declared||!info.shown_as_button)
+        return "Command absent from the matching active ECU INI";
+    brick_bench_u16_t rpm={0},battery={0};
+    if(!stim_get_channels(active,&rpm,&battery))
+        return "Cannot resolve current ECU RPM channel";
+    double speed=0;
+    if(!stim_read_u16(&rpm,&speed)||!isfinite(speed)||fabs(speed)>0.1)
+        return "Fresh ECU RPM unavailable or engine not stopped";
+    if(!brick_bench_interlock_stable_high())
+        return "GPIO8 changed during preflight";
+    return NULL;
+}
+static bool brick_output_test_abort_command(void){
+    if(!vcp_gateway_usb_ready())return false;
+    const uint8_t args[]={0x00,0x16,0x00,0x0f};
+    ts_reply_t *reply=calloc(1,sizeof(*reply));
+    if(!reply)return false;
+    brick_live_holdoff(1200);
+    esp_err_t err=ts_request('Z',args,sizeof(args),reply,4500);
+    bool acknowledged=err==ESP_OK && (reply->status==0||reply->status==4);
+    free(reply);
+    if(acknowledged){g_brick_test_active=false;g_brick_test_auto_stop_us=0;}
+    return acknowledged;
+}
+static esp_err_t brick_output_test_preflight_post(httpd_req_t *r){
+    cJSON *j=read_request_json(r);
+    if(!j)return error_reply(r,400,"Output test preflight requires JSON");
+    const char *sig=cJSON_GetStringValue(cJSON_GetObjectItem(j,"signature"));
+    const char *name=cJSON_GetStringValue(cJSON_GetObjectItem(j,"command"));
+    uint8_t group=0,selector=0;
+    const char *reason=brick_bench_check(sig,name,&group,&selector);
+    if(reason){cJSON_Delete(j);return error_reply(r,403,reason);}
+    g_brick_test_challenge=esp_random();
+    if(!g_brick_test_challenge)g_brick_test_challenge=1;
+    g_brick_test_challenge_until=esp_timer_get_time()+15000000LL;
+    snprintf(g_brick_test_sig,sizeof(g_brick_test_sig),"%s",sig);
+    snprintf(g_brick_test_name,sizeof(g_brick_test_name),"%s",name);
+    cJSON_Delete(j);
+    char result[150];
+    snprintf(result,sizeof(result),"{\"ok\":true,\"token\":\"%08lx\",\"expires_in_seconds\":15}",
+            (unsigned long)g_brick_test_challenge);
+    return json_string(r,result,200);
+}
+static esp_err_t brick_output_test_start_post(httpd_req_t *r){
+    cJSON *j=read_request_json(r);
+    if(!j)return error_reply(r,400,"Output test start requires JSON");
+    const char *sig=cJSON_GetStringValue(cJSON_GetObjectItem(j,"signature"));
+    const char *name=cJSON_GetStringValue(cJSON_GetObjectItem(j,"command"));
+    const char *token=cJSON_GetStringValue(cJSON_GetObjectItem(j,"token"));
+    const char *confirm=cJSON_GetStringValue(cJSON_GetObjectItem(j,"confirm"));
+    char expected[12];
+    snprintf(expected,sizeof(expected),"%08lx",(unsigned long)g_brick_test_challenge);
+    bool allowed=sig&&name&&token&&confirm&&g_brick_test_challenge &&
+        esp_timer_get_time()<g_brick_test_challenge_until &&
+        !strcmp(confirm,"HARNESS_REMOVED_LR_CONFIRMED") &&
+        !strcmp(sig,g_brick_test_sig)&&!strcmp(name,g_brick_test_name)&&
+        !strcmp(token,expected);
+    /* Single-use authorization regardless of outcome. */
+    g_brick_test_challenge=0;g_brick_test_challenge_until=0;
+    if(!allowed){cJSON_Delete(j);return error_reply(r,403,"Confirmation invalid or expired");}
+    uint8_t group=0,selector=0;
+    const char *reason=brick_bench_check(sig,name,&group,&selector);
+    cJSON_Delete(j);
+    if(reason)return error_reply(r,403,reason);
+    const uint8_t args[]={0x00,group,0x00,selector};
+    if(!brick_bench_interlock_stable_high())
+        return error_reply(r,403,"GPIO8 lost safe HIGH state before ECU request");
+    ts_reply_t *reply=calloc(1,sizeof(*reply));
+    if(!reply)return error_reply(r,503,"No memory for output test request");
+    brick_live_holdoff(1200);
+    esp_err_t err=ts_request('Z',args,sizeof(args),reply,4500);
+    bool acknowledged=err==ESP_OK && (reply->status==0||reply->status==4);
+    free(reply);
+    if(!acknowledged){
+        /* A timeout may still have executed on ECU; attempt Abort. */
+        g_brick_test_active=true;
+        g_brick_test_auto_stop_us=esp_timer_get_time();
+        brick_output_test_abort_command();
+        return error_reply(r,503,"Test ACK unknown; Abort attempted; output state unverified");
+    }
+    g_brick_test_active=true;
+    g_brick_test_auto_stop_us=esp_timer_get_time()+4000000LL;
+    if(!brick_bench_interlock_stable_high()){
+        if(!brick_output_test_abort_command())
+            return error_reply(r,503,"GPIO8 LOW after ECU ACK; Abort not acknowledged");
+        return error_reply(r,403,"GPIO8 changed; ECU Abort acknowledged");
+    }
+    return json_string(r,"{\"ok\":true,\"command_acknowledged\":true,\"running_state_verified\":false}",200);
+}
+static void brick_output_test_watchdog(void *arg){
+    (void)arg;
+    for(;;){
+        int64_t now=esp_timer_get_time();
+        if(g_brick_test_challenge && (!brick_bench_interlock_safe_now() ||
+            now>=g_brick_test_challenge_until)){
+            g_brick_test_challenge=0;
+        }
+        if(g_brick_test_active && (!brick_bench_interlock_safe_now() ||
+            now>=g_brick_test_auto_stop_us || !vcp_gateway_usb_ready() ||
+            g_wifi_connected_clients==0)){
+            if(!brick_output_test_abort_command())
+                ESP_LOGW(TAG,"Output-test Abort not acknowledged; physical state unknown");
+        }
+        vTaskDelay(pdMS_TO_TICKS(75)>0?pdMS_TO_TICKS(75):1);
+    }
+}
+
 static esp_err_t test_abort_post(httpd_req_t *r){
     cJSON *j=read_request_json(r);
     if(!j)return error_reply(r,400,"Abort requires current ECU signature JSON");
@@ -677,6 +871,7 @@ static esp_err_t test_abort_post(httpd_req_t *r){
     bool ack=err==ESP_OK && (status==0||status==4);
     free(reply);
     if(!ack)return error_reply(r,503,"ECU test abort not acknowledged; actual output state unknown");
+    g_brick_test_active=false;g_brick_test_auto_stop_us=0;g_brick_test_challenge=0;
     return json_string(r,
       "{\"ok\":true,\"command\":\"cmd_test_cancel\",\"command_acknowledged\":true,\"running_state_verified\":false}",200);
 }
@@ -996,6 +1191,8 @@ static void http_start(void){
       {.uri="/api/live",.method=HTTP_GET,.handler=live_get},
       {.uri="/api/stim/stop",.method=HTTP_POST,.handler=stim_stop_post},
       {.uri="/api/test/abort",.method=HTTP_POST,.handler=test_abort_post},
+      {.uri="/api/test/preflight",.method=HTTP_POST,.handler=brick_output_test_preflight_post},
+      {.uri="/api/test/start",.method=HTTP_POST,.handler=brick_output_test_start_post},
       {.uri="/api/sensors/capture",.method=HTTP_POST,.handler=sensor_capture_post},
       {.uri="/api/stim/preflight",.method=HTTP_POST,.handler=stim_preflight_post},
       {.uri="/api/stim/start",.method=HTTP_POST,.handler=stim_start_post},
@@ -1088,6 +1285,14 @@ void app_main(void){
 
     // Bring up the browser AP even if STM32 USB is disconnected.
     brick_led_init();
+    const gpio_config_t bench_pin={
+        .pin_bit_mask=(1ULL<<BRICK_BENCH_INTERLOCK),
+        .mode=GPIO_MODE_INPUT,.pull_up_en=GPIO_PULLUP_DISABLE,
+        .pull_down_en=GPIO_PULLDOWN_DISABLE,.intr_type=GPIO_INTR_DISABLE
+    };
+    g_brick_bench_pin_configured=(gpio_config(&bench_pin)==ESP_OK);
+    if(!g_brick_bench_pin_configured)
+        ESP_LOGE(TAG,"GPIO8 interlock input setup failed; output tests blocked");
     if (g_boot_magic != BRICK_BOOT_MAGIC || g_boot_counter > 100000000U) {
         g_boot_magic = BRICK_BOOT_MAGIC;
         g_boot_counter = 0;
@@ -1119,6 +1324,10 @@ void app_main(void){
     if (xTaskCreate(stim_watchdog_task,"brick-stim-watchdog",4096,NULL,3,NULL)==pdPASS)
         g_stim_watchdog_ready=true;
     else ESP_LOGE(TAG,"Stimulator watchdog unavailable: START MUST REMAIN DISABLED");
+    if(g_brick_bench_pin_configured &&
+       xTaskCreate(brick_output_test_watchdog,"brick-bench-watchdog",4096,NULL,3,NULL)==pdPASS)
+        g_brick_bench_watchdog_ready=true;
+    else ESP_LOGE(TAG,"Output-test watchdog unavailable; tests blocked");
     ESP_LOGI(TAG,"BrickOS USB ONLY: http://192.168.4.1/ on brick (OPEN AP)");
     ESP_LOGI(TAG,"BrickOS owns rusEFI USB CDC directly; no TCP bridge");
 }
