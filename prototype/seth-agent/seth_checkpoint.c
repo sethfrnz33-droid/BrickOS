@@ -83,6 +83,7 @@ size_t seth_checkpoint_encode(const seth_agent_t *s,uint8_t *buffer,size_t cap){
     /* Never serialize ecu_definition_matched. A fresh ECU handshake is required. */
     const char *lesson=active_lesson_id(s);
     wtext(&w,lesson?lesson:"",BRICK_EDU_ID_CAP);
+    wtext(&w,s->study_target,BRICK_EDU_ID_CAP);
     w8(&w,(uint8_t)s->education.concept_count);
     for(size_t i=0;i<s->education.concept_count;i++){
         const brick_edu_concept_t *c=&s->education.concepts[i];
@@ -127,6 +128,7 @@ bool seth_checkpoint_restore(seth_agent_t *dst,seth_agent_t *scratch,
     uint32_t session_revision=r32(&r);
     char lesson[BRICK_EDU_ID_CAP];
     if(!rtext(&r,lesson,sizeof(lesson)))return false;
+    if(!rtext(&r,scratch->study_target,sizeof(scratch->study_target)))return false;
     if(!r.valid||screen>SETH_REPORT||stage>=SETH_STAGE_COUNT||
        depth>BRICK_EDU_TECHNICAL||interaction>BRICK_EDU_COURSE_MODE||
        alt>1||diagnostic>SETH_CASE_IGNITION||injection>SETH_INJ_MIXED||
@@ -177,6 +179,15 @@ bool seth_checkpoint_restore(seth_agent_t *dst,seth_agent_t *scratch,
     }
     if((screen==SETH_LESSON||screen==SETH_CHECK)&&!found){
         scratch->screen=SETH_HOME;scratch->alternate_explanation=false;
+    }
+    /* A catalog update can remove a target without discarding old learning. */
+    if(scratch->study_target[0]){
+        bool target_known=false;
+        for(size_t i=0;i<seth_lesson_count;i++)
+            if(strcmp(seth_lessons[i].id,scratch->study_target)==0){
+                target_known=true;break;
+            }
+        if(!target_known)scratch->study_target[0]=0;
     }
     scratch->ecu_definition_matched=false;
     *dst=*scratch; /* Atomic assignment only after full integrity validation. */
