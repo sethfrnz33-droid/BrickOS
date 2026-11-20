@@ -1,5 +1,6 @@
 #include "seth_actions.h"
 #include "seth_coordinator.h"
+#include "seth_learning_path.h"
 #include <string.h>
 #include <stdint.h>
 static bool same(const char *a,const char *b){return a&&b&&strcmp(a,b)==0;}
@@ -38,8 +39,8 @@ bool seth_dispatch(seth_agent_t *s,uint32_t revision,
     if(!s||revision!=s->session_revision||revision==UINT32_MAX||
        !small(action,35))return false;
     bool ok=false;
-    if(same(action,"home")){s->screen=SETH_HOME;ok=true;}
-    else if(same(action,"full_tour"))ok=seth_open_tour(s);
+    if(same(action,"home")){s->screen=SETH_HOME;s->study_target[0]=0;ok=true;}
+    else if(same(action,"full_tour")){s->study_target[0]=0;ok=seth_open_tour(s);}
     else if(same(action,"stage")){
         if(small(value,1)&&value[0]>='0'&&value[0]<='9'&&value[1]==0)
             ok=seth_select_stage(s,(unsigned)(value[0]-'0'));
@@ -49,8 +50,15 @@ bool seth_dispatch(seth_agent_t *s,uint32_t revision,
         if(seth_plan_current(s,&plan))ok=seth_follow_plan(s,&plan);
     }
     else if(same(action,"lesson")){
-        if(small(value,BRICK_EDU_ID_CAP-1))ok=seth_open_lesson(s,value);
+        if(small(value,BRICK_EDU_ID_CAP-1)){
+            ok=seth_open_lesson(s,value);
+            if(ok)s->study_target[0]=0;
+        }
     }
+    else if(same(action,"study_topic")){
+        if(small(value,BRICK_EDU_ID_CAP-1))ok=seth_request_topic(s,value);
+    }
+    else if(same(action,"continue_topic"))ok=seth_continue_topic(s);
     else if(same(action,"depth")){
         if(small(value,24))ok=choose_depth(s,value);
     }
