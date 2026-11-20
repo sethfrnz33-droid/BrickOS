@@ -24,6 +24,7 @@ static void base_packet(const seth_agent_t *s,seth_packet_t *p){
     p->gdi_unsupported=s->build.injection==SETH_INJ_GDI||
                        s->build.injection==SETH_INJ_MIXED;
     p->stage=s->stage;
+    p->session_revision=s->session_revision;
     p->study_target=s->study_target[0]?s->study_target:NULL;
     p->evidence="No verified live ECU evidence attached. Education and user-reported build facts only.";
 }
