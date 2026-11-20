@@ -4,6 +4,7 @@
 #include "seth_coordinator.h"
 #include "seth_checkpoint.h"
 #include "seth_actions.h"
+#include "seth_learning_path.h"
 #include "seth_packet_json.h"
 #include <assert.h>
 #include <string.h>
@@ -133,6 +134,46 @@ static void test_checkpoint_roundtrip_and_tamper(void){
     assert(restored.session_revision==rev);
 }
 
+static void test_study_path_and_resume(void){
+    static const char *const expected[]={
+        "ecu_vs_engine","ini_definition","active_table","sensor_trust",
+        "wideband_readiness","lambda_vs_target","fuel_trim_masking",
+        "ve_interpolation"
+    };
+    seth_agent_t s,restored,scratch;
+    seth_init(&s);
+    assert(seth_dispatch(&s,0,"study_topic","ve_interpolation"));
+    assert(s.screen==SETH_LESSON);
+    assert(strcmp(s.study_target,"ve_interpolation")==0);
+    assert(strcmp(seth_lessons[s.lesson_index].id,expected[0])==0);
+    seth_packet_t p;seth_render(&s,&p);
+    assert(strcmp(p.study_target,"ve_interpolation")==0);
+    uint8_t snap[SETH_CHECKPOINT_MAX_BYTES];
+    size_t len=seth_checkpoint_encode(&s,snap,sizeof(snap));
+    assert(len>0);
+    seth_init(&restored);
+    assert(seth_checkpoint_restore(&restored,&scratch,snap,len));
+    assert(strcmp(restored.study_target,"ve_interpolation")==0);
+    assert(restored.session_revision==s.session_revision);
+    for(unsigned i=1;i<sizeof(expected)/sizeof(expected[0]);i++){
+        assert(seth_dispatch(&restored,restored.session_revision,"continue_topic",""));
+        assert(restored.screen==SETH_LESSON);
+        assert(strcmp(seth_lessons[restored.lesson_index].id,expected[i])==0);
+    }
+    assert(seth_dispatch(&restored,restored.session_revision,"continue_topic",""));
+    assert(restored.screen==SETH_TOUR);
+    assert(restored.study_target[0]==0);
+    seth_course_summary_t sum;seth_course_summary(&restored,&sum);
+    assert(sum.seen_concepts==sizeof(expected)/sizeof(expected[0]));
+    assert(sum.externally_verified_chapters==0);
+    assert(!restored.ecu_definition_matched);
+    assert(!seth_dispatch(&restored,restored.session_revision,"continue_topic",""));
+    /* Direct topic change cancels a previous breadcrumb. */
+    assert(seth_dispatch(&restored,restored.session_revision,"study_topic","knock_not_mbt"));
+    assert(strcmp(restored.study_target,"knock_not_mbt")==0);
+    assert(seth_dispatch(&restored,restored.session_revision,"lesson","ecu_vs_engine"));
+    assert(restored.study_target[0]==0);
+}
 static void test_capacity_and_repeated_use(void){
     seth_agent_t s,temp;seth_init(&s);
     uint8_t blob[SETH_CHECKPOINT_MAX_BYTES];
@@ -156,6 +197,7 @@ int main(void){
     test_action_revision_and_scope();
     test_checkpoint_roundtrip_and_tamper();
     test_capacity_and_repeated_use();
+    test_study_path_and_resume();
     puts("Seth coordinator, action authority separation, and checkpoint tests passed");
     return 0;
 }
