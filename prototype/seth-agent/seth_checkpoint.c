@@ -79,6 +79,7 @@ size_t seth_checkpoint_encode(const seth_agent_t *s,uint8_t *buffer,size_t cap){
     w8(&w,(uint8_t)s->build.regulator);w8(&w,(uint8_t)s->build.pressure_sensor);
     w32(&w,s->build.revision);
     w32(&w,s->education.event_sequence);
+    w32(&w,s->session_revision);
     /* Never serialize ecu_definition_matched. A fresh ECU handshake is required. */
     const char *lesson=active_lesson_id(s);
     wtext(&w,lesson?lesson:"",BRICK_EDU_ID_CAP);
@@ -123,6 +124,7 @@ bool seth_checkpoint_restore(seth_agent_t *dst,seth_agent_t *scratch,
     uint8_t alt=r8(&r),diagnostic=r8(&r),injection=r8(&r),pump=r8(&r);
     uint8_t regulator=r8(&r),sensor=r8(&r);
     uint32_t revision=r32(&r),sequence=r32(&r);
+    uint32_t session_revision=r32(&r);
     char lesson[BRICK_EDU_ID_CAP];
     if(!rtext(&r,lesson,sizeof(lesson)))return false;
     if(!r.valid||screen>SETH_REPORT||stage>=SETH_STAGE_COUNT||
@@ -140,6 +142,7 @@ bool seth_checkpoint_restore(seth_agent_t *dst,seth_agent_t *scratch,
     scratch->build.regulator=(seth_regulator_t)regulator;
     scratch->build.pressure_sensor=(seth_pressure_sensor_t)sensor;
     scratch->build.revision=revision;scratch->education.event_sequence=sequence;
+    scratch->session_revision=session_revision;
     uint8_t count=r8(&r);
     if(!r.valid||count>BRICK_EDU_MAX_CONCEPTS)return false;
     for(size_t i=0;i<count;i++){
