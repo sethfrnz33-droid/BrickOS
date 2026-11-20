@@ -188,6 +188,13 @@ static bool exact_signature(const char *path, const char *expected) {
     return has_ts_sig ? ts_matches : mt_matches;
 }
 
+bool ini_cache_matches_signature(const char *ecu_signature) {
+    if (!ecu_signature || !ecu_signature[0] || !acquire()) return false;
+    bool matched = exact_signature(INI_PATH, ecu_signature);
+    xSemaphoreGive(lock);
+    return matched;
+}
+
 esp_err_t ini_cache_import_exact_file(const char *source_path, const char *ecu_signature) {
     if (!source_path || !ecu_signature || !acquire()) return ESP_ERR_INVALID_STATE;
     esp_err_t result = ESP_FAIL;
