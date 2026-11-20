@@ -139,3 +139,9 @@ The existing 3DS/DSi tuners preserve a verified copy on **their own SD card**. F
 - [Cache regression tests](firmware/BrickOS/tests/ini-fast-cache.test.mjs)
 
 **Host-tested only:** no measured load-time improvement, real phone test, new ESP-IDF binary build, or physical ECU/MSC confirmation has been performed for this update. The new browser asset is regenerated automatically by ESP-IDF CMake configuration.
+
+## Seth standalone prototype V0.2 — no production integration
+
+[Prototype source and build instructions](prototype/seth-agent/README.md) — a self-contained, **offline C11** agent prototype, not linked into `firmware/BrickOS/` or the phone/DS applications.
+
+V0.2 implements stage-by-stage task selection, prerequisite-aware lesson paths, source-independent user-reported engine profile decisions, allowlisted/revisioned dialogue actions, bounded CRC-checked resumable progress records, and synthetic timestamp-aware diagnostic evidence review. The embedded JSON response includes explicit reasons and next tasks, while **all tuning writes and physical engine controls remain absent**. No live telemetry, ECU matching, SD persistence or autocalibration has been enabled.
