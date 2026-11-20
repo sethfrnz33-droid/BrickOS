@@ -127,3 +127,15 @@ A complete customer-supplied generated INI was analyzed **as a definition, not a
 - [Reusable read-only INI research scanner](tools/ini_research_scan.py), with [synthetic parser tests](tools/tests/test_ini_research_scan.py) and [source-fact tests](firmware/esp32/tests/proteus-f7-ini-audit.test.mjs)
 
 **Important:** This INI's declared identity has **not** been matched to a live ECU and supplies no actual tune values or physical engine facts. The browser Guide's current alias candidate for spark and low-pressure fuel sensing misses the correct output channels; the existing `sync` and `knock` aliases conflate counters with other quantities. **These are research findings, not runtime fixes.** Present primary/secondary/idle VE shapes are 16×16 / 16×16 / 4×4, and page 3 LTFT is explicitly read-only. GDI and mixed PFI/GDI Guided Fuel Tuning stay unsupported. Manual Tuning, ESP bridge and DS/DSi connection code were not modified.
+
+## Phone INI loading: ECU SD first, fast local cache
+
+**Primary supported definition:** the user-provided generated Proteus F7 INI `rusEFI master.2026.11.09.proteus_f7.2735508644`; unknown future/third-party strategies are outside the verified BrickOS scope until explicitly supported. Matching the connected ECU signature remains mandatory before calibration.
+
+The existing 3DS/DSi tuners preserve a verified copy on **their own SD card**. For the ESP-hosted phone, the existing path is **ECU SD via USB MSC LUN1 → ESP SPIFFS**, now enhanced with a **stable ESP SHA-256 fingerprint → browser IndexedDB parsed-definition cache**. Returning to the same ECU and unchanged ESP INI can reuse the parsed definition without a repeat ~944 KB transfer. The first load still uses the original ESP source; browser storage failure falls back to network; manual upload remains available. Neither DS connection code nor ECU commands were changed.
+
+- [Detailed support boundary, automatic load architecture and validation checklist](docs/43-supported-ini-scope-and-phone-sd-fastpath.md)
+- [Phone cache module and exact hash/signature fallback](firmware/esp32/web/ini-fast-cache.mjs)
+- [Cache regression tests](firmware/esp32/tests/ini-fast-cache.test.mjs)
+
+**Host-tested only:** no measured load-time improvement, real phone test, new ESP-IDF binary build, or physical ECU/MSC confirmation has been performed for this update. The new browser asset is regenerated automatically by ESP-IDF CMake configuration.
