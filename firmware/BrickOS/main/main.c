@@ -225,7 +225,8 @@ static esp_err_t status_get(httpd_req_t *r){
     cJSON *j=cJSON_CreateObject();
     cJSON_AddBoolToObject(j,"ok",true);
     cJSON_AddStringToObject(j,"product","BrickOS");
-    cJSON_AddStringToObject(j,"brick_os_build","v4.8");
+    cJSON_AddStringToObject(j,"brick_os_build","v4.8-GPIO8-STIM-R2");
+    cJSON_AddStringToObject(j,"bench_interlock_revision","GPIO8_HIGH_ISOLATED_R2");
     cJSON_AddBoolToObject(j,"stim_remote_start_supported",g_stim_watchdog_ready);
     cJSON_AddBoolToObject(j,"stim_remote_stop_supported",true);
     char stim_sig[160];
