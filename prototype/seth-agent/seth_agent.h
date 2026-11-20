@@ -52,6 +52,7 @@ typedef struct {
     seth_case_t diagnostic_case;
     char symptom[SETH_MAX_SYMPTOM];
     bool ecu_definition_matched; /* externally set; never set by a lesson */
+    uint32_t session_revision;    /* local dialog actions only; not ECU authority */
 } seth_agent_t;
 
 typedef struct {
