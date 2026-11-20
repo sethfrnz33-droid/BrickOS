@@ -63,11 +63,11 @@ footer = r'''
 static void put(const char *p,const char *data){FILE *f=fopen(p,"wb");assert(f);assert(fwrite(data,1,strlen(data),f)==strlen(data));assert(fclose(f)==0);}
 static bool same(const char *p,const char *data){char b[4096]={0};FILE *f=fopen(p,"rb");if(!f)return false;size_t n=fread(b,1,sizeof(b),f);fclose(f);return n==strlen(data)&&memcmp(b,data,n)==0;}
 int main(void){
- const char *valid="[TunerStudio]\\nsignature=some-other-ECU-build\\n[Constants]\\nx=1\\n[OutputChannels]\\ny=2\\n";
+ const char *valid="[TunerStudio]\\nsignature=some-other-ECU-build\\n; a firmware-generated description that makes the sample INI realistic\\n[Constants]\\nx=1\\n[OutputChannels]\\ny=2\\n";
  put("candidate.ini",valid);
  assert(ini_cache_import_sd_file("candidate.ini")==ESP_OK);
  assert(same(INI_PATH,valid));
- put("candidate.ini","[TunerStudio]\\nsignature=no-data\\n[Constants]\\nfoo=1\\n");
+ put("candidate.ini","[TunerStudio]\\nsignature=no-data\\n; malformed ECU definition with missing runtime section and a long metadata comment\\n[Constants]\\nfoo=1\\n");
  assert(ini_cache_import_sd_file("candidate.ini")==ESP_ERR_INVALID_RESPONSE);
  assert(same(INI_PATH,valid));
  assert(ini_cache_import_sd_file("missing.ini")!=ESP_OK);
