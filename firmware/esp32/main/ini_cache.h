@@ -14,6 +14,11 @@ esp_err_t ini_cache_download(const char *url, const char *ssid, const char *pass
 esp_err_t ini_cache_serve(httpd_req_t *req);
 esp_err_t ini_cache_delete(void);
 
+/* Read-only import metadata. Accept one valid ECU SD definition even when the
+ * live ECU signature is unavailable/different; does not authorize writes. */
+bool ini_cache_definition_file_valid(const char *source_path);
+esp_err_t ini_cache_import_sd_file(const char *source_path);
+
 /* Imports a local file only if its TunerStudio signature matches the live ECU. */
 esp_err_t ini_cache_import_exact_file(const char *source_path, const char *ecu_signature);
 

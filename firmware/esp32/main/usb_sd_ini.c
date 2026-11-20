@@ -68,8 +68,14 @@ static bool ends_with_ini(const char *name) {
 
 /* Scan FAT root and conventional dirs; filename need only end in .ini.
  * Size cap includes firmware-generated 943,745-byte Proteus F7 definitions. */
+/* Exact-match definitions win. When the ECU has another firmware/INI,
+ * a lone valid INI must still be available to the read-only tuner.
+ * Never silently select one of multiple mismatched candidates. */
 static esp_err_t sd_copy_definition(const char *sig) {
     const char *dirs[] = {BRICK_SD_MOUNT, BRICK_SD_MOUNT "/rusEFI", BRICK_SD_MOUNT "/tunerstudio"};
+    char fallback[192] = "";
+    unsigned unmatched = 0;
+    esp_err_t last_error = ESP_ERR_NOT_FOUND;
     for (unsigned d = 0; d < sizeof(dirs)/sizeof(dirs[0]); ++d) {
         DIR *dir = opendir(dirs[d]);
         if (!dir) continue;
@@ -80,34 +86,59 @@ static esp_err_t sd_copy_definition(const char *sig) {
             const size_t shown = strnlen(entry->d_name, sizeof(s_last_file) - 1);
             memcpy(s_last_file, entry->d_name, shown);
             s_last_file[shown] = '\0';
-            ESP_LOGI(TAG, "Found SD INI candidate: %s", entry->d_name);
             char filename[192];
             int n = snprintf(filename, sizeof(filename), "%s/%s", dirs[d], entry->d_name);
             if (n <= 0 || (size_t)n >= sizeof(filename)) continue;
             struct stat st;
             if (stat(filename, &st) || !S_ISREG(st.st_mode)) {
-                sd_status("SD INI candidate is not a readable regular file");
+                last_error = ESP_ERR_INVALID_RESPONSE;
                 continue;
             }
             if (st.st_size < 100 || st.st_size > 1200000) {
+                last_error = ESP_ERR_INVALID_SIZE;
                 sd_status("SD INI rejected: file size outside 100B-1.2MB");
                 continue;
             }
-            esp_err_t result = ini_cache_import_exact_file(filename, sig);
-            s_last_error = result;
-            if (result == ESP_OK) {
-                closedir(dir);
-                ESP_LOGI(TAG, "Verified matching INI imported into SPIFFS: %s", filename);
-                return ESP_OK;
+            if (!ini_cache_definition_file_valid(filename)) {
+                last_error = ESP_ERR_INVALID_RESPONSE;
+                ESP_LOGW(TAG,"SD INI missing required TunerStudio sections: %s",filename);
+                continue;
             }
-            ESP_LOGW(TAG, "INI rejected, wrong signature or invalid file: %s (%s)",
-                     filename, esp_err_to_name(result));
+            if (sig && sig[0]) {
+                esp_err_t exact = ini_cache_import_exact_file(filename, sig);
+                if (exact == ESP_OK) {
+                    closedir(dir);
+                    sd_status("Matching ECU INI imported from SD");
+                    return ESP_OK;
+                }
+                /* A true storage failure must not be papered over by trying
+                 * another candidate or a relaxed signature path. */
+                if (exact != ESP_ERR_INVALID_RESPONSE) {
+                    last_error = exact;
+                    closedir(dir);
+                    return last_error;
+                }
+            }
+            ++unmatched;
+            if (unmatched == 1) snprintf(fallback, sizeof(fallback), "%s", filename);
         }
         closedir(dir);
     }
-    return ESP_ERR_NOT_FOUND;
+    if (unmatched == 1) {
+        esp_err_t result = ini_cache_import_sd_file(fallback);
+        if (result == ESP_OK) {
+            snprintf(s_last_file,sizeof(s_last_file),"%s",strrchr(fallback,'/')?
+                strrchr(fallback,'/')+1:fallback);
+            sd_status("Valid alternate ECU INI imported (read-only until signature matches)");
+        }
+        return result;
+    }
+    if (unmatched > 1) {
+        sd_status("Multiple valid INIs; no exact ECU signature match");
+        return ESP_ERR_INVALID_STATE;
+    }
+    return last_error;
 }
-
 static esp_err_t sd_import_once(uint8_t addr, const char *signature) {
     ++s_attempts;
     s_candidates = 0;
@@ -129,14 +160,16 @@ static esp_err_t sd_import_once(uint8_t addr, const char *signature) {
     };
     result = msc_host_vfs_register(device, BRICK_SD_MOUNT, &config, &mount);
     if (result == ESP_OK) {
-        sd_status("ECU SD available; checking INI signature");
+        sd_status("ECU SD mounted; checking INI definitions");
         result = sd_copy_definition(signature);
         s_last_error = result;
         if (result == ESP_OK) {
             ++s_imports;
-            sd_status("Exact ECU INI imported from SD to ESP32 SPIFFS");
+            sd_status("ECU SD INI ready in ESP32 cache");
         } else {
-            sd_status(s_candidates ? "SD INI found but signature/format rejected" : "SD mounted but no .ini files in scanned folders");
+            if (result != ESP_ERR_INVALID_STATE)
+                sd_status(s_candidates ? "SD INI found but format/storage rejected" :
+                          "SD mounted but no .ini files in scanned folders");
         }
     } else {
         s_last_error = result;
@@ -155,6 +188,7 @@ static void sd_ini_task(void *arg) {
     (void)arg;
     vTaskDelay(pdMS_TO_TICKS(BRICK_SD_BOOT_DELAY_MS) ?: 1);
     char last_success_sig[160] = {0};
+    bool imported = false;
     uint32_t next_try_tick = 0;
     sd_status("Waiting for ECU USB mass-storage interface");
     while (true) {
@@ -165,12 +199,14 @@ static void sd_ini_task(void *arg) {
                 s_device_present = true;
                 next_try_tick = 0;
                 last_success_sig[0] = 0;
-                sd_status("ECU USB MSC detected; waiting for signature");
+                imported = false;
+                sd_status("ECU USB MSC detected; scanning INI");
             } else {
                 s_device_present = false;
                 s_usb_address = 0;
                 next_try_tick = 0;
                 last_success_sig[0] = 0;
+                imported = false;
                 sd_status("ECU USB storage disconnected");
             }
         }
@@ -178,12 +214,15 @@ static void sd_ini_task(void *arg) {
         brick_ecu_signature_get(signature, sizeof(signature));
         uint32_t tick = xTaskGetTickCount();
         bool due = next_try_tick == 0 || (int32_t)(tick - next_try_tick) >= 0;
-        if (s_device_present && vcp_gateway_usb_ready() && signature[0] &&
-                strcmp(signature, last_success_sig) != 0 && due) {
+        if (s_device_present && due &&
+                (!imported || (signature[0] && strcmp(signature, last_success_sig) != 0))) {
             // Do not continuously re-probe an SD card in active logging use.
             next_try_tick = tick + pdMS_TO_TICKS(BRICK_SD_RETRY_MS);
             esp_err_t e = sd_import_once(s_usb_address, signature);
-            if (e == ESP_OK) snprintf(last_success_sig, sizeof(last_success_sig), "%s", signature);
+            if (e == ESP_OK) {
+                imported = true;
+                snprintf(last_success_sig, sizeof(last_success_sig), "%s", signature);
+            }
         }
         vTaskDelay(pdMS_TO_TICKS(200) ?: 1);
     }

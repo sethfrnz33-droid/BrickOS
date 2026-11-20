@@ -84,6 +84,14 @@ static bool valid_definition(const char *path){
     fclose(f);
     return constants && channels;
 }
+/* Only use this test to decide whether an on-SD file is a readable INI.
+ * It grants no calibration access and does not authenticate the ECU. */
+bool ini_cache_definition_file_valid(const char *path){
+    if(!path)return false;
+    struct stat st;
+    return stat(path,&st)==0 && S_ISREG(st.st_mode) &&
+        st.st_size>=100 && st.st_size<=INI_MAX_BYTES && valid_definition(path);
+}
 static esp_err_t commit_file(void){
     if(!valid_definition(INI_TEMP))return ESP_ERR_INVALID_RESPONSE;
     // Prefer a complete old version over any incomplete new version.
@@ -203,6 +211,40 @@ esp_err_t ini_cache_import_exact_file(const char *source_path, const char *ecu_s
     if (fclose(dst) != 0) result = ESP_FAIL;
     if (result == ESP_OK && !exact_signature(INI_TEMP, ecu_signature))
         result = ESP_ERR_INVALID_RESPONSE;
+    if (result == ESP_OK) result = commit_file();
+    if (result != ESP_OK) remove(INI_TEMP);
+close_src:
+    fclose(src);
+done:
+    xSemaphoreGive(lock);
+    return result;
+}
+
+/* A single valid INI on ECU USB storage may describe a different ECU
+ * revision and still be offered for read-only parsing/download.
+ * NEVER use this import result to authorize ECU writes or commands.
+ * Those remain guarded by exact_signature(INI_PATH, live_ecu_signature). */
+esp_err_t ini_cache_import_sd_file(const char *source_path) {
+    if (!source_path || !acquire()) return ESP_ERR_INVALID_STATE;
+    esp_err_t result = ESP_FAIL;
+    FILE *src = fopen(source_path, "rb");
+    if (!src) goto done;
+    if (fseek(src, 0, SEEK_END) != 0) goto close_src;
+    long length = ftell(src);
+    if (length < 100 || length > INI_MAX_BYTES || fseek(src, 0, SEEK_SET) != 0) {
+        result = ESP_ERR_INVALID_SIZE; goto close_src;
+    }
+    if (!valid_definition(source_path)) {
+        result = ESP_ERR_INVALID_RESPONSE; goto close_src;
+    }
+    FILE *dst = fopen(INI_TEMP, "wb");
+    if (!dst) goto close_src;
+    char buf[1024]; size_t n; result = ESP_OK;
+    while ((n = fread(buf, 1, sizeof(buf), src)) > 0) {
+        if (fwrite(buf, 1, n, dst) != n) { result = ESP_FAIL; break; }
+    }
+    if (ferror(src)) result = ESP_FAIL;
+    if (fclose(dst) != 0) result = ESP_FAIL;
     if (result == ESP_OK) result = commit_file();
     if (result != ESP_OK) remove(INI_TEMP);
 close_src:
