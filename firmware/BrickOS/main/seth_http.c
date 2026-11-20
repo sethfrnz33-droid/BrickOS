@@ -161,15 +161,55 @@ esp_err_t seth_http_view(httpd_req_t *req) {
     return send_view(req);
 }
 
+/* Static lesson index, shared by any small phone/DS client.
+ * This contains original teaching concepts, not ECU offsets or commands. */
+esp_err_t seth_http_lessons(httpd_req_t *req) {
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return fail(req, "503 Service Unavailable", "No memory");
+    cJSON_AddStringToObject(root, "schema", "brickos.seth.esp.lessons.v1");
+    cJSON_AddBoolToObject(root, "read_only", true);
+    cJSON *stages = cJSON_AddArrayToObject(root, "stages");
+    cJSON *lessons = cJSON_AddArrayToObject(root, "lessons");
+    if (!stages || !lessons) {
+        cJSON_Delete(root);
+        return fail(req, "503 Service Unavailable", "No memory");
+    }
+    for (unsigned i=0; i<SETH_STAGE_COUNT; ++i) {
+        cJSON *stage = cJSON_CreateObject();
+        if (!stage) break;
+        cJSON_AddNumberToObject(stage, "number", i);
+        cJSON_AddStringToObject(stage, "id", seth_stage_ids[i]);
+        cJSON_AddItemToArray(stages, stage);
+    }
+    for (size_t i=0; i<seth_lesson_count; ++i) {
+        cJSON *lesson = cJSON_CreateObject();
+        if (!lesson) break;
+        cJSON_AddStringToObject(lesson, "id", seth_lessons[i].id);
+        cJSON_AddStringToObject(lesson, "chapter", seth_lessons[i].chapter);
+        cJSON_AddStringToObject(lesson, "title", seth_lessons[i].objective);
+        cJSON_AddNumberToObject(lesson, "version", seth_lessons[i].version);
+        cJSON_AddItemToArray(lessons, lesson);
+    }
+    char *body = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!body) return fail(req, "503 Service Unavailable", "No memory");
+    httpd_resp_set_type(req, "application/json; charset=utf-8");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    esp_err_t out = httpd_resp_sendstr(req, body);
+    free(body);
+    return out;
+}
+
 esp_err_t seth_http_action(httpd_req_t *req) {
     if (!s_agent_lock) return fail(req, "503 Service Unavailable", "Seth agent unavailable");
     if (req->content_len < 2 || req->content_len > SETH_MAX_ACTION_BODY)
         return fail(req, "413 Payload Too Large", "Action body outside permitted size");
     char buf[SETH_MAX_ACTION_BODY+1];
     int total = 0;
+    unsigned retries = 0;
     while (total < req->content_len) {
         int n = httpd_req_recv(req, buf+total, req->content_len-total);
-        if (n == HTTPD_SOCK_ERR_TIMEOUT) continue;
+        if (n == HTTPD_SOCK_ERR_TIMEOUT && ++retries < 3u) continue;
         if (n <= 0) return fail(req, "400 Bad Request", "Incomplete request");
         total += n;
     }
