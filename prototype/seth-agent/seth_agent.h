@@ -67,6 +67,8 @@ typedef struct {
     uint32_t session_revision;
     bool read_only, tuning_verified, gdi_unsupported;
     const char *study_target; /* non-authoritative original topic breadcrumb */
+    const char *task_id, *task_reason, *task_lesson_id;
+    const char *task_question_field; /* user report question, not hardware truth */
 } seth_packet_t;
 
 /* All functions return state or human-readable packets. No ECU operations. */
