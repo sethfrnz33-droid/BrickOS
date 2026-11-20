@@ -1,0 +1,99 @@
+name: Publish standalone BrickOS ESP-IDF project
+
+on:
+  push:
+    branches: [main]
+    tags: ['brickos-fw-v*']
+    paths:
+      - '.github/workflows/brickos-firmware-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Package and publish BrickOS.zip
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out firmware source
+        uses: actions/checkout@v4
+
+      - name: Build standalone, directly importable BrickOS.zip
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+
+          project = Path("firmware/BrickOS")
+          required = (
+              "CMakeLists.txt",
+              "sdkconfig.defaults",
+              "partitions.csv",
+              "README.md",
+              "main/CMakeLists.txt",
+              "main/idf_component.yml",
+              "main/main.c",
+              "main/stim_policy.h",
+              "tools/generate_web_assets.py",
+              "web/index.html",
+          )
+          for path in required:
+              if not (project / path).is_file():
+                  raise SystemExit("Missing required firmware file: " + path)
+
+          sources = [project / item for item in (
+              "CMakeLists.txt", "sdkconfig.defaults", "partitions.csv", "README.md"
+          )]
+          for directory in ("main", "web", "tools"):
+              sources.extend(p for p in (project / directory).rglob("*") if p.is_file())
+          sources = sorted(set(sources))
+          with ZipFile("BrickOS.zip", "w", ZIP_DEFLATED, compresslevel=9) as z:
+              for source in sources:
+                  z.write(source, "BrickOS/" + source.relative_to(project).as_posix())
+
+          # Fail the release if any entire-repo nesting accidentally returns.
+          with ZipFile("BrickOS.zip") as z:
+              names = set(z.namelist())
+              assert z.testzip() is None
+              assert {"BrickOS/CMakeLists.txt", "BrickOS/main/main.c",
+                      "BrickOS/web/index.html", "BrickOS/sdkconfig.defaults"} <= names
+              assert all(n.startswith("BrickOS/") for n in names)
+              assert not any("BrickOS-main/" in n or "firmware/" in n
+                             or "/build/" in n for n in names)
+              print(f"Verified standalone BrickOS.zip: {len(names)} files")
+          PY
+
+      - name: Save zip as downloadable build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BrickOS-ESP-IDF-project
+          path: BrickOS.zip
+          if-no-files-found: error
+
+      - name: Publish directly importable ZIP to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            TAG="brickos-fw-v4.8-gpio8-r2"
+          fi
+
+          TITLE="BrickOS ESP32-S3 firmware - standalone ESP-IDF project"
+          NOTES="Download **BrickOS.zip** below. Extract it once to get **BrickOS/** with **CMakeLists.txt**, **main/**, **web/**, and **tools/** directly inside. In Espressif IDE import the **BrickOS/** folder. This is source code to build and flash, not a compiled .bin. The broader source repository includes the 3DS app and documentation and is not the ESP-IDF project. Hardware verification remains required."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" BrickOS.zip --clobber
+          else
+            gh release create "$TAG" BrickOS.zip \
+              --target "$GITHUB_SHA" \
+              --title "$TITLE" --notes "$NOTES" --latest
+          fi
