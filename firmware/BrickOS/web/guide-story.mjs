@@ -1,4 +1,5 @@
 import {analyzeSeth,sethReasoningSummary,normalizeReasoningStage} from './guide-reasoning.mjs';
+import {explainSetting,findSettings,answerGeneralQuestion} from './guide-setting-help.mjs';
 
 /* BrickOS portable Seth conversation interpreter — no DOM, no ECU writes.
  * Loaded from the ESP-served versioned JSON dialogue catalogue. Any future DS
@@ -58,14 +59,21 @@ export function findManualTarget(stage,menuTree){
  return null;
 }
 export class GuideStory {
- constructor(catalog=null){this.catalog=null;this.nodeId='welcome';this.stack=[];this.definitionKey='';this.lastVisited='';this.history=[];this.checkAnswers={};if(catalog)this.load(catalog)}
- load(c){this.catalog=validateStoryCatalog(c);this.nodeId=c.entry;this.stack=[];this.lastVisited='';this.history=[];this.checkAnswers={};this.definitionKey='';}
+ constructor(catalog=null){this.catalog=null;this.nodeId='welcome';this.stack=[];this.definitionKey='';this.lastVisited='';this.history=[];this.checkAnswers={};this.questionText='';if(catalog)this.load(catalog)}
+ load(c){this.catalog=validateStoryCatalog(c);this.nodeId=c.entry;this.stack=[];this.lastVisited='';this.history=[];this.checkAnswers={};this.definitionKey='';this.questionText='';}
  isCheckNode(id){const m=/^check\.([a-z_]+)\.(\d+)$/.exec(id||'');return !!(m&&this.catalog?.chapter_checks?.[m[1]]?.[Number(m[2])]);}
  save(){if(!this.definitionKey||typeof localStorage==='undefined')return;try{localStorage.setItem('brickos.guide.state.'+this.definitionKey,JSON.stringify({version:this.catalog.version,lastVisited:this.lastVisited,answers:this.checkAnswers}));}catch{}}
- bindDefinition(key){const k=key||'';if(k!==this.definitionKey){this.definitionKey=k;this.nodeId=this.catalog?.entry||'welcome';this.stack=[];this.lastVisited='';this.history=[];this.checkAnswers={};
+ bindDefinition(key){const k=key||'';if(k!==this.definitionKey){this.definitionKey=k;this.nodeId=this.catalog?.entry||'welcome';this.stack=[];this.lastVisited='';this.history=[];this.checkAnswers={};this.questionText='';
    if(k&&typeof localStorage!=='undefined')try{const raw=JSON.parse(localStorage.getItem('brickos.guide.state.'+k)||'null');if(raw?.version===this.catalog?.version){if(has(this.catalog.nodes,raw.lastVisited)||this.isCheckNode(raw.lastVisited)||/^diagnosis\.(?:question\.)?[a-z_]+$/.test(raw.lastVisited))this.lastVisited=raw.lastVisited;for(const [id,v] of Object.entries(raw.answers||{})){const m=/^([a-z_]+)\.([a-z0-9_]+)$/.exec(id);const q=this.catalog.chapter_checks?.[m?.[1]]?.find(x=>x.id===m?.[2]);if(q&&['reported','unknown'].includes(v))this.checkAnswers[id]=v;}}}catch{}
   }return k;}
  canResume(){return !!this.lastVisited&&this.lastVisited!==this.catalog?.entry&&!!this.definitionKey;}
+ ask(question) {
+  const cleaned=String(question??'').replace(/[\u0000-\u001f]/g,' ').trim().slice(0,240);
+  if(!cleaned)return false;
+  this.questionText=cleaned;
+  this.go('ask');
+  return true;
+ }
  go(id){if(!this.catalog)throw Error('Guide catalogue unavailable');
   if(id==='back'){this.nodeId=this.stack.pop()||this.catalog.entry;return {type:'node',node:this.nodeId};}
   if(id==='resume.last'){this.nodeId=this.canResume()?this.lastVisited:'tour.start';return {type:'node',node:this.nodeId};}
@@ -78,7 +86,7 @@ export class GuideStory {
   if(id.startsWith('workspace.'))return {type:'workspace',tab:id.slice(10)};
   if(id.startsWith('action.field.'))return {type:'manual_field',index:Number(id.slice(13))};
   if(id.startsWith('action.manual.'))return {type:'manual',stage:id.slice(14)};
-  if(!has(this.catalog.nodes,id)&&!/^field\.\d+$/.test(id)&&!this.isCheckNode(id)&&!/^why\.[a-z_]+\.\d+$/.test(id)&&!/^diagnosis\.(?:question\.)?[a-z_]+$/.test(id))throw Error('Unknown dialogue step');
+  if(!has(this.catalog.nodes,id)&&id!=='ask'&&!/^field\.\d+$/.test(id)&&!this.isCheckNode(id)&&!/^why\.[a-z_]+\.\d+$/.test(id)&&!/^diagnosis\.(?:question\.)?[a-z_]+$/.test(id))throw Error('Unknown dialogue step');
   if(id!==this.nodeId&&this.stack.length<90)this.stack.push(this.nodeId);
   this.nodeId=id;
   if(id!=='welcome'&&id!=='resume'&&id!=='targeted'&&id!=='tour.start'&&id!=='tour.map')this.lastVisited=id;
@@ -91,17 +99,32 @@ export class GuideStory {
   if(ecuKey!==this.definitionKey)this.bindDefinition(ecuKey);
   let n=this.catalog.nodes[this.nodeId]||this.catalog.nodes[this.catalog.entry];
   const all=engine?.inventory||[];
+  if(this.nodeId==='ask'){
+   const query=this.questionText;
+   const matches=findSettings(query,all,5);
+   const general=answerGeneralQuestion(query);
+   const chosen=matches.length===1&&matches[0].score>=4?matches[0]:null;
+   const explanation=chosen?explainSetting(chosen.field):null;
+   n={id:'ask',speaker:'seth',tone:'curious',tag:'YOUR QUESTION',
+    text:chosen?`You're asking about ${explanation.label}. ${explanation.summary} ${explanation.check}`:
+      matches.length?`I found a few settings that might be what you mean by "${query}". Pick one and I'll explain what I can.`:general.text,
+    choices:[
+     ...matches.map(m=>({label:String(m.field.label||m.field.name||'Setting'),go:'field.'+m.index})),
+     ...(general.stage?[{label:'Explore '+general.stage+' together',go:'diagnosis.'+general.stage}]:[]),
+     {label:'Back to the guide',go:'back'}
+    ]};
+  }
   if(/^field\.\d+$/.test(this.nodeId)){
    const i=Number(this.nodeId.slice(6));const f=all[i];
-   if(f){const explicit=menuLinks[f.name];const fieldType=[f.kind,f.type,f.units].filter(Boolean).join(' / ');
-    n={id:this.nodeId,speaker:'seth',tone:'thoughtful',tag:'INI '+(i+1)+' / '+all.length,
-     text:`This is ${f.label||f.name}, stored on page ${f.page}. The INI identifies it as ${fieldType||'a calibration field'}. I can show its original editor when the INI menu resolves it; the field definition alone does not prove what the setting should be.`,
-     choices:[...(i>0?[{label:'Previous INI field',go:'field.'+(i-1)}]:[]),
-      ...(i+1<all.length?[{label:'Next INI field',go:'field.'+(i+1)}]:[]),
-      {label:'Open original field editor',go:'action.field.'+i},
-      {label:'Search INI Atlas',go:'workspace.atlas'},
+   if(f){const explicit=menuLinks[f.name];const help=explainSetting(f);
+    n={id:this.nodeId,speaker:'seth',tone:'curious',tag:'SETTING '+(i+1)+' / '+all.length,
+     text:`Here's ${help.label}. ${help.summary} ${help.check} ${help.recognized?'':'If you can tell me what system it belongs to, I can narrow that down.'}`,
+     choices:[...(i>0?[{label:'Previous setting',go:'field.'+(i-1)}]:[]),
+      ...(i+1<all.length?[{label:'Next setting',go:'field.'+(i+1)}]:[]),
+      {label:'Open this setting in the tuner',go:'action.field.'+i},
+      {label:'Browse all settings',go:'workspace.atlas'},
       {label:'Back to guide home',go:'welcome'}],_field:f,_menu:explicit||null};}
-   else n={id:this.nodeId,speaker:'seth',text:'No further decoded calibration fields are available. This is not a claim that all INI conditions or control strategies are fully understood.',choices:[{label:'Open full INI Atlas',go:'workspace.atlas'},{label:'Guide home',go:'welcome'}]};
+   else n={id:this.nodeId,speaker:'seth',text:'That setting isn't available in the loaded ECU definition. You can search for another name.',choices:[{label:'Open full INI Atlas',go:'workspace.atlas'},{label:'Guide home',go:'welcome'}]};
   }
   // Chapter checks are catalogued with INI role names; clients render data packets.
   const match=/^(check|why)\.([a-z_]+)\.(\d+)$/.exec(this.nodeId);
@@ -118,11 +141,11 @@ export class GuideStory {
    n={id:this.nodeId,speaker:'seth',tone:why?'thoughtful':'normal',
     tag:`${String(activeStep.step).padStart(2,'0')} / ${activeStep.title} · QUESTION ${index+1} / ${this.catalog.chapter_checks[stage].length}`,
     stage:activeStep.expert,manual:activeCheck.manual_stage,
-    text:why?`${activeCheck.why} This is a review question, not an automatic test or permission to change calibration values.`:
-      `${activeCheck.prompt} ${activeCheck.why} ${activeCheck.roles.length?'ECU evidence: {{available:'+activeCheck.roles.join('|')+'}}.':''}`,
+    text:why?`${activeCheck.why} We can talk it through; you don't need to have an answer yet.`:
+      `${activeCheck.prompt} ${activeCheck.roles.length?'Here is what I can currently read: {{available:+activeCheck.roles.join('|')+'}}.':''}`,
     choices:[
-     {label:activeCheck.requires_external?'I checked it independently':'I reviewed the available evidence',go:'answer.'+stage+'.'+index+'.reported'},
-     {label:'I don’t know / not checked',go:'answer.'+stage+'.'+index+'.unknown'},
+     {label:activeCheck.requires_external?'Yes, it has been checked separately':'Yes, I checked that',go:'answer.'+stage+'.'+index+'.reported'},
+     {label:'Not sure yet',go:'answer.'+stage+'.'+index+'.unknown'},
      {label:why?'Return to question':'Why does this matter?',go:why?'check.'+stage+'.'+index:'why.'+stage+'.'+index},
      {label:'Show measured evidence',go:'workspace.evidence'},
      {label:'Open related original setting',go:'action.manual.'+activeCheck.manual_stage},
@@ -160,8 +183,8 @@ export class GuideStory {
   }
   const r=engine?.report?.()||{};const fields=engine?.fields||{};const values=r.values||{};
   const available=roles=>roles.map(role=>{
-   const field=fields[role];if(!field)return role+': not exposed by matched INI';
-   const v=values[role];if(!r.fresh||typeof v!=='number'||!Number.isFinite(v))return role+': defined, live value unknown';
+   const field=fields[role];if(!field)return role+': not available yet';
+   const v=values[role];if(!r.fresh||typeof v!=='number'||!Number.isFinite(v))return role+': waiting for a current reading';
    const u=field.units||'';return role+': '+(Math.round(v*100)/100)+(u?' '+u:'');
   }).join('; ');
   const text=n.text.replace(/\{\{available:([^{}]+)\}\}/g,(_,keys)=>available(keys.split('|').filter(Boolean)));
@@ -176,7 +199,7 @@ export class GuideStory {
    freshness:r.fresh===true?'live':r.fresh===false?'stale':'unavailable',
    choices:n.choices.map((ch,i)=>({id:n.id+':'+i,label:ch.label,go:ch.go,enabled:(!ch.go.startsWith('action.manual.')&&!ch.go.startsWith('action.field.'))||!!target,
     blocked_reason:(ch.go.startsWith('action.manual.')||ch.go.startsWith('action.field.'))&&!target?'No matching menu entry in the active INI':null})),
-   manual_target:target,field_id:n._field?.id||null,check:progress,chapter_progress:chapter?counts:null,can_back:this.stack.length>0,can_resume:this.canResume(),
+   manual_target:target,field_id:n._field?.id||null,question_input:this.nodeId==='ask'?this.questionText:null,check:progress,chapter_progress:chapter?counts:null,can_back:this.stack.length>0,can_resume:this.canResume(),
    voice:this.catalog.character?.voice_asset||null,
    assets:{head:this.catalog.character?.sprite_head,jaw:this.catalog.character?.sprite_jaw,mouth:this.catalog.character?.sprite_mouth},
    reasoning:n._reasoning||null,read_only:true};
