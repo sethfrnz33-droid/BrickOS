@@ -17,7 +17,7 @@ jobs:
       - name: Standalone C agent tests
         run: make -C prototype/seth-agent clean test
       - name: ESP route and portable UI contract
-        run: node --test firmware/BrickOS/tests/seth-esp-http-contract.test.mjs
+        run: node --test firmware/BrickOS/tests/seth-esp-http-contract.test.mjs firmware/BrickOS/tests/seth-guide.test.mjs firmware/BrickOS/tests/seth-natural-language.test.mjs
       - name: Regenerate browser assets
         run: python3 firmware/BrickOS/tools/generate_web_assets.py
   esp-idf-compile:
