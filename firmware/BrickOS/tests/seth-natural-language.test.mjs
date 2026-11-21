@@ -90,3 +90,14 @@ test('foreign INI preview lists only text names and never changes live ECU acces
  assert.match(app,/scanIniText\(raw\)/);
  assert.match(app,/id="ini-inspect-file"/);
 });
+
+test('ESP course page shares read-only question lookup without issuing ECU commands',()=>{
+ const page=source('seth.html');
+ assert.match(page,/id="ask-form"/);
+ assert.match(page,/getHelpModules/);
+ assert.match(page,/scanIniText\(raw/);
+ assert.match(page,/findSettings\(question,fields/);
+ assert.match(page,/explainSetting\(field/);
+ assert.doesNotMatch(page,/\/api\/ts\b/);
+ assert.doesNotMatch(page,/\/api\/arm\b/);
+});
