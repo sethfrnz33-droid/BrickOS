@@ -22,11 +22,11 @@ test('changing definition invalidates last step; no stale INI binding',()=>{
 });
 test('missing INI role stays explicitly unavailable',()=>{
  const s=new GuideStory(catalog);s.bindDefinition('ECU-A');s.go('evidence.idle');const p=s.packet({engine,menuTree,ecuKey:'ECU-A'});
- assert.match(p.text,/not exposed by matched INI/);assert.match(p.text,/rpm: 1000 RPM/);
+ assert.match(p.text,/not available yet/);assert.match(p.text,/rpm: 1000 RPM/);
 });
 test('no false sensor reading when source stale',()=>{
  const s=new GuideStory(catalog);s.bindDefinition('ECU-A');s.go('evidence.fuel');const p=s.packet({engine:{...engine,report:()=>({fresh:false,values:{rpm:5000,lambda:2}})},ecuKey:'ECU-A'});
- assert.match(p.text,/live value unknown/);assert.doesNotMatch(p.text,/lambda: 2/);
+ assert.match(p.text,/waiting for a current reading/);assert.doesNotMatch(p.text,/lambda: 2/);
 });
 test('manual navigation accepts only actual resolved INI menu targets',()=>{
  assert.equal(findManualTarget('fuel',menuTree)?.id,'fuel:ve');assert.equal(findManualTarget('spark',menuTree),null);
@@ -54,7 +54,7 @@ test('generic field-by-field tour includes unknown INI fields without inventing 
  const s=new GuideStory(catalog);s.bindDefinition('ECU-A');s.go('atlas.entry');s.go('field.0');
  const e={...engine,inventory:[{name:'mysteryFutureSetting',label:'mystery future setting',id:'9:123:mysteryFutureSetting',page:9,kind:'scalar',type:'U16',units:'%'},{name:'veTable',label:'VE table',id:'1:3:veTable',page:1,kind:'array',type:'U08',units:''}]};
  const p=s.packet({engine:e,menuTree,menuLinks:{veTable:'fuel:ve'},ecuKey:'ECU-A'});
- assert.match(p.text,/mystery future setting/);assert.match(p.text,/does not prove what the setting should be/);
+ assert.match(p.text,/mystery future setting/);assert.match(p.text,/not specific enough to explain its function reliably/);
  assert.equal(p.choices.find(x=>x.go==='action.field.0').enabled,false);
  s.go('field.1');const q=s.packet({engine:e,menuTree,menuLinks:{veTable:'fuel:ve'},ecuKey:'ECU-A'});
  assert.equal(q.manual_target.id,'fuel:ve');assert.equal(q.field_id,'1:3:veTable');
@@ -86,7 +86,32 @@ test('quick help stays independent and the HPA tour adapts to INI evidence avail
  s.go('targeted');s.go('topics.idle');
  assert.equal(s.packet({engine,menuTree,ecuKey:'ECU-A'}).tour_step,null);
  s.go('tour.reference');const q=s.packet({engine,menuTree,ecuKey:'ECU-A'});
- assert.equal(q.tour_step,4);assert.match(q.text,/external verification/);
+ assert.equal(q.tour_step,4);assert.match(q.text,/physical check|qualified verification|separate from the value shown/);
  const missing=s.packet({engine:{fields:{},report:()=>({fresh:false,values:{}})},ecuKey:'ECU-A'});
  assert.equal(missing.tour_step,4);assert.equal(missing.manual_target,null);
+});
+
+test('Seth speaks as himself and questions never shame user for an INI assumption',()=>{
+ assert.doesNotMatch(catalog.nodes.welcome.text,/clone|ECU-bound|stuck/i);
+ assert.equal(catalog.character.description.includes('clone'),false);
+ assert.equal(catalog.chapter_checks.baseline[1].prompt.includes('injector size'),true);
+ assert.doesNotMatch(renderSethStory(new GuideStory(catalog).packet()),/Resident ECU clone/);
+});
+test('plain-language questions map to actual available fields without permission to write',()=>{
+ const s=new GuideStory(catalog);s.bindDefinition('ECU-A');
+ const engine={fields:{},inventory:[
+  {name:'injectorDeadTime',label:'Injector Dead Time',kind:'scalar',units:'ms',id:'1:9:dead'},
+  {name:'futureMystery',label:'Mystery Procedure XYZ',kind:'scalar',id:'1:10:unknown'}
+ ],report:()=>({fresh:false,values:{}})};
+ assert.equal(s.ask('What does injector dead time mean?'),true);
+ const p=s.packet({engine,ecuKey:'ECU-A'});
+ assert.equal(p.node_id,'ask');
+ assert.ok(p.choices.some(x=>x.go==='field.0'));
+ assert.ok(!p.choices.some(x=>/burn|write|autotune/i.test(x.label)));
+ s.go('field.0');
+ const detail=s.packet({engine,ecuKey:'ECU-A'});
+ assert.match(detail.text,/injector/i);
+ assert.equal(detail.manual_target,null);
+ s.go('field.1');
+ assert.match(s.packet({engine,ecuKey:'ECU-A'}).text,/not specific enough/i);
 });
