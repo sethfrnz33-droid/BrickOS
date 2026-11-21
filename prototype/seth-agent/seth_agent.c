@@ -247,8 +247,8 @@ void seth_render(const seth_agent_t *s,seth_packet_t *p){
     switch(s->screen){
     case SETH_HOME:
         p->title="Welcome to Ask Seth";
-        p->text="I'm a copy of the ECU's creator, stuck helping you learn this stuff. What should we figure out?";
-        p->detail="Full tour, targeted lessons, build questions, or read-only diagnostics are independent of manual tuning.";
+        p->text="Hey, I'm Seth. Want to go through the full setup, get a clear explanation, or pick up a topic you're curious about?";
+        p->detail="Pick a topic, ask for a simpler explanation, or follow the full course. This page won't change your ECU settings.";
         p->choices[0]="Full tour";p->choices[1]="Learn a concept";
         p->choices[2]="My engine build";p->choices[3]="Investigate a symptom";
         p->choice_count=4;p->state="ready";break;
