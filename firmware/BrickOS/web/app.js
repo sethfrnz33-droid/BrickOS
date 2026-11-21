@@ -345,7 +345,7 @@ function guided(){
  renderGuide(GUIDE,{tab:S.guideTab,search:S.guideSearch,status:S.status,menuLinks:S.guideMenuLinks});
 }
 function storySpeak(playVoice){
- if(S.route==='guided'&&S.guideScreen==='story'&&S.guidePacket)SETH.speak(S.guidePacket.text,S.guidePacket.voice,{playVoice});
+ if(S.route==='guided'&&S.guideScreen==='story'&&S.guidePacket)SETH.speak(S.guidePacket.text,S.guidePacket.voice,{playVoice,tone:S.guidePacket.tone||'normal'});
 }
 async function fetchStoryCatalog(){
  try{const res=await fetch('/api/guide/v1/catalog',{cache:'no-store'});if(!res.ok)throw Error('HTTP '+res.status);
@@ -922,6 +922,15 @@ case 'reset-gauges':S.gaugeSlots=defaultGauges();S.gaugeEdit=null;savePrefs();re
  case 'export-csv':exportCsv();break;
  }}catch(e){toast(e.message,true)}}
 
+document.addEventListener('submit',evt=>{
+ const form=evt.target.closest('[data-seth-question-form]');
+ if(!form)return;
+ evt.preventDefault();
+ const text=String(form.elements.question?.value||'').trim();
+ if(!text)return;
+ try{if(!STORY.ask(text))return;}catch(e){toast(e.message,true);return;}
+ SETH.stop();S.guideScreen='story';render();storySpeak(true);
+});
 document.addEventListener('click',evt=>{
  const selected=evt.target.closest('[data-seth-choice]');
  const backward=evt.target.closest('[data-seth-back]');
