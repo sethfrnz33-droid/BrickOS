@@ -1,0 +1,33 @@
+name: BrickOS Full Project Folder Download
+on:
+  push:
+    branches:
+      - feature/seth-natural-guide-ini-diversity
+  workflow_dispatch:
+
+jobs:
+  package-project:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package complete project in BrickOS directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p package/BrickOS
+          tar --exclude=.git --exclude=package -cf - . | tar -xf - -C package/BrickOS
+          cd package
+          zip -q -r -9 ../BrickOS-Complete-Project.zip BrickOS
+          cd ..
+          unzip -t BrickOS-Complete-Project.zip | tail -1
+          unzip -Z1 BrickOS-Complete-Project.zip | grep -q '^BrickOS/firmware/BrickOS/main/CMakeLists.txt$'
+          unzip -Z1 BrickOS-Complete-Project.zip | grep -q '^BrickOS/prototype/seth-agent/generate_catalog.py$'
+      - name: Upload complete BrickOS project ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: BrickOS-Complete-Project
+          path: BrickOS-Complete-Project.zip
+          retention-days: 14
+          if-no-files-found: error
