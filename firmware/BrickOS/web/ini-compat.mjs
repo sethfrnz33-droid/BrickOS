@@ -37,3 +37,33 @@ export function inspectIniCompatibility(raw,definition=null) {
   transport_compatible:false,read_supported:false,write_supported:false,
   warnings};
 }
+
+/* Browse names in an arbitrary TunerStudio definition locally on the phone.
+ * The browser does NOT activate the definition, read ECU memory or enable writes.
+ * Partial sections are clearly a preview, never complete parse certification. */
+export function scanIniText(raw,{maxFields=2200}={}){
+ const text=String(raw||'');
+ if(text.length>1400000)throw Error('INI preview is too large (limit 1.4 million characters)');
+ const limit=Math.max(1,Math.min(2200,maxFields|0));
+ let section='',truncated=false;
+ const fields=[],seen=new Set(),sections=new Set();
+ const lines=text.replace(/\r/g,'').split('\n');
+ for(const line of lines){
+  const header=/^\s*\[([^\]\n]+)\]\s*(?:;.*)?$/.exec(line);
+  if(header){section=header[1].trim();sections.add(section);continue;}
+  if(!/^(Constants|OutputChannels)$/i.test(section))continue;
+  if(/^\s*(?:[;#]|$)/.test(line))continue;
+  const m=/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)/.exec(line);
+  if(!m)continue;
+  const id=m[1],key=section+':'+id;
+  if(seen.has(key))continue;
+  seen.add(key);
+  const rawKind=m[2].trim().split(',')[0].replace(/[;].*$/,'').trim().slice(0,28);
+  // Only a name, section, and unexecuted field-kind token are retained.
+  if(fields.length>=limit){truncated=true;continue;}
+  const label=id.replace(/([a-z0-9])([A-Z])/g,'$1 $2').replace(/[_-]/g,' ');
+  fields.push({name:id,label,section,declared_kind:rawKind,verified:false});
+ }
+ return {schema:'brickos.ini.text-preview.v1',sections:[...sections],fields,truncated,
+  status:'names_only_unverified',read_enabled:false,write_enabled:false};
+}
