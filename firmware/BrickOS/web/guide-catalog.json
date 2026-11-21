@@ -2735,7 +2735,7 @@
     "tour.reference": {
       "id": "tour.reference",
       "speaker": "seth",
-      "text": "Step 4: Reference checks. The ECU can report ignition angle and fuel pressure if the matching ECU definition provides those channels. Physical timing and fuel-system behavior still require qualified external verification. I'm trapped in the ECU, not carrying a timing light.",
+      "text": "Step 4: Let's talk about reference measurements. The ECU can report commanded timing and some pressure readings, but physical measurements are separate things to confirm with suitable equipment. I can explain what the recorded information means.",
       "tone": "normal",
       "stage": "spark",
       "roles": [
