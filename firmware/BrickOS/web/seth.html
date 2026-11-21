@@ -15,7 +15,7 @@ h1{font-size:clamp(24px,4vw,39px);letter-spacing:-1px;margin:8px 0}h2{font-size:
 .panel{border:1px solid var(--stroke);background:var(--surface);border-radius:13px;padding:20px}
 .panel+.panel{margin-top:18px}.tile{padding:12px;border:1px solid var(--stroke);border-radius:8px;margin:10px 0;overflow-wrap:anywhere}
 .notice{background:#233026;border-left:3px solid var(--accent);padding:12px;margin-top:16px;border-radius:4px}
-button,select{font:inherit;border:1px solid #597079;border-radius:8px;background:#27343b;color:var(--text);padding:10px 12px;min-height:43px;max-width:100%}
+button,select,input{font:inherit;border:1px solid #597079;border-radius:8px;background:#27343b;color:var(--text);padding:10px 12px;min-height:43px;max-width:100%}
 button{cursor:pointer;text-align:left}button:hover{border-color:var(--accent)}button:disabled{opacity:.5;cursor:wait}
 button.primary{background:var(--accent);border-color:var(--accent);color:#14201a;font-weight:700}button.secondary{background:#1c292f}
 button.active{border-color:var(--accent)}.actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
@@ -25,6 +25,11 @@ label{display:block;font-size:13px;margin-top:12px;margin-bottom:5px;color:var(-
 select{width:100%}.source-line{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--stroke)}
 .source-line strong{text-align:right;max-width:68%;overflow-wrap:anywhere}.dim{font-size:12px;color:var(--muted)}
 .status{color:var(--accent)}.error{color:#ffbcae}
+.ask-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ask-row input{min-width:160px;flex:1;border:1px solid #597079;border-radius:8px;background:#0e191c;color:var(--text);padding:11px}
+.ask-result{padding:12px;border:1px solid var(--stroke);border-radius:9px;margin-top:12px;white-space:pre-wrap}
+.ask-matches{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.ask-matches button{font-size:12px;min-height:35px}
 .seth-mini{position:relative;width:76px;height:76px;image-rendering:pixelated;flex:none}
 .seth-mini img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;image-rendering:pixelated;pointer-events:none;transition:transform .24s}
 .seth-mini[data-mood="blink"] img{animation:seth-mini-blink .2s}
@@ -52,6 +57,13 @@ select{width:100%}.source-line{display:flex;justify-content:space-between;gap:12
 </header>
 <div class="notice">This is a shared, temporary learning session on an open Wi-Fi access point. Do not enter private engine-build details. Seth cannot change calibration, command hardware, verify wiring, or diagnose an engine from these status flags.</div>
 <div id="error" class="notice" hidden role="alert"></div>
+<section class="panel" style="margin-top:22px" aria-label="Ask Seth about a setting">
+<h2>Ask Seth about a setting</h2>
+<p class="muted">Ask in your own words. If a setting exists in your ECU's loaded definition, I'll look it up and explain its likely purpose.</p>
+<form id="ask-form"><div class="ask-row"><input id="ask-input" name="question" type="search" maxlength="240" autocomplete="off" placeholder="What is injector dead time?" required aria-label="Question about tuning or a setting"><button class="primary" type="submit">Ask Seth</button></div></form>
+<div class="ask-result" id="ask-result" hidden role="status" aria-live="polite"></div><div class="ask-matches" id="ask-matches"></div>
+<small>These are explanations, not suggestions to change a tune. Missing definitions and unknown setting meanings stay unknown.</small>
+</section>
 <div class="grid">
 <div>
 <section class="panel" aria-live="polite">
@@ -113,7 +125,56 @@ select{width:100%}.source-line{display:flex;justify-content:space-between;gap:12
 (function(){
 "use strict";
 const by=id=>document.getElementById(id);
-let view=null, catalog=null, busy=false;
+let view=null,catalog=null,busy=false,helpModules=null,fieldCatalog=null,fieldsAttempted=false;
+async function getHelpModules(){
+ if(!helpModules)helpModules=Promise.all([
+  import('/guide-setting-help.mjs'),import('/ini-compat.mjs')
+ ]).then(([help,ini])=>({help,ini})).catch(e=>{helpModules=null;throw e});
+ return helpModules;
+}
+async function getFieldCatalog(iniModule){
+ if(fieldsAttempted)return fieldCatalog||[];
+ fieldsAttempted=true;
+ try{
+  const meta=await getJson('/api/ini/status');
+  if(!meta.cached)return [];
+  const resp=await fetch('/api/ini/file',{cache:'no-store'});
+  if(!resp.ok)throw Error('No readable ECU settings definition');
+  const raw=await resp.text();
+  fieldCatalog=iniModule.scanIniText(raw,{maxFields:2200}).fields;
+ }catch(e){fieldCatalog=[];}
+ return fieldCatalog;
+}
+function showSettingAnswer(help,field){
+ const result=by('ask-result'),hits=by('ask-matches');
+ result.hidden=false;
+ const info=help.explainSetting(field);
+ result.textContent=info.label+': '+info.summary+' '+info.check;
+ hits.replaceChildren();
+}
+async function askSeth(question){
+ const result=by('ask-result'),hits=by('ask-matches');
+ result.hidden=false;result.textContent='Looking at the available settings…';hits.replaceChildren();
+ try{
+  const {help,ini}=await getHelpModules();
+  const fields=await getFieldCatalog(ini);
+  const matches=help.findSettings(question,fields,6);
+  if(matches.length===0){
+   const general=help.answerGeneralQuestion(question);
+   result.textContent=general.text+(fields.length?' I could not find a matching setting name in the loaded definition.':' No matching settings reference is available yet.');
+   return;
+  }
+  result.textContent=matches.length>1?'I found some possible matches. Which setting were you asking about?':'This looks like the setting you mean:';
+  for(const match of matches){
+   const b=document.createElement('button');
+   b.type='button';b.textContent=match.field.label||match.field.name;
+   b.addEventListener('click',()=>showSettingAnswer(help,match.field));
+   hits.append(b);
+  }
+  if(matches.length===1)showSettingAnswer(help,matches[0].field);
+ }catch(e){result.textContent='I cannot read those setting definitions right now. The guided lessons are still available.';}
+}
+
 (function animateSeth(){
  if(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches)return;
  const el=document.querySelector('.seth-mini');
@@ -196,6 +257,10 @@ async function start(){
  }catch(e){fail(e)}
  await refresh();
 }
+by("ask-form").addEventListener("submit",e=>{
+ e.preventDefault();const question=by("ask-input").value.trim();
+ if(question)askSeth(question);
+});
 by("refresh").addEventListener("click",refresh);
 by("open-lesson").addEventListener("click",()=>act("study_topic",by("lesson").value));
 by("depth").addEventListener("change",()=>act("depth",by("depth").value));
