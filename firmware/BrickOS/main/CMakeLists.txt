@@ -45,6 +45,8 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_LIST_DIR}/../web/guided.mjs"
   "${CMAKE_CURRENT_LIST_DIR}/../web/guided-ui.mjs"
   "${CMAKE_CURRENT_LIST_DIR}/../web/guide-story.mjs"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/guide-setting-help.mjs"
+  "${CMAKE_CURRENT_LIST_DIR}/../web/ini-compat.mjs"
   "${CMAKE_CURRENT_LIST_DIR}/../web/guide-reasoning.mjs"
   "${CMAKE_CURRENT_LIST_DIR}/../web/guide-story-ui.mjs"
   "${CMAKE_CURRENT_LIST_DIR}/../web/guide-voice.mjs"
