@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {explainSetting,findSettings,answerGeneralQuestion} from '../web/guide-setting-help.mjs';
-import {inspectIniCompatibility} from '../web/ini-compat.mjs';
+import {inspectIniCompatibility,scanIniText} from '../web/ini-compat.mjs';
 import {GuideStory,validateStoryCatalog} from '../web/guide-story.mjs';
 import {renderSethStory} from '../web/guide-story-ui.mjs';
 const root=new URL('../web/',import.meta.url);
@@ -75,4 +75,18 @@ test('phone and ESP assets include new modules and animation respects reduced mo
  assert.match(app,/inspectIniCompatibility\(text,def\)/);
  assert.match(voice,/prefers-reduced-motion/);
  assert.match(css,/seth-portrait\[data-mood="bored"\]/);
+});
+
+test('foreign INI preview lists only text names and never changes live ECU access',()=>{
+ const fixture='[TunerStudio]\nsignature = "speeduino 2025"\n[Constants]\ninjectorDeadTime = scalar, U16, 15, "ms", 0.1, 0\n[OutputChannels]\nRPMValue = scalar, U16, 0, "rpm", 1, 0';
+ const preview=scanIniText(fixture);
+ assert.equal(preview.fields.length,2);
+ assert.equal(preview.fields[0].name,'injectorDeadTime');
+ assert.equal(preview.fields[1].section,'OutputChannels');
+ assert.equal(preview.write_enabled,false);
+ assert.equal(preview.read_enabled,false);
+ assert.equal(preview.status,'names_only_unverified');
+ const app=fs.readFileSync(new URL('../web/app.js',import.meta.url),'utf8');
+ assert.match(app,/scanIniText\(raw\)/);
+ assert.match(app,/id="ini-inspect-file"/);
 });
