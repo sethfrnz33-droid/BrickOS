@@ -1,6 +1,6 @@
 # BrickOS ESP Browser — Seth Guided Tuning V2
 
-**Phone-first browser implementation; currently read-only.** The supplied pixel-art head, independently split jaw and uploaded gibberish voice are included in the firmware's embedded assets. Seth's lore is an occasionally grumpy, ECU-bound copy of the creator who genuinely explains what to do next.
+**Phone-first browser implementation; currently read-only.** The supplied pixel-art head, independently split jaw and uploaded gibberish voice are included in the firmware's embedded assets. Seth is presented as an ordinary guy who explains ECU settings and concepts in everyday language, with occasional dry humor.
 
 ## How to open
 
@@ -50,3 +50,7 @@ The canonical versioned dialogue is `web/guide-catalog.json`; every fixed respon
 ## Full Tour chapter checks — dialogue catalogue 1.2.0
 
 Each of the ten tour chapters offers three context-aware questions. Seth shows matched INI-channel evidence and explains missing inputs; users may report a review, say they do not know, request an explanation, inspect evidence or open a verified original INI menu item. Browser-local user reports never count as independent ECU validation. This update adds no ECU writes, ESP-resident autotuning, 3DS guide screens or DS connection changes. [Dialogue script](../../docs/28-seth-chapter-questions.md).
+
+## 2026-11-20 natural-language Seth update (feature branch)
+
+The updated phone guide now has an open-ended Ask box, name-based setting help with explicit uncertainty, seven ambient character expressions, and 30 rewritten questions. A separate read-only INI preview lets someone inspect setting names from an arbitrary TunerStudio definition without changing the active ECU, and a compatibility card distinguishes definition parsing from verified live protocol support. MegaSquirt, Speeduino and other non-rusEFI ECUs are **not** enabled for live read/write by this change. See [the implementation and limitations](../../docs/44-seth-conversation-and-ini-diversity.md).
