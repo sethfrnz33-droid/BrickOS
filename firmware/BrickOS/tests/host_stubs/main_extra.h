@@ -87,6 +87,7 @@ TickType_t xTaskGetTickCount(void);
 void vTaskDelayUntil(TickType_t*,TickType_t);
 
 // v2.2 Wi-Fi and active-high LED diagnostics (host-only declarations).
+#define GPIO_NUM_8 8
 #define GPIO_NUM_17 17
 #define GPIO_NUM_18 18
 #define GPIO_MODE_OUTPUT 2

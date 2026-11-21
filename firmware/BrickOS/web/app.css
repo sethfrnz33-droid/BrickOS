@@ -282,3 +282,29 @@ body{overflow-x:hidden}
 .seth-reason-sub{border-top:1px solid #314c50;padding:10px 0 4px}
 .seth-reason-sub strong{color:#f2f6eb}.seth-reason-sub small{display:block;color:#bbd0c7}
 @media(max-width:650px){.seth-reasoning{padding:12px}.seth-reason-title{align-items:flex-start;flex-direction:column;gap:3px}}
+
+/* Seth: expressive states reuse existing head/jaw/mouth sprites. */
+.seth-ask-form{border:1px solid #58736c;background:#1e2a2b;border-radius:11px;padding:13px;margin:0 0 11px}
+.seth-ask-form label{display:block;color:#e4eadc;font-size:12px;font-weight:700;margin:0 0 8px}
+.seth-ask-row{display:flex;align-items:center;gap:7px}
+.seth-ask-row input{min-width:0;flex:1;background:#101a1c;border:1px solid #5b7771;border-radius:7px;padding:11px;color:#f2f6e8;font:14px system-ui,sans-serif}
+.seth-ask-row button{flex:none;min-height:41px}
+.seth-ask-form small{display:block;color:#9fb2ad;margin-top:7px;font-size:11px}
+.seth-portrait .seth-head,.seth-portrait .seth-jaw,.seth-portrait .seth-mouth{transition:transform .22s ease,filter .22s ease,opacity .22s ease}
+.seth-portrait[data-mood="blink"] .seth-head{animation:seth-blink .22s ease}
+.seth-portrait[data-mood="curious"] .seth-head{transform:translate(4px,-3px) rotate(5deg)}
+.seth-portrait[data-mood="curious"] .seth-jaw{transform:translate(4px,var(--seth-jaw-gap)) rotate(5deg)}
+.seth-portrait[data-mood="bored"] .seth-head{transform:translate(-4px,6px) rotate(-5deg);filter:brightness(.77)}
+.seth-portrait[data-mood="bored"] .seth-jaw{transform:translate(-4px,calc(var(--seth-jaw-gap) + 6px)) rotate(-5deg);filter:brightness(.77)}
+.seth-portrait[data-mood="skeptical"] .seth-head{transform:translateX(-6px) rotate(-7deg)}
+.seth-portrait[data-mood="surprised"] .seth-head{transform:translateY(-8px) scale(1.04)}
+.seth-portrait[data-mood="surprised"] .seth-jaw{transform:translateY(calc(var(--seth-jaw-gap) + 6px))}
+.seth-portrait[data-mood="chuckle"] .seth-head{animation:seth-chuckle .5s ease-in-out 2}
+.seth-portrait[data-mood="chuckle"] .seth-jaw{animation:seth-jaw-chuckle .5s ease-in-out 2}
+.seth-portrait[data-mood="look-away"] .seth-head{transform:translateX(8px) rotate(9deg)}
+.seth-portrait[data-mood="look-away"] .seth-jaw{transform:translate(8px,var(--seth-jaw-gap)) rotate(9deg)}
+@keyframes seth-blink{50%{transform:scaleY(.91) translateY(2px)}}
+@keyframes seth-chuckle{0%,100%{transform:translateY(0)}25%,75%{transform:translateY(-4px)}50%{transform:translateY(3px)}}
+@keyframes seth-jaw-chuckle{0%,100%{transform:translateY(var(--seth-jaw-gap))}50%{transform:translateY(calc(var(--seth-jaw-gap) + 3px))}}
+@media(max-width:520px){.seth-ask-row input{font-size:13px}.seth-ask-form{padding:10px}}
+@media(prefers-reduced-motion:reduce){.seth-portrait .seth-layer{animation:none!important;transition:none!important;transform:none!important}}

@@ -170,6 +170,8 @@ static esp_err_t guideduipage(httpd_req_t *r){return asset(r,"application/javasc
 /* Versioned guide text + assets; intentionally static/read-only. DS clients can
  * fetch the SAME catalogue from the ESP later, without shipping new copy. */
 static esp_err_t guide_story_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_story,brick_asset_guide_story_len);}
+static esp_err_t guide_setting_help_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_setting_help,brick_asset_guide_setting_help_len);}
+static esp_err_t ini_compat_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_ini_compat,brick_asset_ini_compat_len);}
 static esp_err_t guide_reasoning_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_reasoning,brick_asset_guide_reasoning_len);}
 static esp_err_t guide_story_ui_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_guide_story_ui,brick_asset_guide_story_ui_len);}
 static esp_err_t ini_fast_cache_js(httpd_req_t *r){return asset(r,"application/javascript; charset=utf-8",brick_asset_ini_fast_cache,brick_asset_ini_fast_cache_len);}
@@ -1234,6 +1236,8 @@ static void http_start(void){
       {.uri="/guided.mjs",.method=HTTP_GET,.handler=guidedpage},
       {.uri="/guided-ui.mjs",.method=HTTP_GET,.handler=guideduipage},
       {.uri="/guide-story.mjs",.method=HTTP_GET,.handler=guide_story_js},
+      {.uri="/guide-setting-help.mjs",.method=HTTP_GET,.handler=guide_setting_help_js},
+      {.uri="/ini-compat.mjs",.method=HTTP_GET,.handler=ini_compat_js},
       {.uri="/guide-reasoning.mjs",.method=HTTP_GET,.handler=guide_reasoning_js},
       {.uri="/guide-story-ui.mjs",.method=HTTP_GET,.handler=guide_story_ui_js},
       {.uri="/guide-voice.mjs",.method=HTTP_GET,.handler=guide_voice_js},

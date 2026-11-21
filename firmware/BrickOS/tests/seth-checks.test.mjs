@@ -33,7 +33,7 @@ test('reported reviews are never confused with physical ECU verification',()=>{
 });
 test('explanations, question flow and chapter summary navigate without tuning writes',()=>{
  const s=new GuideStory(catalog);s.bindDefinition('ECU:INI-HASH-A');s.go('tour.idle');s.go('check.idle.0');
- s.go('why.idle.0');assert.match(s.packet({engine,ecuKey:'ECU:INI-HASH-A'}).text,/review question/);
+ s.go('why.idle.0');assert.match(s.packet({engine,ecuKey:'ECU:INI-HASH-A'}).text,/We can talk it through/);
  s.go('check.idle.1');s.go('answer.idle.1.unknown');s.go('check.idle.2');
  assert.equal(s.packet({engine,ecuKey:'ECU:INI-HASH-A'}).check.index,3);
  s.go('tour.idle');assert.equal(s.packet({engine,ecuKey:'ECU:INI-HASH-A'}).chapter_progress.unknown,1);
@@ -47,7 +47,7 @@ test('new definition discards old question claims and answer state',()=>{
 });
 test('missing INI inputs remain missing; unsupported responses are rejected',()=>{
  const s=new GuideStory(catalog);s.go('check.steady_fuel.0');const p=s.packet({engine,ecuKey:''});
- assert.match(p.text,/not exposed by matched INI/);assert.equal(p.read_only,true);
+ assert.match(p.text,/not available yet/);assert.equal(p.read_only,true);
  assert.throws(()=>s.go('answer.trigger.99.reported'),/Unknown question response/);
  const bad=structuredClone(catalog);bad.chapter_checks.idle[0].id='';
  assert.throws(()=>validateStoryCatalog(bad),/Bad question/);

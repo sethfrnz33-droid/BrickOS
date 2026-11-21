@@ -1,16 +1,16 @@
 {
   "schema": "brickos.guide.dialog.v1",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "identity": "seth",
   "display_name": "Seth",
   "origin": "ESP-hosted guide catalogue; clients are renderers, not rule owners",
   "character": {
-    "description": "A lightly frustrated, chip-bound clone of the Brick ECU creator who still wants users to succeed. Dry, concise, friendly; never obstructs or interrupts critical controls.",
+    "description": "Seth is a guy who knows ECU software, asks useful questions, and explains complicated things plainly. Dry humor, occasional boredom and surprise; never blames people or makes unsupported claims.",
     "voice_asset": "/guide/voice.mp3",
     "sprite_head": "/guide/seth-head.png",
     "sprite_jaw": "/guide/seth-jaw.png",
     "sprite_mouth": "/guide/seth-mouth.png",
-    "notes": "Lore is occasional and never replaces safety/technical clarity."
+    "notes": "Friendly, curious and a little irreverent. No clone mythology. Let questions come naturally; keep technical cautions in context rather than repeating them."
   },
   "entry": "welcome",
   "topics": [
@@ -127,7 +127,7 @@
     "welcome": {
       "id": "welcome",
       "speaker": "seth",
-      "text": "Hey. I'm Seth. Well, an ECU-bound copy of Seth. Long story. I live in here now, and apparently helping you is my entire job. So—where do we start?",
+      "text": "Hey, I'm Seth. What are we working on? We can go through the whole setup together, figure out one annoying problem, or just talk through a setting you're curious about.",
       "tone": "intro",
       "choices": [
         {
@@ -143,11 +143,11 @@
           "go": "resume"
         },
         {
-          "label": "Walk through INI settings",
+          "label": "Walk through settings",
           "go": "atlas.entry"
         },
         {
-          "label": "See ECU evidence / full INI atlas",
+          "label": "See ECU evidence / full settings list",
           "go": "workspace"
         }
       ]
@@ -155,7 +155,7 @@
     "resume": {
       "id": "resume",
       "speaker": "seth",
-      "text": "I can pick up where we left off, but first I need to confirm we're still looking at the same ECU definition. I'm not trusting yesterday's offsets on today's firmware.",
+      "text": "Back again? All right. I can pick up where we stopped. I'll check that we're still looking at the same ECU before showing any readings or settings.",
       "tone": "thoughtful",
       "choices": [
         {
@@ -175,7 +175,7 @@
     "targeted": {
       "id": "targeted",
       "speaker": "seth",
-      "text": "All right. What are we dealing with? Pick the closest topic; we can narrow it down. I'm not going to make you read a 900-page INI unless you're into that.",
+      "text": "What's on your mind? Tell me what's acting strange, or pick a system. We can start wherever makes sense.",
       "tone": "normal",
       "choices": [
         {
@@ -219,7 +219,7 @@
     "tour.start": {
       "id": "tour.start",
       "speaker": "seth",
-      "text": "Full tour. We'll use a ten-stage structure based on HP Academy's public outline, then adapt the details to this ECU's matching INI. I'll explain what's verified, what isn't, and where the real settings live. No automatic changes.",
+      "text": "Want the full walkthrough? Great. We'll start with the ECU and sensors, work through the core settings, then review how to tell what the data actually means. Ask questions whenever something doesn't click.",
       "tone": "intro",
       "choices": [
         {
@@ -239,7 +239,7 @@
     "tour.map": {
       "id": "tour.map",
       "speaker": "seth",
-      "text": "Our route has ten chapters: ECU configuration, trigger, base tables, physical references, startup, idle, steady fuel, steady ignition, instrumented power review and final confirmation. Warmup, trims, transients and advanced systems remain available as focused subtopics. Skipping an explanation never verifies a setting.",
+      "text": "There are ten main chapters, from basic setup through interpreting and documenting the results. You can skip around, dig deeper, or come back later. Learning a chapter isn't the same as checking hardware, but we'll keep track of both.",
       "tone": "normal",
       "choices": [
         {
@@ -259,7 +259,7 @@
     "tour.identity": {
       "id": "tour.identity",
       "speaker": "seth",
-      "text": "First we confirm the ECU identity and exact matching INI. If the definition is wrong, the numbers may point to the wrong memory. I am not guessing those.",
+      "text": "First, let's make sure I'm talking to the right ECU. The software uses a matching definition file behind the scenes to find settings and readings. You shouldn't need to think about that file.",
       "tone": "normal",
       "choices": [
         {
@@ -267,7 +267,7 @@
           "go": "evidence.identity"
         },
         {
-          "label": "Find related settings in the INI",
+          "label": "Find related settings in the tuner",
           "go": "manual.identity"
         },
         {
@@ -288,7 +288,7 @@
     "tour.sensors": {
       "id": "tour.sensors",
       "speaker": "seth",
-      "text": "Next, the sensors. We check which live channels exist, which readings are fresh, and which still need physical verification. A number on the screen does not prove the wiring is correct.",
+      "text": "Let's look at the sensors. What type is installed, where does it connect, and does the reading make sense? The software can show what it sees; physical checks are separate.",
       "tone": "normal",
       "choices": [
         {
@@ -320,7 +320,7 @@
     "tour.trigger": {
       "id": "tour.trigger",
       "speaker": "seth",
-      "text": "Step 2: Trigger setup. We identify which crank/cam strategy the active configuration uses and whether the ECU reports useful synchronization diagnostics. That is not the same as verifying the physical timing reference, which comes later.",
+      "text": "The crank and cam sensors let the ECU know where the engine is in its cycle. Let's identify the configured setup and what the available sync information can tell us.",
       "tone": "normal",
       "choices": [
         {
@@ -353,7 +353,7 @@
     "tour.starting": {
       "id": "tour.starting",
       "speaker": "seth",
-      "text": "Step 5: Initial startup evidence. We distinguish crank, catch, after-start and settled behavior as separate events. A sync error, unknown injector configuration or invalid sensor cannot be diagnosed by simply changing VE. I'll show what's observable and what requires a qualified check.",
+      "text": "For startup behavior, it helps to separate cranking, catching, and settling down afterward. Those are different moments and may have different causes. We'll look at the recorded information before drawing conclusions.",
       "tone": "normal",
       "choices": [
         {
@@ -387,7 +387,7 @@
     "tour.idle": {
       "id": "tour.idle",
       "speaker": "seth",
-      "text": "Step 6: Idle. We separate airflow, fueling, spark correction and feedback instead of treating every RPM fluctuation as bad PID. First we inspect the active idle strategy and measurements; then I can explain what's still unverified.",
+      "text": "Idle can be surprisingly complicated. Let's see how this ECU handles it: airflow, target speed, actual speed, and any corrections. We'll work through what each reading means.",
       "tone": "normal",
       "choices": [
         {
@@ -430,7 +430,7 @@
           "go": "evidence.warmup"
         },
         {
-          "label": "Find related settings in the INI",
+          "label": "Find related settings in the tuner",
           "go": "manual.warmup"
         },
         {
@@ -451,7 +451,7 @@
     "tour.fuel": {
       "id": "tour.fuel",
       "speaker": "seth",
-      "text": "We compare valid lambda evidence with target and the active fuel strategy. Closed-loop trims and transient enrichment can hide a bad base table, so those cases are not blindly counted.",
+      "text": "Fueling has a base calculation, a target mixture and sometimes several corrections on top. Let's untangle those pieces so one good-looking number doesn't hide another issue.",
       "tone": "normal",
       "choices": [
         {
@@ -459,7 +459,7 @@
           "go": "evidence.fuel"
         },
         {
-          "label": "Find related settings in the INI",
+          "label": "Find related settings in the tuner",
           "go": "manual.fuel"
         },
         {
@@ -482,7 +482,7 @@
     "tour.trims": {
       "id": "tour.trims",
       "speaker": "seth",
-      "text": "Short-term and long-term trim are different signals with firmware-dependent scaling. I show each available bank separately and say when correction semantics are unknown.",
+      "text": "Fuel trims are the ECU making adjustments to its base fueling. Short-term and long-term adjustments can mean different things depending on the firmware, so let's look at the actual labels before interpreting them.",
       "tone": "normal",
       "choices": [
         {
@@ -490,7 +490,7 @@
           "go": "evidence.trims"
         },
         {
-          "label": "Find related settings in the INI",
+          "label": "Find related settings in the tuner",
           "go": "manual.trims"
         },
         {
@@ -521,7 +521,7 @@
           "go": "evidence.transients"
         },
         {
-          "label": "Find related settings in the INI",
+          "label": "Find related settings in the tuner",
           "go": "manual.transients"
         },
         {
@@ -543,7 +543,7 @@
     "tour.spark": {
       "id": "tour.spark",
       "speaker": "seth",
-      "text": "Ignition timing affects torque and knock margin, but MAP, AFR and acceleration alone cannot establish best-torque timing. We can organize evidence and flag the need for instrumented verification.",
+      "text": "Spark timing is more than a number in a table. We can identify the base setting and active corrections, and explain what the information can and can't tell us.",
       "tone": "normal",
       "choices": [
         {
@@ -551,7 +551,7 @@
           "go": "evidence.spark"
         },
         {
-          "label": "Find related settings in the INI",
+          "label": "Find related settings in the tuner",
           "go": "manual.spark"
         },
         {
@@ -573,7 +573,7 @@
     "tour.advanced": {
       "id": "tour.advanced",
       "speaker": "seth",
-      "text": "Electronic throttle, boost, VVT, flex fuel, CAN and other extras only appear when the INI and current calibration show they apply. Missing support is shown, not made up.",
+      "text": "Boost, electronic throttle, variable cam timing and other extras are only relevant if they're part of your ECU setup. Let's find what's actually there instead of assuming.",
       "tone": "normal",
       "choices": [
         {
@@ -581,7 +581,7 @@
           "go": "evidence.advanced"
         },
         {
-          "label": "Find related settings in the INI",
+          "label": "Find related settings in the tuner",
           "go": "manual.advanced"
         },
         {
@@ -599,7 +599,7 @@
     "tour.validation": {
       "id": "tour.validation",
       "speaker": "seth",
-      "text": "Now we audit what was really measured, what was only inferred, which settings changed, and what still requires qualified verification. I am not putting a fake 100%-tuned badge on this engine.",
+      "text": "Here's where we organize what you've learned, which readings we've seen, and which checks still need qualified verification. No mystery score pretending everything is perfect.",
       "tone": "normal",
       "choices": [
         {
@@ -607,7 +607,7 @@
           "go": "evidence.validation"
         },
         {
-          "label": "Find related settings in the INI",
+          "label": "Find related settings in the tuner",
           "go": "manual.validation"
         },
         {
@@ -625,7 +625,7 @@
     "tour.done": {
       "id": "tour.done",
       "speaker": "seth",
-      "text": "We've covered all ten chapters. Some findings may still need measurements or qualified verification; finishing a tour doesn't make the calibration complete. I live in this ECU, so I plan to be annoyingly clear about that.",
+      "text": "That's all ten chapters. You can revisit anything, ask more questions, or take the review with you. A finished walkthrough just means we've covered the material—not that every physical check is complete.",
       "tone": "thoughtful",
       "choices": [
         {
@@ -637,7 +637,7 @@
           "go": "targeted"
         },
         {
-          "label": "Browse INI settings",
+          "label": "Browse settings",
           "go": "atlas.entry"
         },
         {
@@ -1063,7 +1063,7 @@
     "issue.fuel.ve": {
       "id": "issue.fuel.ve",
       "speaker": "seth",
-      "text": "Think of the VE table as a model indexed by the active RPM and load strategy. The INI tells us the actual shape; our evidence map is not a substitute for the original table editor. What I can read right now: {{available:rpm|map|lambda|target}}.",
+      "text": "The VE table is one way the ECU describes fueling across RPM and load. We can look at the table your software exposes and explain the axes without guessing what any particular cell should be. Right now I can see: {{available:rpm|map|lambda|target}}.",
       "tone": "normal",
       "choices": [
         {
@@ -1672,7 +1672,7 @@
     "issue.connection.ini": {
       "id": "issue.connection.ini",
       "speaker": "seth",
-      "text": "The generated INI must match the live ECU firmware signature and layout; a similar name is not sufficient. We should inspect the definition status rather than guessing offsets.",
+      "text": "The ECU and the tuning app need to agree on what settings and readings exist. I'll check that match in the background; if something doesn't line up, I'll tell you what needs attention.",
       "tone": "normal",
       "choices": [
         {
@@ -1848,7 +1848,7 @@
     "issue.more.can": {
       "id": "issue.more.can",
       "speaker": "seth",
-      "text": "The active INI tells us which dialogs exist; the guide can point to them and explain their dependencies without inventing unavailable hardware. What I can read right now: {{available:rpm}}.",
+      "text": "Let's look at the CAN settings your ECU exposes. I can explain common purposes, but this ECU's actual configuration decides what each option does.",
       "tone": "normal",
       "choices": [
         {
@@ -1877,7 +1877,7 @@
     "topics.unknown": {
       "id": "topics.unknown",
       "speaker": "seth",
-      "text": "No problem. We can start from what the ECU actually reports. I will highlight stale inputs, current faults, missing calibration evidence and the original settings they relate to.",
+      "text": "No problem. We can start with the basics, look at readings the ECU is already reporting, or you can ask about any named setting.",
       "tone": "normal",
       "choices": [
         {
@@ -1993,7 +1993,7 @@
     "evidence.identity": {
       "id": "evidence.identity",
       "speaker": "seth",
-      "text": "Here is what the matched ECU definition can expose for this system: {{available:rpm}}. Missing or stale evidence stays unknown. You can open the detailed live evidence panel without leaving the guide.",
+      "text": "Here's what I can currently read for this system: {{available:rpm}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2018,7 +2018,7 @@
     "manual.identity": {
       "id": "manual.identity",
       "speaker": "seth",
-      "text": "I can take you to the original INI-driven tuning editor. I will only offer a direct link if the matching INI actually resolves it. That editor is separate from this guide.",
+      "text": "I can look for the matching page in the tuning app and take you there. If this firmware doesn't provide an exact menu link, I'll tell you rather than sending you somewhere random.",
       "tone": "normal",
       "choices": [
         {
@@ -2044,7 +2044,7 @@
     "evidence.sensors": {
       "id": "evidence.sensors",
       "speaker": "seth",
-      "text": "Here is what the matched ECU definition can expose for this system: {{available:clt|tps|map|lambda}}. Missing or stale evidence stays unknown. You can open the detailed live evidence panel without leaving the guide.",
+      "text": "Here's what I can currently read for this system: {{available:clt|tps|map|lambda}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2072,7 +2072,7 @@
     "manual.sensors": {
       "id": "manual.sensors",
       "speaker": "seth",
-      "text": "I can take you to the original INI-driven tuning editor. I will only offer a direct link if the matching INI actually resolves it. That editor is separate from this guide.",
+      "text": "I can look for the matching page in the tuning app and take you there. If this firmware doesn't provide an exact menu link, I'll tell you rather than sending you somewhere random.",
       "tone": "normal",
       "choices": [
         {
@@ -2101,7 +2101,7 @@
     "evidence.trigger": {
       "id": "evidence.trigger",
       "speaker": "seth",
-      "text": "Here is what the matched ECU definition can expose for this system: {{available:sync}}. Missing or stale evidence stays unknown. You can open the detailed live evidence panel without leaving the guide.",
+      "text": "Here's what I can currently read for this system: {{available:sync}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2126,7 +2126,7 @@
     "manual.trigger": {
       "id": "manual.trigger",
       "speaker": "seth",
-      "text": "I can take you to the original INI-driven tuning editor. I will only offer a direct link if the matching INI actually resolves it. That editor is separate from this guide.",
+      "text": "I can look for the matching page in the tuning app and take you there. If this firmware doesn't provide an exact menu link, I'll tell you rather than sending you somewhere random.",
       "tone": "normal",
       "choices": [
         {
@@ -2152,7 +2152,7 @@
     "evidence.starting": {
       "id": "evidence.starting",
       "speaker": "seth",
-      "text": "Here is what the matched ECU definition can expose for this system: {{available:rpm|clt}}. Missing or stale evidence stays unknown. You can open the detailed live evidence panel without leaving the guide.",
+      "text": "Here's what I can currently read for this system: {{available:rpm|clt}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2178,7 +2178,7 @@
     "manual.starting": {
       "id": "manual.starting",
       "speaker": "seth",
-      "text": "I can take you to the original INI-driven tuning editor. I will only offer a direct link if the matching INI actually resolves it. That editor is separate from this guide.",
+      "text": "I can look for the matching page in the tuning app and take you there. If this firmware doesn't provide an exact menu link, I'll tell you rather than sending you somewhere random.",
       "tone": "normal",
       "choices": [
         {
@@ -2205,7 +2205,7 @@
     "evidence.idle": {
       "id": "evidence.idle",
       "speaker": "seth",
-      "text": "Here is what the matched ECU definition can expose for this system: {{available:rpm|idleTarget|idleCommand}}. Missing or stale evidence stays unknown. You can open the detailed live evidence panel without leaving the guide.",
+      "text": "Here's what I can currently read for this system: {{available:rpm|idleTarget|idleCommand}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2232,7 +2232,7 @@
     "manual.idle": {
       "id": "manual.idle",
       "speaker": "seth",
-      "text": "I can take you to the original INI-driven tuning editor. I will only offer a direct link if the matching INI actually resolves it. That editor is separate from this guide.",
+      "text": "I can look for the matching page in the tuning app and take you there. If this firmware doesn't provide an exact menu link, I'll tell you rather than sending you somewhere random.",
       "tone": "normal",
       "choices": [
         {
@@ -2260,7 +2260,7 @@
     "evidence.warmup": {
       "id": "evidence.warmup",
       "speaker": "seth",
-      "text": "Here is what the matched ECU definition can expose for this system: {{available:clt}}. Missing or stale evidence stays unknown. You can open the detailed live evidence panel without leaving the guide.",
+      "text": "Here's what I can currently read for this system: {{available:clt}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2285,7 +2285,7 @@
     "manual.warmup": {
       "id": "manual.warmup",
       "speaker": "seth",
-      "text": "I can take you to the original INI-driven tuning editor. I will only offer a direct link if the matching INI actually resolves it. That editor is separate from this guide.",
+      "text": "I can look for the matching page in the tuning app and take you there. If this firmware doesn't provide an exact menu link, I'll tell you rather than sending you somewhere random.",
       "tone": "normal",
       "choices": [
         {
@@ -2311,7 +2311,7 @@
     "evidence.fuel": {
       "id": "evidence.fuel",
       "speaker": "seth",
-      "text": "Here is what the matched ECU definition can expose for this system: {{available:lambda|target|gego}}. Missing or stale evidence stays unknown. You can open the detailed live evidence panel without leaving the guide.",
+      "text": "Here's what I can currently read for this system: {{available:lambda|target|gego}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2338,7 +2338,7 @@
     "manual.fuel": {
       "id": "manual.fuel",
       "speaker": "seth",
-      "text": "I can take you to the original INI-driven tuning editor. I will only offer a direct link if the matching INI actually resolves it. That editor is separate from this guide.",
+      "text": "I can look for the matching page in the tuning app and take you there. If this firmware doesn't provide an exact menu link, I'll tell you rather than sending you somewhere random.",
       "tone": "normal",
       "choices": [
         {
@@ -2366,7 +2366,7 @@
     "evidence.trims": {
       "id": "evidence.trims",
       "speaker": "seth",
-      "text": "Here is what the matched ECU definition can expose for this system: {{available:gego|stft1|ltft1}}. Missing or stale evidence stays unknown. You can open the detailed live evidence panel without leaving the guide.",
+      "text": "Here's what I can currently read for this system: {{available:gego|stft1|ltft1}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2393,7 +2393,7 @@
     "manual.trims": {
       "id": "manual.trims",
       "speaker": "seth",
-      "text": "I can take you to the original INI-driven tuning editor. I will only offer a direct link if the matching INI actually resolves it. That editor is separate from this guide.",
+      "text": "I can look for the matching page in the tuning app and take you there. If this firmware doesn't provide an exact menu link, I'll tell you rather than sending you somewhere random.",
       "tone": "normal",
       "choices": [
         {
@@ -2421,7 +2421,7 @@
     "evidence.transients": {
       "id": "evidence.transients",
       "speaker": "seth",
-      "text": "Here is what the matched ECU definition can expose for this system: {{available:tps|map}}. Missing or stale evidence stays unknown. You can open the detailed live evidence panel without leaving the guide.",
+      "text": "Here's what I can currently read for this system: {{available:tps|map}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2447,7 +2447,7 @@
     "manual.transients": {
       "id": "manual.transients",
       "speaker": "seth",
-      "text": "I can take you to the original INI-driven tuning editor. I will only offer a direct link if the matching INI actually resolves it. That editor is separate from this guide.",
+      "text": "I can look for the matching page in the tuning app and take you there. If this firmware doesn't provide an exact menu link, I'll tell you rather than sending you somewhere random.",
       "tone": "normal",
       "choices": [
         {
@@ -2474,7 +2474,7 @@
     "evidence.spark": {
       "id": "evidence.spark",
       "speaker": "seth",
-      "text": "Here is what the matched ECU definition can expose for this system: {{available:spark|knock}}. Missing or stale evidence stays unknown. You can open the detailed live evidence panel without leaving the guide.",
+      "text": "Here's what I can currently read for this system: {{available:spark|knock}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2500,7 +2500,7 @@
     "manual.spark": {
       "id": "manual.spark",
       "speaker": "seth",
-      "text": "I can take you to the original INI-driven tuning editor. I will only offer a direct link if the matching INI actually resolves it. That editor is separate from this guide.",
+      "text": "I can look for the matching page in the tuning app and take you there. If this firmware doesn't provide an exact menu link, I'll tell you rather than sending you somewhere random.",
       "tone": "normal",
       "choices": [
         {
@@ -2527,7 +2527,7 @@
     "evidence.advanced": {
       "id": "evidence.advanced",
       "speaker": "seth",
-      "text": "Here is what the matched ECU definition can expose for this system: {{available:}}. Missing or stale evidence stays unknown. You can open the detailed live evidence panel without leaving the guide.",
+      "text": "This section has no specific live reading assigned yet. We can review other available ECU information or look at the settings.",
       "tone": "normal",
       "choices": [
         {
@@ -2549,7 +2549,7 @@
     "manual.advanced": {
       "id": "manual.advanced",
       "speaker": "seth",
-      "text": "I can take you to the original INI-driven tuning editor. I will only offer a direct link if the matching INI actually resolves it. That editor is separate from this guide.",
+      "text": "I can look for the matching page in the tuning app and take you there. If this firmware doesn't provide an exact menu link, I'll tell you rather than sending you somewhere random.",
       "tone": "normal",
       "choices": [
         {
@@ -2572,7 +2572,7 @@
     "evidence.validation": {
       "id": "evidence.validation",
       "speaker": "seth",
-      "text": "Here is what the matched ECU definition can expose for this system: {{available:}}. Missing or stale evidence stays unknown. You can open the detailed live evidence panel without leaving the guide.",
+      "text": "This section has no specific live reading assigned yet. We can review other available ECU information or look at the settings.",
       "tone": "normal",
       "choices": [
         {
@@ -2594,7 +2594,7 @@
     "manual.validation": {
       "id": "manual.validation",
       "speaker": "seth",
-      "text": "I can take you to the original INI-driven tuning editor. I will only offer a direct link if the matching INI actually resolves it. That editor is separate from this guide.",
+      "text": "I can look for the matching page in the tuning app and take you there. If this firmware doesn't provide an exact menu link, I'll tell you rather than sending you somewhere random.",
       "tone": "normal",
       "choices": [
         {
@@ -2625,7 +2625,7 @@
           "go": "workspace.evidence"
         },
         {
-          "label": "Browse the INI Atlas",
+          "label": "Browse the settings list",
           "go": "workspace.atlas"
         },
         {
@@ -2633,7 +2633,7 @@
           "go": "workspace.systems"
         },
         {
-          "label": "Walk through INI settings",
+          "label": "Walk through settings",
           "go": "atlas.entry"
         },
         {
@@ -2654,7 +2654,7 @@
           "go": "field.0"
         },
         {
-          "label": "Search the full INI Atlas",
+          "label": "Search the full settings list",
           "go": "workspace.atlas"
         },
         {
@@ -2666,7 +2666,7 @@
     "tour.configuration": {
       "id": "tour.configuration",
       "speaker": "seth",
-      "text": "Step 1: We start with what the ECU is configured to control. The matching INI reveals its field definitions and live channels, not whether every wire or sensor has been physically verified. I'll sort the knowns from the assumptions before we go further.",
+      "text": "Step 1: We start with what the ECU is configured to control. The matching ECU definition reveals its field definitions and live channels, not whether every wire or sensor has been physically verified. I'll sort the knowns from the assumptions before we go further.",
       "tone": "normal",
       "stage": "identity",
       "roles": [
@@ -2700,7 +2700,7 @@
     "tour.base_tables": {
       "id": "tour.base_tables",
       "speaker": "seth",
-      "text": "Step 3: Base tables. Before we interpret fueling or spark behavior, we need to know which fuel model and ignition tables are actually active. I can find matching INI entries; I cannot declare an unknown starting map correct just because it exists.",
+      "text": "Step 3: Base tables. Before we interpret fueling or spark behavior, we need to know which fuel model and ignition tables are actually active. I can find matching ECU definition entries; I cannot declare an unknown starting map correct just because it exists.",
       "tone": "normal",
       "stage": "fuel",
       "roles": [
@@ -2735,7 +2735,7 @@
     "tour.reference": {
       "id": "tour.reference",
       "speaker": "seth",
-      "text": "Step 4: Reference checks. The ECU can report ignition angle and fuel pressure if the matching INI provides those channels. Physical timing and fuel-system behavior still require qualified external verification. I'm trapped in the ECU, not carrying a timing light.",
+      "text": "Step 4: Let's talk about reference measurements. The ECU can report commanded timing and some pressure readings, but physical measurements are separate things to confirm with suitable equipment. I can explain what the recorded information means.",
       "tone": "normal",
       "stage": "spark",
       "roles": [
@@ -3100,8 +3100,8 @@
     "configuration": [
       {
         "id": "matching_ini",
-        "prompt": "Do the ECU signature and generated INI match?",
-        "why": "Every live reading and setting depends on the correct definition.",
+        "prompt": "Is this the ECU you meant to connect to?",
+        "why": "That helps me show the right settings and readings.",
         "roles": [
           "rpm"
         ],
@@ -3110,8 +3110,8 @@
       },
       {
         "id": "engine_inputs",
-        "prompt": "Have the configured sensors and engine inputs been checked against the actual installation?",
-        "why": "Configured values cannot independently verify physical wiring.",
+        "prompt": "Do the installed sensors and input selections match what you actually have?",
+        "why": "For example, a sensor can be selected in software even if it isn't connected.",
         "roles": [
           "rpm",
           "clt",
@@ -3123,8 +3123,8 @@
       },
       {
         "id": "backup",
-        "prompt": "Is there a recoverable baseline calibration backup?",
-        "why": "A browser export is not automatically a validated ECU backup.",
+        "prompt": "Do you have a copy of your current tune saved somewhere safe?",
+        "why": "It's useful to know which version you started with.",
         "roles": [],
         "manual_stage": "identity",
         "requires_external": true
@@ -3133,8 +3133,8 @@
     "trigger": [
       {
         "id": "sync_reporting",
-        "prompt": "Can we establish whether trigger synchronization data is available?",
-        "why": "An unavailable channel is not evidence of a fault-free trigger.",
+        "prompt": "Which crank and cam signals does this ECU say it's seeing?",
+        "why": "That helps us understand the sync information on the screen.",
         "roles": [
           "rpm",
           "sync"
@@ -3144,8 +3144,8 @@
       },
       {
         "id": "trigger_configuration",
-        "prompt": "Does the configured trigger setup agree with the installed hardware?",
-        "why": "Plausible RPM alone does not establish correct crank or cam setup.",
+        "prompt": "Does the crank and cam setup selected in software match the hardware?",
+        "why": "The wheel pattern and sensor type both matter.",
         "roles": [
           "rpm",
           "sync"
@@ -3155,8 +3155,8 @@
       },
       {
         "id": "physical_reference",
-        "prompt": "Has the ignition reference been independently verified?",
-        "why": "Commanded spark readings do not prove physical reference alignment.",
+        "prompt": "Has the physical ignition timing reference been checked with suitable equipment?",
+        "why": "The ECU's displayed timing number alone doesn't establish physical alignment.",
         "roles": [
           "spark",
           "sync"
@@ -3168,8 +3168,8 @@
     "baseline": [
       {
         "id": "fuel_model",
-        "prompt": "Which fuel strategy and base table are actually active?",
-        "why": "INI table names alone do not establish which fuel strategy is used.",
+        "prompt": "Which fueling method is selected, and which fuel table does the ECU use?",
+        "why": "Some controllers offer several choices, and I want to talk about the one that's actually enabled.",
         "roles": [
           "map",
           "tps",
@@ -3181,8 +3181,8 @@
       },
       {
         "id": "injectors",
-        "prompt": "Have injector and fuel-system assumptions been reviewed?",
-        "why": "Incorrect injector assumptions can be masked by other corrections.",
+        "prompt": "Do the injector size, opening-time data, and fuel-system settings match the parts installed?",
+        "why": "We can find each setting and explain what information belongs there.",
         "roles": [
           "fuelPressure"
         ],
@@ -3191,8 +3191,8 @@
       },
       {
         "id": "spark_model",
-        "prompt": "Which base ignition strategy and correction sources are active?",
-        "why": "Reported actual timing can contain multiple corrections.",
+        "prompt": "Which ignition map is selected, and are any corrections enabled?",
+        "why": "The actual commanded timing may include adjustments beyond the main map.",
         "roles": [
           "spark",
           "knock"
@@ -3204,8 +3204,8 @@
     "references": [
       {
         "id": "ignition_reference",
-        "prompt": "Is the physical timing reference independently confirmed?",
-        "why": "The ECU cannot verify its own external timing reference solely from reported data.",
+        "prompt": "Has the physical timing reference been checked?",
+        "why": "That check is separate from the value shown in software.",
         "roles": [
           "spark",
           "rpm"
@@ -3215,8 +3215,8 @@
       },
       {
         "id": "fuel_pressure",
-        "prompt": "Is fuel pressure independently verified when required?",
-        "why": "Missing pressure instrumentation must remain unknown, not normal.",
+        "prompt": "Do you have a verified fuel-pressure reading where your system needs one?",
+        "why": "A configured sensor doesn't always mean a real reading is available.",
         "roles": [
           "fuelPressure"
         ],
@@ -3225,8 +3225,8 @@
       },
       {
         "id": "protection_review",
-        "prompt": "Have the applicable ECU protection and sensor-fault settings been reviewed?",
-        "why": "No warning currently displayed does not establish that protections were validated.",
+        "prompt": "Have you looked through the relevant protection settings?",
+        "why": "Let's find what's supported and which details still need confirmation.",
         "roles": [
           "knock",
           "oilPressure",
@@ -3239,8 +3239,8 @@
     "starting": [
       {
         "id": "start_state",
-        "prompt": "Can the ECU distinguish cranking and after-start states?",
-        "why": "State recognition matters before interpreting an initial-start log.",
+        "prompt": "Can your log distinguish cranking from the time just after an engine catches?",
+        "why": "Those stages use different information.",
         "roles": [
           "rpm",
           "sync",
@@ -3251,8 +3251,8 @@
       },
       {
         "id": "start_history",
-        "prompt": "Have multiple comparable startup events been recorded?",
-        "why": "One event does not validate a temperature-dependent start strategy.",
+        "prompt": "Do you have any comparable startup records to look at?",
+        "why": "One event may not tell the whole story, especially across temperatures.",
         "roles": [
           "rpm",
           "clt",
@@ -3263,8 +3263,8 @@
       },
       {
         "id": "faults",
-        "prompt": "Have startup faults and hardware uncertainties been reviewed?",
-        "why": "A hardware issue cannot be safely diagnosed as a VE problem.",
+        "prompt": "Are there any faults or uncertain sensor readings in those records?",
+        "why": "We should understand those before assuming a fuel table is responsible.",
         "roles": [
           "sync",
           "battery"
@@ -3276,8 +3276,8 @@
     "idle": [
       {
         "id": "control_strategy",
-        "prompt": "Do we know the enabled idle-control strategy?",
-        "why": "An idle valve, throttle and other strategies have different controls.",
+        "prompt": "What kind of idle control is selected: an idle valve, electronic throttle, or something else?",
+        "why": "The available controls depend on the hardware.",
         "roles": [
           "idleTarget",
           "idleCommand"
@@ -3287,8 +3287,8 @@
       },
       {
         "id": "baseline_response",
-        "prompt": "Does comparable idle evidence reveal how RPM relates to commanded control?",
-        "why": "Variation may involve air, fuel, spark, feedback, load or hardware.",
+        "prompt": "Can we see actual idle speed, the target speed, and what the controller is commanding?",
+        "why": "Those readings help us describe what happened, rather than guessing.",
         "roles": [
           "rpm",
           "idleTarget",
@@ -3299,8 +3299,8 @@
       },
       {
         "id": "fuel_and_corrections",
-        "prompt": "Can we distinguish idle fueling from active corrections?",
-        "why": "Target lambda under closed-loop correction does not prove correct idle VE.",
+        "prompt": "Can we separate base idle fueling from corrections happening at the same time?",
+        "why": "A reading near target may include automatic compensation.",
         "roles": [
           "lambda",
           "target",
@@ -3315,8 +3315,8 @@
     "steady_fuel": [
       {
         "id": "lambda_ready",
-        "prompt": "Are target and measured lambda valid, fresh and scaled correctly?",
-        "why": "Unknown units or unready sensors invalidate an inferred VE error.",
+        "prompt": "Can we find the requested mixture and a trustworthy measured mixture reading?",
+        "why": "We need to know which is which and when the sensor is ready.",
         "roles": [
           "lambda",
           "target",
@@ -3327,8 +3327,8 @@
       },
       {
         "id": "trims_interpretation",
-        "prompt": "Do we understand how active STFT, LTFT and Gego affect this observation?",
-        "why": "Fuel-feedback scaling and bank applicability must not be guessed.",
+        "prompt": "Which fuel corrections are active here, and what do their numbers represent?",
+        "why": "Some controllers use percentages while others use multipliers or separate banks.",
         "roles": [
           "gego",
           "stft1",
@@ -3341,8 +3341,8 @@
       },
       {
         "id": "steady_evidence",
-        "prompt": "Do the actual fuel-table regions have independent stable observations?",
-        "why": "Transient or repeated samples do not automatically count as independent coverage.",
+        "prompt": "Do your existing records cover the table areas you're curious about?",
+        "why": "A few repeated samples aren't the same as broad coverage.",
         "roles": [
           "rpm",
           "map",
@@ -3356,8 +3356,8 @@
     "steady_spark": [
       {
         "id": "active_spark",
-        "prompt": "Does the INI expose the active ignition table and related corrections?",
-        "why": "Actual spark is not necessarily the base table value.",
+        "prompt": "Where is the main ignition map, and which other settings adjust its result?",
+        "why": "I can help identify the relevant screens.",
         "roles": [
           "spark",
           "knock"
@@ -3367,8 +3367,8 @@
       },
       {
         "id": "fuel_conditions",
-        "prompt": "Are fueling and temperature conditions known for these observations?",
-        "why": "Different conditions can make two ignition observations incomparable.",
+        "prompt": "Are the fuel and temperature readings comparable between the records you're reviewing?",
+        "why": "Context matters when you compare observations.",
         "roles": [
           "lambda",
           "target",
@@ -3380,8 +3380,8 @@
       },
       {
         "id": "torque_evidence",
-        "prompt": "Is there appropriate independent torque evidence for any MBT claim?",
-        "why": "MAP, acceleration and knock absence alone cannot establish MBT.",
+        "prompt": "Is there independent instrumented evidence behind any claim of best-torque timing?",
+        "why": "Reported knock data or a single acceleration reading cannot establish it.",
         "roles": [
           "spark",
           "knock"
@@ -3393,8 +3393,8 @@
     "power": [
       {
         "id": "instrumentation",
-        "prompt": "Are professional supervision and external measurements documented?",
-        "why": "This review organizes instrumented evidence; it never commands an engine test.",
+        "prompt": "Were the external measurements and qualified supervision recorded?",
+        "why": "We can organize existing results, not command a test.",
         "roles": [
           "fuelPressure",
           "knock"
@@ -3404,8 +3404,8 @@
       },
       {
         "id": "operating_envelope",
-        "prompt": "Which operating regions have actually been evaluated with qualifying evidence?",
-        "why": "Unmeasured operating areas remain unknown, not verified.",
+        "prompt": "Which operating areas have actually been measured?",
+        "why": "Everything outside that coverage should remain marked as unknown.",
         "roles": [
           "rpm",
           "map",
@@ -3416,8 +3416,8 @@
       },
       {
         "id": "protective_events",
-        "prompt": "Are reported warnings and protective events included in the review?",
-        "why": "No logged warning is not proof that an operating condition is safe.",
+        "prompt": "Were any warnings or protective events captured?",
+        "why": "Those belong in the review too.",
         "roles": [
           "knock",
           "oilPressure",
@@ -3430,8 +3430,8 @@
     "confirmation": [
       {
         "id": "open_findings",
-        "prompt": "Are unresolved faults and evidence gaps visible in the final summary?",
-        "why": "A final report must not hide unknowns or unverified hardware.",
+        "prompt": "Is there anything you're still unsure about or want to revisit?",
+        "why": "I'll keep the open questions visible.",
         "roles": [
           "sync",
           "lambda"
@@ -3441,8 +3441,8 @@
       },
       {
         "id": "revision_check",
-        "prompt": "Does the recorded ECU definition and calibration revision still match?",
-        "why": "Changes can invalidate earlier evidence and conclusions.",
+        "prompt": "Are we still working with the same ECU software and tune revision?",
+        "why": "Changes can make earlier observations less comparable.",
         "roles": [
           "rpm"
         ],
@@ -3451,8 +3451,8 @@
       },
       {
         "id": "record_results",
-        "prompt": "Is the review record separate from ECU saving and flashing?",
-        "why": "Finishing the tour is not a flash burn or certification of the engine.",
+        "prompt": "Do you want a summary of what we learned and what still needs checking?",
+        "why": "It's separate from saving settings to the ECU.",
         "roles": [],
         "manual_stage": "validation",
         "requires_external": true
