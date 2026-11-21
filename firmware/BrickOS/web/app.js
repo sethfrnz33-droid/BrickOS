@@ -4,6 +4,7 @@ import {renderGuide} from './guided-ui.mjs';
 import {GuideStory,findManualTarget} from './guide-story.mjs';
 import {renderSethStory} from './guide-story-ui.mjs';
 import {SethSpeech} from './guide-voice.mjs';
+import {inspectIniCompatibility} from './ini-compat.mjs';
 import {readLocalIni,writeLocalIni,clearLocalIni} from './ini-fast-cache.mjs';
 
 const $=x=>document.querySelector(x);
@@ -63,6 +64,7 @@ S.dashboardLayout=['split','gauges','scope'].includes(PREF.layout)?PREF.layout:'
 S.scopeNames=Array.isArray(PREF.scope)?PREF.scope.filter(x=>typeof x==='string').slice(0,3):[];
 S.tuneFavorites=Array.isArray(PREF.favorites)?PREF.favorites.filter(x=>typeof x==='string').slice(0,24):[];
 S.tuneRecent=Array.isArray(PREF.recent)?PREF.recent.filter(x=>typeof x==='string').slice(0,12):[];
+S.iniCompatibility=null;
 S.guideTab='next';S.guideSearch='';S.guideLastRender=0;S.guideMenuLinks={};S.guideScreen='story';S.guidePacket=null;S.guideDefinitionHash='';
 S.tuneCategory='';S.tuneSearch='';S.tuneBrowserOpen=true;S.gaugeEdit=null;S.commandOpen=false;S.commandSearch='';
 function savePrefs(){try{localStorage.setItem(PREF_KEY,JSON.stringify({gauges:S.gaugeSlots,layout:S.dashboardLayout,scope:S.scopeNames,favorites:S.tuneFavorites,recent:S.tuneRecent}))}catch{toast('Device preference storage unavailable; layout may not persist',true)}}
@@ -321,14 +323,33 @@ function logs(){const files=S.logs||[];const read=hasDef()?Math.min(256,Math.max
 function logViewer(){const d=S.viewer,data=d.records||[];const channels=visibleChannels().filter(f=>f.offset>=d.offset&&f.offset+TYPES[f.type]<=d.offset+d.size);
  return `<div class="section-label">LOG ANALYZER</div><div class="panel"><div class="panel-header"><h2>Binary log viewer</h2>${button('export-csv','Export CSV','primary')}</div><p class="tiny">${data.length} records · offset ${d.offset} · ${d.size} bytes each ${d.truncated?'· Last record truncated':''}</p><div class="row spaced"><label>Plot channel</label><select id="log-channel" class="selector">${channels.map(x=>`<option value="${escapeHTML(x.name)}" ${x.name===S.viewChannel?'selected':''}>${escapeHTML(x.name)}</option>`).join('')}</select></div><canvas id="log-chart" class="logplot" width="1000" height="230"></canvas></div>`;
 }
-function system(){const z=S.status;return pageHeader('06','Connection & diagnostics','ESP32-S3 firmware configuration and rusEFI connectivity',button('ping','Run ECU query','primary')+button('ecu-version','Firmware version','ghost')+button('ecu-errors','Check ECU errors','ghost')+button('load-ini','Import generated .ini','ghost'))+statusMessage()+
+function iniCompatibilityPanel(){
+ const info=S.iniCompatibility;
+ if(!info)return '';
+ const summary=info.family_guess==='Not identified'?'Unknown ECU family':info.family_guess;
+ const issues=info.warnings.map(m=>'<li>'+escapeHTML(m)+'</li>').join('');
+ const supported=safeSignature()&&info.family_guess==='rusEFI'&&connected()?'Matched rusEFI (subject to protocol checks)':'Definition view only — not enabled for live ECU tuning';
+ return `<section class="panel"><div class="panel-header"><h2>TunerStudio definition compatibility</h2><span class="pill">${escapeHTML(summary)}</span></div>
+ <p>Settings and readings can be listed from this file when the syntax is understood. That does not mean the ESP can communicate with the ECU.</p>
+ ${dataRow('Definition fields',String(info.calibration_fields??'Unknown'))}
+ ${dataRow('Output readings',String(info.output_fields??'Unknown'))}
+ ${dataRow('Live communication',supported)}
+ <details><summary>Technical definition details</summary>
+ ${dataRow('Sections found',String(info.sections))}
+ ${dataRow('Firmware query defined',info.declared_protocol_features.querycommand?'Yes':'Not found')}
+ ${dataRow('Read command defined',info.declared_protocol_features.pagereadcommand?'Yes':'Not found')}
+ ${dataRow('Write command defined',info.declared_protocol_features.pagevaluewrite?'Yes':'Not found')}
+ <ul>${issues}</ul>
+ </details></section>`;
+}
+function system(){const z=S.status;return pageHeader('06','Connection & diagnostics','ESP32-S3 firmware configuration and rusEFI connectivity',button('ping','Run ECU query','primary')+button('ecu-version','Firmware version','ghost')+button('ecu-errors','Check ECU errors','ghost')+button('load-ini','Import generated .ini','ghost'))+statusMessage()+iniCompatibilityPanel()+
  `<div class="grid g2"><div class="panel"><div class="panel-header"><h2>ESP32 native USB tuner</h2><span class="pill ${z?'green':'orange'}">${z?'READY':'NOT READY'}</span></div>${dataRow('Transport',z?.transport||'Unavailable')}${dataRow('USB host',z?.usb_device_ready?'ECU USB CONNECTED':'WAITING FOR ECU USB')}${dataRow('Protocol','Native rusEFI TunerStudio over USB')}${dataRow('USB gateway',z?.usb_gateway||'—')}${dataRow('ECU session',z?.usb_device_ready?'USB AVAILABLE':'WAITING FOR USB')}${dataRow('Last transport error',z?.last_error||'—')}${dataRow('Storage',z?.storage||'—')}${dataRow('Firmware version',S.firmwareVersion||'Not requested')}${dataRow('Configuration errors',S.ecuErrorMessage||'Not checked')}</div>
  <div class="panel"><div class="panel-header"><h2>ECU definition</h2><span class="pill ${hasDef()?'green':'orange'}">${hasDef()?'LOADED':'MISSING'}</span></div>${dataRow('Connected ECU signature',S.ecuSignature||'—')}${dataRow('INI status',S.iniResolveState)}${dataRow('ECU SD INI import',S.status?.ecu_sd_ini_state||'Waiting for USB storage')}${dataRow('SD access attempts',String(S.status?.ecu_sd_ini_attempts??0))}${dataRow('Verified SD imports',String(S.status?.ecu_sd_ini_imports??0))}${dataRow('.ini expected signature',S.definition?.signature||'—')}${dataRow('Signature match',safeSignature()?'YES':'NO',safeSignature()?'good-text':'bad-text')}${dataRow('Calibration definitions',S.definition?.cal.length??0)}${dataRow('Output channel definitions',S.definition?.channels.length??0)}${dataRow('Write commands',z?.write_compiled?'ENABLED':z?'DISABLED BY INSTALLED ESP32 FIRMWARE':'ESP32 STATUS UNKNOWN')}${dataRow('Write authorization',z?.write_mode||'UNKNOWN')}${dataRow('Write runtime arm',z?.write_armed?'ACTIVE DURING WRITE':'Automatic (only during Burn)')}${dataRow('BrickOS firmware',z?.brick_os_build||'Older/unknown ESP32 firmware')}${button('disarm','Disarm writes','danger')}</div></div>
  <div class="section-label">ECU DEFINITION MANAGER · INTERNAL SPIFFS</div>
  <div class="panel"><div class="panel-header"><h2>Saved rusEFI definition</h2><span class="pill ${z?.ini_cached?'green':'orange'}">${z?.ini_cached?((z.ini_size/1024).toFixed(0)+' KB CACHED'):'NOT CACHED'}</span></div>
  <p class="tiny">Automatically imported from the ECU SD card over USB MSC LUN1 when available, saved on ESP32 SPIFFS, then cached on this phone for faster repeat loads. SHA-256 detects updates; live ECU signature checking remains required. Manual upload is a fallback.</p>
- <div class="spaced"><label for="ini-upload">Select rusEFI INI from this phone or computer</label><input class="field ini-file-input" id="ini-upload" type="file" accept=".ini,.txt,text/plain,application/octet-stream" aria-label="Choose rusEFI INI or text file"><p class="tiny">Select Browse in iPhone Files (not Photos). Filenames do not need to be rusefi.ini; the contents and ECU signature are checked.</p></div>
- <details class="spaced"><summary>iPhone alternative: paste INI text instead</summary><p class="tiny">Open the INI in Files or a text editor, copy its complete contents, then paste below. This bypasses iOS file-type restrictions.</p><textarea class="field ini-paste" id="ini-paste" rows="5" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Paste full generated rusEFI INI here"></textarea><div class="btnrow spaced">${button('ini-paste-import','Import pasted INI','primary')}</div></details>
+ <div class="spaced"><label for="ini-upload">Select TunerStudio definition (.ini) from this phone or computer</label><input class="field ini-file-input" id="ini-upload" type="file" accept=".ini,.txt,text/plain,application/octet-stream" aria-label="Choose TunerStudio INI or text file"><p class="tiny">Select Browse in iPhone Files (not Photos). Filenames do not need to be rusefi.ini; the contents and ECU signature are checked.</p></div>
+ <details class="spaced"><summary>iPhone alternative: paste INI text instead</summary><p class="tiny">Open the INI in Files or a text editor, copy its complete contents, then paste below. This bypasses iOS file-type restrictions.</p><textarea class="field ini-paste" id="ini-paste" rows="5" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Paste a TunerStudio ECU definition here"></textarea><div class="btnrow spaced">${button('ini-paste-import','Import pasted INI','primary')}</div></details>
  <div class="ini-import-status spaced" id="ini-import-progress" role="status" aria-live="polite">${escapeHTML(S.iniImportProgress)}</div><div class="btnrow spaced">${button('ini-read','Load saved INI','primary')}${button('ini-save','Save current INI to ESP32','ghost')}${button('ini-delete','Delete saved INI','danger')}</div>
  <div class="rule"></div><p class="tiny">AP-only build: no internet downloads. The phone loads the ESP32's locally stored ECU SD definition, not an internet copy. Browser storage is optional; if unavailable, the phone reloads from the ESP32.</p></div>
  <div class="section-label">USB CONNECTION</div><div class="panel"><h2>Connect Big Brick over USB</h2><div class="steps spaced"><div>Connect the STM32 USB device interface to the ESP32-S3 USB host interface using the same USB wiring as your proven working3wayhub firmware. USB host VBUS must be powered appropriately.</div><div>BrickOS speaks the rusEFI TunerStudio protocol directly to STM32 over USB; no TCP bridge or desktop TunerStudio connection is required.</div><div>Join the open <code>brick</code> Wi-Fi network and open <code>http://192.168.4.1/</code>.</div><div>BrickOS now attempts read-only ECU SD access over the STM32 USB Mass Storage interface (LUN1), if exposed by the installed firmware. Place a plain generated <code>rusefi.ini</code> on the card; it imports only when its signature matches the connected ECU. The ESP32 SPIFFS stores the verified copy. Existing USB CDC tuning remains active.</div></div></div>`;
@@ -1056,7 +1077,7 @@ async function activateIni(text,readyDefinition=null,revision=''){
   if(connected()&&def.signature!==S.ecuSignature)throw Error('INI signature differs from connected ECU');
   if(!def.channels.length||!def.cal.length)throw Error('Not a generated rusEFI definition');
   if(S.rawIni!==text||S.iniRevision!==revision)clearCalibrationSession();
-  S.rawIni=text;S.definition=def;S.iniRevision=revision;rebuildTs();GUIDE.attach(def,S.ecuSignature);
+  S.rawIni=text;S.definition=def;S.iniRevision=revision;S.iniCompatibility=inspectIniCompatibility(text,def);rebuildTs();GUIDE.attach(def,S.ecuSignature);
   S.signatureMismatch=connected()&&!safeSignature();S.latest=null;
   render();toast('Loaded '+def.cal.length+' calibration fields and '+def.channels.length+' channels');
 }
@@ -1133,7 +1154,7 @@ async function saveCurrentIni(){
 }
 async function deleteCachedIni(){
  try{await api('/api/ini/file',{},'DELETE');await clearLocalIni();
-    S.iniRevision='';S.rawIni='';S.definition=null;S.tsStructure=null;
+    S.iniRevision='';S.rawIni='';S.definition=null;S.tsStructure=null;S.iniCompatibility=null;
     GUIDE.reset(true);clearCalibrationSession();toast('Saved INI deleted');await getStatus();}
  catch(e){toast('Delete failed: '+e.message,true)}
 }
