@@ -1993,7 +1993,7 @@
     "evidence.identity": {
       "id": "evidence.identity",
       "speaker": "seth",
-      "text": "Here's what the ECU can currently show for this system: . If a reading isn't available or is old, I'll label it clearly. We can also open the detailed readings.",
+      "text": "Here's what I can currently read for this system: {{available:rpm}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2044,7 +2044,7 @@
     "evidence.sensors": {
       "id": "evidence.sensors",
       "speaker": "seth",
-      "text": "Here's what the ECU can currently show for this system: . If a reading isn't available or is old, I'll label it clearly. We can also open the detailed readings.",
+      "text": "Here's what I can currently read for this system: {{available:clt|tps|map|lambda}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2101,7 +2101,7 @@
     "evidence.trigger": {
       "id": "evidence.trigger",
       "speaker": "seth",
-      "text": "Here's what the ECU can currently show for this system: . If a reading isn't available or is old, I'll label it clearly. We can also open the detailed readings.",
+      "text": "Here's what I can currently read for this system: {{available:sync}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2152,7 +2152,7 @@
     "evidence.starting": {
       "id": "evidence.starting",
       "speaker": "seth",
-      "text": "Here's what the ECU can currently show for this system: . If a reading isn't available or is old, I'll label it clearly. We can also open the detailed readings.",
+      "text": "Here's what I can currently read for this system: {{available:rpm|clt}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2205,7 +2205,7 @@
     "evidence.idle": {
       "id": "evidence.idle",
       "speaker": "seth",
-      "text": "Here's what the ECU can currently show for this system: . If a reading isn't available or is old, I'll label it clearly. We can also open the detailed readings.",
+      "text": "Here's what I can currently read for this system: {{available:rpm|idleTarget|idleCommand}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2260,7 +2260,7 @@
     "evidence.warmup": {
       "id": "evidence.warmup",
       "speaker": "seth",
-      "text": "Here's what the ECU can currently show for this system: . If a reading isn't available or is old, I'll label it clearly. We can also open the detailed readings.",
+      "text": "Here's what I can currently read for this system: {{available:clt}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2311,7 +2311,7 @@
     "evidence.fuel": {
       "id": "evidence.fuel",
       "speaker": "seth",
-      "text": "Here's what the ECU can currently show for this system: . If a reading isn't available or is old, I'll label it clearly. We can also open the detailed readings.",
+      "text": "Here's what I can currently read for this system: {{available:lambda|target|gego}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2366,7 +2366,7 @@
     "evidence.trims": {
       "id": "evidence.trims",
       "speaker": "seth",
-      "text": "Here's what the ECU can currently show for this system: . If a reading isn't available or is old, I'll label it clearly. We can also open the detailed readings.",
+      "text": "Here's what I can currently read for this system: {{available:gego|stft1|ltft1}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2421,7 +2421,7 @@
     "evidence.transients": {
       "id": "evidence.transients",
       "speaker": "seth",
-      "text": "Here's what the ECU can currently show for this system: . If a reading isn't available or is old, I'll label it clearly. We can also open the detailed readings.",
+      "text": "Here's what I can currently read for this system: {{available:tps|map}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2474,7 +2474,7 @@
     "evidence.spark": {
       "id": "evidence.spark",
       "speaker": "seth",
-      "text": "Here's what the ECU can currently show for this system: . If a reading isn't available or is old, I'll label it clearly. We can also open the detailed readings.",
+      "text": "Here's what I can currently read for this system: {{available:spark|knock}}. If a reading isn't available or it's old, I'll label it clearly. We can also open the detailed readings.",
       "tone": "normal",
       "choices": [
         {
@@ -2527,7 +2527,7 @@
     "evidence.advanced": {
       "id": "evidence.advanced",
       "speaker": "seth",
-      "text": "Here's what the ECU can currently show for this system: . If a reading isn't available or is old, I'll label it clearly. We can also open the detailed readings.",
+      "text": "This section has no specific live reading assigned yet. We can review other available ECU information or look at the settings.",
       "tone": "normal",
       "choices": [
         {
@@ -2572,7 +2572,7 @@
     "evidence.validation": {
       "id": "evidence.validation",
       "speaker": "seth",
-      "text": "Here's what the ECU can currently show for this system: . If a reading isn't available or is old, I'll label it clearly. We can also open the detailed readings.",
+      "text": "This section has no specific live reading assigned yet. We can review other available ECU information or look at the settings.",
       "tone": "normal",
       "choices": [
         {
