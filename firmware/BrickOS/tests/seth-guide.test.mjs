@@ -86,7 +86,7 @@ test('quick help stays independent and the HPA tour adapts to INI evidence avail
  s.go('targeted');s.go('topics.idle');
  assert.equal(s.packet({engine,menuTree,ecuKey:'ECU-A'}).tour_step,null);
  s.go('tour.reference');const q=s.packet({engine,menuTree,ecuKey:'ECU-A'});
- assert.equal(q.tour_step,4);assert.match(q.text,/physical check|qualified verification|separate from the value shown/);
+ assert.equal(q.tour_step,4);assert.match(q.text,/physical measurements|separate things|qualified verification/);
  const missing=s.packet({engine:{fields:{},report:()=>({fresh:false,values:{}})},ecuKey:'ECU-A'});
  assert.equal(missing.tour_step,4);assert.equal(missing.manual_target,null);
 });
