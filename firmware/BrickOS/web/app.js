@@ -4,7 +4,7 @@ import {renderGuide} from './guided-ui.mjs';
 import {GuideStory,findManualTarget} from './guide-story.mjs';
 import {renderSethStory} from './guide-story-ui.mjs';
 import {SethSpeech} from './guide-voice.mjs';
-import {inspectIniCompatibility} from './ini-compat.mjs';
+import {inspectIniCompatibility,scanIniText} from './ini-compat.mjs';
 import {readLocalIni,writeLocalIni,clearLocalIni} from './ini-fast-cache.mjs';
 
 const $=x=>document.querySelector(x);
@@ -64,7 +64,7 @@ S.dashboardLayout=['split','gauges','scope'].includes(PREF.layout)?PREF.layout:'
 S.scopeNames=Array.isArray(PREF.scope)?PREF.scope.filter(x=>typeof x==='string').slice(0,3):[];
 S.tuneFavorites=Array.isArray(PREF.favorites)?PREF.favorites.filter(x=>typeof x==='string').slice(0,24):[];
 S.tuneRecent=Array.isArray(PREF.recent)?PREF.recent.filter(x=>typeof x==='string').slice(0,12):[];
-S.iniCompatibility=null;
+S.iniCompatibility=null;S.iniPreview=null;S.iniPreviewCompatibility=null;
 S.guideTab='next';S.guideSearch='';S.guideLastRender=0;S.guideMenuLinks={};S.guideScreen='story';S.guidePacket=null;S.guideDefinitionHash='';
 S.tuneCategory='';S.tuneSearch='';S.tuneBrowserOpen=true;S.gaugeEdit=null;S.commandOpen=false;S.commandSearch='';
 function savePrefs(){try{localStorage.setItem(PREF_KEY,JSON.stringify({gauges:S.gaugeSlots,layout:S.dashboardLayout,scope:S.scopeNames,favorites:S.tuneFavorites,recent:S.tuneRecent}))}catch{toast('Device preference storage unavailable; layout may not persist',true)}}
@@ -324,14 +324,17 @@ function logViewer(){const d=S.viewer,data=d.records||[];const channels=visibleC
  return `<div class="section-label">LOG ANALYZER</div><div class="panel"><div class="panel-header"><h2>Binary log viewer</h2>${button('export-csv','Export CSV','primary')}</div><p class="tiny">${data.length} records · offset ${d.offset} · ${d.size} bytes each ${d.truncated?'· Last record truncated':''}</p><div class="row spaced"><label>Plot channel</label><select id="log-channel" class="selector">${channels.map(x=>`<option value="${escapeHTML(x.name)}" ${x.name===S.viewChannel?'selected':''}>${escapeHTML(x.name)}</option>`).join('')}</select></div><canvas id="log-chart" class="logplot" width="1000" height="230"></canvas></div>`;
 }
 function iniCompatibilityPanel(){
- const info=S.iniCompatibility;
- if(!info)return '';
- const summary=info.family_guess==='Not identified'?'Unknown ECU family':info.family_guess;
- const issues=info.warnings.map(m=>'<li>'+escapeHTML(m)+'</li>').join('');
- const supported=safeSignature()&&info.family_guess==='rusEFI'&&connected()?'Matched rusEFI (subject to protocol checks)':'Definition view only — not enabled for live ECU tuning';
+ const info=S.iniCompatibility,preview=S.iniPreview,previewInfo=S.iniPreviewCompatibility;
+ const summary=info?(info.family_guess==='Not identified'?'Unknown ECU family':info.family_guess):'No active definition';
+ const issues=info?info.warnings.map(m=>'<li>'+escapeHTML(m)+'</li>').join(''):'';
+ const supported=info&&safeSignature()&&info.family_guess==='rusEFI'&&connected()?'Matched rusEFI (subject to protocol checks)':'Definition browsing only — no live ECU support from this file';
+ const previewNames=preview?preview.fields.slice(0,30).map(f=>'<span class="system-tag">'+escapeHTML(f.label)+'</span>').join(' '):'';
  return `<section class="panel"><div class="panel-header"><h2>TunerStudio definition compatibility</h2><span class="pill">${escapeHTML(summary)}</span></div>
- <p>Settings and readings can be listed from this file when the syntax is understood. That does not mean the ESP can communicate with the ECU.</p>
- ${dataRow('Definition fields',String(info.calibration_fields??'Unknown'))}
+ <p>The app can explain many setting names from the definition file. Different ECU families use different communication protocols, so reading the file alone does not enable tuning.</p>
+ <div class="spaced"><label for="ini-inspect-file">Preview another TunerStudio INI — read-only, local to this browser</label>
+ <input class="field ini-file-input" id="ini-inspect-file" type="file" accept=".ini,.txt,text/plain" aria-label="Preview an INI definition without connecting it to the ECU"></div>
+ ${preview?`<div class="ini-import-status"><strong>Preview: ${escapeHTML(previewInfo?.family_guess||'Unknown family')}</strong> · ${preview.fields.length} named fields ${preview.truncated?'(preview capped)':''}. No ECU commands or edits are enabled.<div class="workspace-filters spaced" style="flex-wrap:wrap">${previewNames}</div></div>`:''}
+ ${info?`${dataRow('Definition fields',String(info.calibration_fields??'Unknown'))}
  ${dataRow('Output readings',String(info.output_fields??'Unknown'))}
  ${dataRow('Live communication',supported)}
  <details><summary>Technical definition details</summary>
@@ -340,7 +343,7 @@ function iniCompatibilityPanel(){
  ${dataRow('Read command defined',info.declared_protocol_features.pagereadcommand?'Yes':'Not found')}
  ${dataRow('Write command defined',info.declared_protocol_features.pagevaluewrite?'Yes':'Not found')}
  <ul>${issues}</ul>
- </details></section>`;
+ </details>`:''}</section>`;
 }
 function system(){const z=S.status;return pageHeader('06','Connection & diagnostics','ESP32-S3 firmware configuration and rusEFI connectivity',button('ping','Run ECU query','primary')+button('ecu-version','Firmware version','ghost')+button('ecu-errors','Check ECU errors','ghost')+button('load-ini','Import generated .ini','ghost'))+statusMessage()+iniCompatibilityPanel()+
  `<div class="grid g2"><div class="panel"><div class="panel-header"><h2>ESP32 native USB tuner</h2><span class="pill ${z?'green':'orange'}">${z?'READY':'NOT READY'}</span></div>${dataRow('Transport',z?.transport||'Unavailable')}${dataRow('USB host',z?.usb_device_ready?'ECU USB CONNECTED':'WAITING FOR ECU USB')}${dataRow('Protocol','Native rusEFI TunerStudio over USB')}${dataRow('USB gateway',z?.usb_gateway||'—')}${dataRow('ECU session',z?.usb_device_ready?'USB AVAILABLE':'WAITING FOR USB')}${dataRow('Last transport error',z?.last_error||'—')}${dataRow('Storage',z?.storage||'—')}${dataRow('Firmware version',S.firmwareVersion||'Not requested')}${dataRow('Configuration errors',S.ecuErrorMessage||'Not checked')}</div>
@@ -943,6 +946,21 @@ case 'reset-gauges':S.gaugeSlots=defaultGauges();S.gaugeEdit=null;savePrefs();re
  case 'export-csv':exportCsv();break;
  }}catch(e){toast(e.message,true)}}
 
+document.addEventListener('change',async evt=>{
+ if(evt.target?.id!=='ini-inspect-file')return;
+ const file=evt.target.files?.[0];
+ if(!file)return;
+ if(file.size>1400000){toast('File too large for local read-only preview',true);return;}
+ try{
+  const raw=await file.text();
+  const preview=scanIniText(raw);
+  if(preview.sections.length===0)throw Error('No recognizable definition sections found');
+  S.iniPreview=preview;
+  S.iniPreviewCompatibility=inspectIniCompatibility(raw);
+  render();
+  toast('Read-only definition preview loaded. This did not change the active ECU definition.');
+ }catch(error){toast('Could not preview this INI: '+error.message,true);}
+});
 document.addEventListener('submit',evt=>{
  const form=evt.target.closest('[data-seth-question-form]');
  if(!form)return;
