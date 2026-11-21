@@ -124,7 +124,7 @@ export class GuideStory {
       {label:'Open this setting in the tuner',go:'action.field.'+i},
       {label:'Browse all settings',go:'workspace.atlas'},
       {label:'Back to guide home',go:'welcome'}],_field:f,_menu:explicit||null};}
-   else n={id:this.nodeId,speaker:'seth',text:'That setting isn't available in the loaded ECU definition. You can search for another name.',choices:[{label:'Open full INI Atlas',go:'workspace.atlas'},{label:'Guide home',go:'welcome'}]};
+   else n={id:this.nodeId,speaker:'seth',text:"That setting isn't available in the loaded ECU definition. You can search for another name.",choices:[{label:'Open full INI Atlas',go:'workspace.atlas'},{label:'Guide home',go:'welcome'}]};
   }
   // Chapter checks are catalogued with INI role names; clients render data packets.
   const match=/^(check|why)\.([a-z_]+)\.(\d+)$/.exec(this.nodeId);
@@ -142,7 +142,7 @@ export class GuideStory {
     tag:`${String(activeStep.step).padStart(2,'0')} / ${activeStep.title} · QUESTION ${index+1} / ${this.catalog.chapter_checks[stage].length}`,
     stage:activeStep.expert,manual:activeCheck.manual_stage,
     text:why?`${activeCheck.why} We can talk it through; you don't need to have an answer yet.`:
-      `${activeCheck.prompt} ${activeCheck.roles.length?'Here is what I can currently read: {{available:+activeCheck.roles.join('|')+'}}.':''}`,
+       `${activeCheck.prompt} ${activeCheck.roles.length?'Here is what I can currently read: {{available:'+activeCheck.roles.join('|')+'}}.':''}`,
     choices:[
      {label:activeCheck.requires_external?'Yes, it has been checked separately':'Yes, I checked that',go:'answer.'+stage+'.'+index+'.reported'},
      {label:'Not sure yet',go:'answer.'+stage+'.'+index+'.unknown'},
